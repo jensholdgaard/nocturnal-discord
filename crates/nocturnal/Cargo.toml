@@ -11,6 +11,7 @@ rust-version.workspace = true
 nocturnal-core = { path = "../nocturnal-core" }
 nocturnal-store = { path = "../nocturnal-store" }
 nocturnal-telemetry = { path = "../nocturnal-telemetry" }
+opentelemetry.workspace = true
 nocturnal-discord = { path = "../nocturnal-discord" }
 nocturnal-provision = { path = "../nocturnal-provision" }
 nocturnal-migrate = { path = "../nocturnal-migrate" }

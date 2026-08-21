@@ -1,0 +1,23 @@
+// Generated from semconv/ by OTel Weaver — do not edit.
+// Regenerate: weaver registry generate -r semconv -t templates rust crates/nocturnal-telemetry/src/
+
+/// Attribute keys.
+pub mod attr {
+{%- for group in ctx.groups %}
+{%- if group.type == "attribute_group" %}
+{%- for attribute in group.attributes %}
+    pub const {{ attribute.name | replace(".", "_") | upper }}: &str = "{{ attribute.name }}";
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+}
+
+/// Metric names.
+pub mod metric {
+{%- for group in ctx.groups %}
+{%- if group.type == "metric" %}
+    pub const {{ group.metric_name | replace(".", "_") | upper }}: &str = "{{ group.metric_name }}";
+{%- endif %}
+{%- endfor %}
+}
+

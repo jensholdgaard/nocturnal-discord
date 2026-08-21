@@ -22,8 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: weaver registry check
+      - name: weaver registry check + codegen drift
         run: |
           curl -sL -o weaver.tar.xz https://github.com/open-telemetry/weaver/releases/latest/download/weaver-x86_64-unknown-linux-gnu.tar.xz
           tar xf weaver.tar.xz
           ./weaver-x86_64-unknown-linux-gnu/weaver registry check -r semconv
+          ./weaver-x86_64-unknown-linux-gnu/weaver registry generate -r semconv -t templates rust /tmp/gen
+          diff -u crates/nocturnal-telemetry/src/generated.rs /tmp/gen/generated.rs

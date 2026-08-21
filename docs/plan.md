@@ -104,9 +104,14 @@ First contact with Discord, zero risk: nothing mutates.
       one shared pagination helper (S12), legacy embed formats. Compiles and
       boots against migrated production data; **live test-server run needs a
       fresh bot application token + test guild id from the maintainer**.
-- [ ] OTLP wiring: traces + logs + metrics into everquest-observability via
-      the `nocturnal-telemetry` crate generated from `semconv/`. (`/healthz`
-      + `/readyz` already live.)
+- [x] OTLP wiring: `nocturnal-telemetry` constants are Weaver-generated from
+      `semconv/` (CI diffs against a fresh generation); traces + logs +
+      metrics export via grpc or http/protobuf when `otlp.endpoint` (or the
+      standard `OTEL_EXPORTER_OTLP_ENDPOINT`) is set, no-op otherwise. The
+      driver emits `ledger.execute` spans and the commands/commit-duration/
+      ledger-events/seq/fsync metrics with registry attribute names.
+      End-to-end span visibility in Jaeger to be eyeballed when deployed next
+      to the stack.
 - [x] flock double-instance guard (B2), verified against the real data dir.
 
 **Exit:** officers can browse real (migrated) balances and history in the test

@@ -1,0 +1,5 @@
+templates:
+  - template: "generated.rs.j2"
+    filter: "."
+    application_mode: single
+    file_name: "generated.rs"

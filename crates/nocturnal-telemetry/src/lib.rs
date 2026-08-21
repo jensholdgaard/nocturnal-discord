@@ -1,5 +1,14 @@
-//! Telemetry constants generated from `semconv/` via OTel Weaver, plus
-//! OTLP/tracing wiring helpers. Generated code lands in M3; until then this
-//! crate pins the crate boundary so nothing hand-writes attribute names.
+//! Telemetry: attribute/metric names generated from `semconv/` by OTel
+//! Weaver (never hand-written — a misspelled attribute is a compile error,
+//! not an empty dashboard), plus the OTLP wiring that puts the bot into the
+//! guild's everquest-observability stack.
+//!
+//! Regenerate after editing the registry:
+//! `weaver registry generate -r semconv -t templates rust crates/nocturnal-telemetry/src/`
+//! CI diffs the committed file against a fresh generation.
 
-pub const CRATE: &str = "nocturnal-telemetry";
+pub mod generated;
+pub mod otlp;
+
+pub use generated::{attr, metric};
+pub use otlp::{init, Metrics, TelemetryConfig, TelemetryGuard};

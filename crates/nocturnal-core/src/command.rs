@@ -118,3 +118,30 @@ pub enum Command {
         entries: Vec<ImportedAttendance>,
     },
 }
+
+impl Command {
+    /// Low-cardinality label for telemetry (`nocturnal.command`).
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Command::LinkCharacter { .. } => "link_character",
+            Command::AdjustDkp { .. } => "adjust_dkp",
+            Command::AdjustByCharacter { .. } => "adjust_by_character",
+            Command::StartRaid { .. } => "start_raid",
+            Command::Tick { .. } => "tick",
+            Command::AwardRaid { .. } => "award_raid",
+            Command::EndRaid { .. } => "end_raid",
+            Command::OpenAuction { .. } => "open_auction",
+            Command::PlaceBid { .. } => "place_bid",
+            Command::RetractBid { .. } => "retract_bid",
+            Command::CloseAuction { .. } => "close_auction",
+            Command::FinalizeAuction { .. } => "finalize_auction",
+            Command::CancelAuction { .. } => "cancel_auction",
+            Command::UpdateConfig { .. } => "update_config",
+            Command::IssueToken { .. } => "issue_token",
+            Command::RefreshAccess { .. } => "refresh_access",
+            Command::RevokeToken { .. } => "revoke_token",
+            Command::ImportPlayer { .. } => "import_player",
+            Command::ImportRaid { .. } => "import_raid",
+        }
+    }
+}

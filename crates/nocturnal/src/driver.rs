@@ -8,6 +8,7 @@
 use anyhow::Context as _;
 use nocturnal_core::{Actor, Command, Envelope, GuildId, Ledger, Rejection};
 use nocturnal_store::Store;
+use nocturnal_telemetry::{attr, Metrics};
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
@@ -112,25 +113,77 @@ pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)
     std::thread::Builder::new()
         .name("ledger-writer".into())
         .spawn(move || {
+            let metrics = Metrics::new();
             while let Some(req) = rx.blocking_recv() {
                 match req {
                     Request::Query(f) => f(&ledger),
                     Request::Execute { guild, actor, cmd, reply } => {
+                        let started = std::time::Instant::now();
                         let ctx = nocturnal_core::Ctx { guild, actor, now_ms: now_ms() };
                         let cmd = *cmd;
+                        let command_kind = cmd.kind();
+                        let span = tracing::info_span!(
+                            "ledger.execute",
+                            { attr::NOCTURNAL_GUILD_ID } = %guild,
+                            { attr::NOCTURNAL_COMMAND } = command_kind,
+                            { attr::NOCTURNAL_DECISION_OUTCOME } = tracing::field::Empty,
+                            { attr::NOCTURNAL_EVENT_SEQ } = tracing::field::Empty,
+                        );
+                        let _entered = span.enter();
                         let result = match ledger.propose(&ctx, &cmd) {
-
-                            Err(rej) => Err(ExecError::Rejected(rej)),
-                            Ok(envelopes) => match store.append(&envelopes) {
-                                Ok(()) => {
-                                    ledger.commit(&envelopes);
-                                    Ok(envelopes)
+                            Err(rej) => {
+                                span.record(attr::NOCTURNAL_DECISION_OUTCOME, "rejected");
+                                metrics.record_command(
+                                    command_kind,
+                                    "rejected",
+                                    Some(rej.slug()),
+                                    started.elapsed().as_secs_f64(),
+                                );
+                                Err(ExecError::Rejected(rej))
+                            }
+                            Ok(envelopes) => {
+                                let fsync_started = std::time::Instant::now();
+                                match store.append(&envelopes) {
+                                    Ok(()) => {
+                                        metrics
+                                            .wal_fsync_duration
+                                            .record(fsync_started.elapsed().as_secs_f64(), &[]);
+                                        ledger.commit(&envelopes);
+                                        span.record(attr::NOCTURNAL_DECISION_OUTCOME, "accepted");
+                                        if let Some(last) = envelopes.last() {
+                                            span.record(attr::NOCTURNAL_EVENT_SEQ, last.seq);
+                                        }
+                                        for env in &envelopes {
+                                            metrics.ledger_events.add(
+                                                1,
+                                                &[opentelemetry::KeyValue::new(
+                                                    attr::NOCTURNAL_EVENT_KIND,
+                                                    env.event.kind(),
+                                                )],
+                                            );
+                                        }
+                                        metrics.ledger_seq.record(ledger.next_seq(), &[]);
+                                        metrics.record_command(
+                                            command_kind,
+                                            "accepted",
+                                            None,
+                                            started.elapsed().as_secs_f64(),
+                                        );
+                                        Ok(envelopes)
+                                    }
+                                    Err(e) => {
+                                        span.record(attr::NOCTURNAL_DECISION_OUTCOME, "error");
+                                        tracing::error!(error = %e, "WAL append failed; command dropped");
+                                        metrics.record_command(
+                                            command_kind,
+                                            "error",
+                                            None,
+                                            started.elapsed().as_secs_f64(),
+                                        );
+                                        Err(ExecError::Storage(e.to_string()))
+                                    }
                                 }
-                                Err(e) => {
-                                    tracing::error!(error = %e, "WAL append failed; command dropped");
-                                    Err(ExecError::Storage(e.to_string()))
-                                }
-                            },
+                            }
                         };
                         let _ = reply.send(result);
                     }

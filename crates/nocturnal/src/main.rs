@@ -41,17 +41,16 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let filter = tracing_subscriber::EnvFilter::try_from_env("NOCTURNAL_LOG")
-        .or_else(|_| tracing_subscriber::EnvFilter::try_from_default_env())
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&cfg.log.level));
-    if cfg.log.format == "json" {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .json()
-            .init();
-    } else {
-        tracing_subscriber::fmt().with_env_filter(filter).init();
-    }
+    // The OTLP exporters spawn background tasks: give them a reactor first.
+    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    let _rt_guard = rt.enter();
+    let _telemetry = nocturnal_telemetry::init(&nocturnal_telemetry::TelemetryConfig {
+        endpoint: cfg.otlp.endpoint.clone(),
+        protocol: cfg.otlp.protocol.clone(),
+        service_name: "nocturnal".to_owned(),
+        log_filter: cfg.log.level.clone(),
+        log_json: cfg.log.format == "json",
+    })?;
 
     // One writer, ever (hazard B2). Held until exit.
     let _lock = lock::acquire(&cfg.data.dir)?;
@@ -73,13 +72,11 @@ fn main() -> anyhow::Result<()> {
             "offline mode: ledger up, no gateway; ctrl-c to exit"
         );
         readiness.set_ready();
-        let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
         rt.block_on(async {
             let _ = tokio::signal::ctrl_c().await;
         });
         return Ok(());
     }
 
-    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
     rt.block_on(discord::run(&cfg, driver, readiness))
 }

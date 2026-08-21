@@ -147,6 +147,12 @@ impl Config {
         if let Ok(v) = std::env::var("NOCTURNAL_HEALTH__BIND") {
             cfg.health.bind = Some(v);
         }
+        if let Ok(v) = std::env::var("NOCTURNAL_OTLP__ENDPOINT") {
+            cfg.otlp.endpoint = Some(v);
+        }
+        if let Ok(v) = std::env::var("NOCTURNAL_OTLP__PROTOCOL") {
+            cfg.otlp.protocol = v;
+        }
         if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__COMMAND_PREFIX") {
             cfg.discord.command_prefix = v;
         }
