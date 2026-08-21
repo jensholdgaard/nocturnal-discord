@@ -1,11 +1,18 @@
 [package]
 name = "nocturnal-core"
-description = "placeholder"
+description = "Nocturnal ledger: events, decide/apply folds, projections. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

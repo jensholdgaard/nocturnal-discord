@@ -34,10 +34,9 @@ written down before code.
       input bounds, no negative balances, case-insensitive character matching
       (audit E11), escaped/validated search input (E6). Officers should sign
       off on this short list — the only places old and new intentionally differ.
-- [ ] Decide bid UX with officers: keep the DM flow, or replace it with a
-      Discord modal (the audit's own suggestion — kills the closed-DM and
-      cross-auction-collector failure classes #5/#39/#50 outright).
-- [ ] Decide the fate of the voice/bell feature with officers (default: drop).
+- [x] Bid UX resolved (2026-08-21): keep the DM flow, hardened; modal stays a
+      possible later upgrade.
+- [x] Bell resolved (2026-08-21): kept, strictly fire-and-forget.
 - [x] Telemetry semantic-convention registry (`semconv/`, OTel Weaver format,
       `weaver registry check` clean) — attributes/metrics/spans mirroring the
       event taxonomy; codegen to `nocturnal-telemetry` lands in M3.
@@ -45,8 +44,8 @@ written down before code.
       (fmt, clippy -D warnings, test, `weaver registry check`),
       `nocturnal.example.toml` — fmt/clippy/test green.
 
-**Exit:** `commands.md` reviewed by the guildie/officers (sign-off on the
-deliberate-changes list + the three open decisions); workspace compiles.
+**Exit (met 2026-08-21):** behaviour policy set — current UX kept everywhere,
+integrity fixes ship, officer change requests handled later; workspace green.
 
 *Status note (2026-08-21):* the guildie's `phase1-stability` branch on the
 legacy repo already lands process safety nets, worker guards, auction handler
@@ -57,17 +56,20 @@ the time pressure off this rewrite.
 
 `nocturnal-core` + WAL: events, decide/apply folds, projections. No Discord.
 
-- [ ] Event types per `events.md` with serde round-trip tests per `(kind, v)`.
-- [ ] Single-writer decide/apply; all integrity invariants (architecture.md §invariants)
-      as property tests (proptest): random command streams never yield negative
-      balances, never double-charge, never admit two active raids…
-- [ ] WAL append/replay with CRC + trailing-truncation recovery (hazard B1);
-      crash-injection test (kill mid-append, replay, assert state).
-- [ ] Replay determinism test: fold(log) twice → identical state hash (B3).
-- [ ] Legacy `DKPManager` fixtures pass against the new fold.
+- [x] Event types with serde round-trip tests and pinned wire `kind` strings.
+- [x] Single-writer decide/apply (`Ledger::propose`/`commit` mirroring the
+      decide → fsync → apply loop); integrity invariants as proptest suites
+      (no negative balances, one active raid, rejections mutate nothing).
+- [x] WAL: crc32-per-record JSONL segments, fsync per append, rotation,
+      torn-tail truncation, corruption refusal, seq-gap refusal (hazard B1).
+- [x] Replay determinism: property test + end-to-end in the raid-night scenario (B3).
+- [x] Legacy jest fixtures ported (`legacy_fixtures.rs`): winner selection
+      incl. main/alt lock + overbid promotion, attendance 80/100/100 case,
+      re-bid replace, tie-breaks, validation bounds.
 
-**Exit:** a headless binary can ingest a scripted raid night (raid, ticks,
-three overlapping auctions, crash, resume) and end with provably correct balances.
+**Exit (met 2026-08-21):** `raid_night.rs` scripts the audit's "anatomy of a
+typical crash" — raid, ticks, three overlapping auctions, kill mid-auction,
+replay, finish — and asserts every balance to the point.
 
 ## M2 — Parquet + migration *(~1 week)*
 

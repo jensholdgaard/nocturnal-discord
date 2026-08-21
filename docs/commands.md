@@ -236,13 +236,19 @@ doesn't care where it runs). Paths and the dashboard URL are config
     flags are silent no-ops); `:prohibited:` renders as the emoji.
 11. Stale buttons (pre-restart) answer "this auction has ended" instead of dying.
 
-## Open decisions (M0, officers)
+## Resolved decisions (2026-08-21: keep current behaviour throughout)
 
-- **Bell sound**: keep (needs voice stack + assets/bell.mp3) or drop? Default
-  proposal: drop; if kept, strictly fire-and-forget.
-- **Bid entry UX**: keep the DM-typed-amount flow, or replace with a Discord
-  modal (amount field on button click)? Modal kills the closed-DM crash class
-  and the cross-auction collector confusion (#5/#39/#50) and is one fewer
-  click. Default proposal: modal, with `/bid` unchanged for long auctions.
-- **`/auctiondetails` public callout** ("peek under the hood"): intentional
-  social feature — keep as-is (default) or make silent?
+Per the maintainer: current UX stays exactly as officers know it; changes can
+be requested later. Concretely:
+
+- **Bell sound**: kept — played at short-auction start in the raid channel(s),
+  strictly fire-and-forget (a voice failure can never touch an auction).
+- **Bid entry**: the DM-typed-amount flow stays, hardened — the collector is
+  bound to its specific auction, closed DMs get the ephemeral fallback, and
+  nothing in the path can crash the bot. (A modal remains a cheap later
+  upgrade if officers ask.)
+- **`/auctiondetails` public callout**: kept as-is.
+
+The [deliberate changes](#deliberate-changes-officer-sign-off--all-fixes-no-feature-changes)
+above are bug fixes, not UX changes — they ship with the rewrite; officers can
+veto any individually later.

@@ -1,4 +1,12 @@
-//! Event store: WAL append/replay (CRC, trailing-truncation recovery),
-//! Parquet compaction, backups. Hazards B1/B5 live and die here. (M1–M2)
+//! Event store: the write-ahead log that makes the ledger durable.
+//!
+//! Format: one event per line, `"{crc32:08x} {json}\n"` — human-greppable on
+//! purpose (loot disputes are settled with `grep`). Appends fsync before
+//! returning. On open, a torn *trailing* record (crash mid-write, hazard B1)
+//! is truncated away; corruption anywhere else refuses to load.
+//!
+//! Parquet compaction of sealed segments lands in M2.
 
-pub const CRATE: &str = "nocturnal-store";
+pub mod wal;
+
+pub use wal::{Wal, WalError};

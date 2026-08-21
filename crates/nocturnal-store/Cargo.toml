@@ -1,11 +1,19 @@
 [package]
 name = "nocturnal-store"
-description = "placeholder"
+description = "Nocturnal event store: WAL append/replay with crash recovery; Parquet compaction (M2)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[dependencies]
+nocturnal-core = { path = "../nocturnal-core" }
+serde_json.workspace = true
+crc32fast.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
