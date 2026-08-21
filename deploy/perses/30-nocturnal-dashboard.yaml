@@ -1,0 +1,244 @@
+# Nocturnal bot health — provisioned like the EverQuest dashboard, project
+# 'everquest', default Prometheus datasource. Metric names are the semconv
+# registry's, as translated by Prometheus OTLP ingestion (dots -> underscores,
+# _total for counters, _seconds for the s-unit histograms).
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: nocturnal-bot
+  project: everquest
+spec:
+  display:
+    name: Nocturnal Bot
+  duration: 6h
+  refreshInterval: 1m
+  panels:
+    stat_ledger_seq:
+      kind: Panel
+      spec:
+        display:
+          name: Ledger head (seq)
+          description: Total events ever appended. Monotonic; a reset to a lower number would mean data loss.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(nocturnal_ledger_seq) or vector(0)
+    stat_commands_rate:
+      kind: Panel
+      spec:
+        display:
+          name: Commands / 5m
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_commands_total[5m])) or vector(0)
+    stat_error_rate:
+      kind: Panel
+      spec:
+        display:
+          name: Storage errors (24h)
+          description: WAL/storage failures during command execution. Anything above 0 is a page.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_commands_total{nocturnal_decision_outcome="error"}[24h])) or vector(0)
+    stat_commit_p95:
+      kind: Panel
+      spec:
+        display:
+          name: Commit p95 (5m)
+          description: Receive-to-fsynced latency. The legacy bot's 3-second Discord window is the line that must never be approached.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: seconds
+              decimalPlaces: 3
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) or vector(0)
+    ts_commands_by_kind:
+      kind: Panel
+      spec:
+        display:
+          name: Commands by kind
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_command) (rate(nocturnal_commands_total[5m]))
+                seriesNameFormat: '{{nocturnal_command}}'
+    ts_outcomes:
+      kind: Panel
+      spec:
+        display:
+          name: Decisions by outcome
+          description: Rejections are healthy (typed refusals); errors are not.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_decision_outcome) (rate(nocturnal_commands_total[5m]))
+                seriesNameFormat: '{{nocturnal_decision_outcome}}'
+    ts_events_by_kind:
+      kind: Panel
+      spec:
+        display:
+          name: Ledger events by kind
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_event_kind) (rate(nocturnal_ledger_events_total[5m]))
+                seriesNameFormat: '{{nocturnal_event_kind}}'
+    ts_latency:
+      kind: Panel
+      spec:
+        display:
+          name: Commit & fsync latency (p50/p95)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m])))
+                seriesNameFormat: commit p95
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.5, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m])))
+                seriesNameFormat: commit p50
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_wal_fsync_duration_seconds_bucket[5m])))
+                seriesNameFormat: fsync p95
+  layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: Right now
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_ledger_seq'
+      - x: 6
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_commands_rate'
+      - x: 12
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_commit_p95'
+      - x: 18
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_error_rate'
+  - kind: Grid
+    spec:
+      display:
+        title: Ledger
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_commands_by_kind'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_outcomes'
+      - x: 0
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_events_by_kind'
+      - x: 12
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_latency'

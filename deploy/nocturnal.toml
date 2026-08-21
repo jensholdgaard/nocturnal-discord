@@ -1,0 +1,21 @@
+# Nocturnal on the observability VM (eq-perses). Data lives on the host.
+[data]
+dir = "/var/lib/nocturnal"
+
+[log]
+level = "info"
+format = "json"
+
+[discord]
+guild_id = 1540111927995539506   # test server (legacy fork testing)
+command_prefix = "controels-"
+
+[health]
+bind = "127.0.0.1:8090"
+
+[otlp]
+# Through the on-box gateway collector like every other reporter (bearer auth
+# via OTEL_EXPORTER_OTLP_HEADERS in the env file); it routes metrics ->
+# Prometheus and traces -> Jaeger.
+endpoint = "http://127.0.0.1:4319"
+protocol = "http/protobuf"

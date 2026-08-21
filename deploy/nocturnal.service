@@ -1,0 +1,23 @@
+[Unit]
+Description=Nocturnal DKP bot (event-sourced rewrite)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nocturnal
+Group=nocturnal
+ExecStart=/usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.toml
+EnvironmentFile=/etc/nocturnal/env
+Restart=on-failure
+RestartSec=3
+# Crash-restart is safe by design (replay); the lock file prevents overlap.
+StateDirectory=nocturnal
+ReadWritePaths=/var/lib/nocturnal
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

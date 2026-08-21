@@ -101,9 +101,9 @@ First contact with Discord, zero risk: nothing mutates.
       with `--check`/`--print-config`/`--offline`, flock instance lock (B2,
       verified: second instance refuses), `/healthz` + `/readyz`.
 - [x] `/playerdkp`, `/dkphistory`, `/listplayersdkps`, `/searchlogs` with the
-      one shared pagination helper (S12), legacy embed formats. Compiles and
-      boots against migrated production data; **live test-server run needs a
-      fresh bot application token + test guild id from the maintainer**.
+      one shared pagination helper (S12), legacy embed formats. **Live** in the
+      test guild (controels-test-bot, `controels-` prefix) over the migrated
+      production ledger, 2026-08-21.
 - [x] OTLP wiring: `nocturnal-telemetry` constants are Weaver-generated from
       `semconv/` (CI diffs against a fresh generation); traces + logs +
       metrics export via grpc or http/protobuf when `otlp.endpoint` (or the
@@ -142,6 +142,16 @@ mid-raid, ledger perfect.
 
 **Exit:** the "anatomy of a typical crash" scenario from the audit is replayed
 step by step against the new bot and is boring.
+
+### Deployment kit (pulled forward from M6, 2026-08-21)
+
+`deploy/`: static musl binary via cargo-zigbuild, `nocturnal.toml` for the
+observability VM (data on the host at `/var/lib/nocturnal`, OTLP through the
+on-box gateway with a dedicated bearer token), hardened systemd unit,
+Perses dashboard (`Nocturnal Bot` in project everquest: ledger head, command
+rates/outcomes, commit + fsync latency percentiles, events by kind), and the
+idempotent `install-vm.sh` (run by the maintainer; agent SSH is
+policy-blocked).
 
 ## M6 — Ops & hardening *(~1 week)*
 
