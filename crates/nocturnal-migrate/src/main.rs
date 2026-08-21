@@ -13,9 +13,21 @@ use nocturnal_migrate::{genesis_commands, run_genesis, LegacyPlayer, LegacyRaid}
 use nocturnal_store::Wal;
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    let mut deprecation_days: Option<i64> = None;
+    if let Some(i) = args.iter().position(|a| a == "--raid-deprecation-days") {
+        let value = args.get(i + 1).and_then(|v| v.parse().ok());
+        let Some(v) = value else {
+            eprintln!("--raid-deprecation-days needs an integer");
+            return ExitCode::from(2);
+        };
+        deprecation_days = Some(v);
+        args.drain(i..=i + 1);
+    }
     let [_, players_path, raids_path, out_dir] = &args[..] else {
-        eprintln!("usage: nocturnal-migrate <players.json> <raids.json> <out-data-dir>");
+        eprintln!(
+            "usage: nocturnal-migrate <players.json> <raids.json> <out-data-dir> [--raid-deprecation-days N]"
+        );
         return ExitCode::from(2);
     };
 
@@ -28,7 +40,7 @@ fn main() -> ExitCode {
         Err(e) => return fail(&format!("{raids_path}: {e}")),
     };
 
-    let (guild, commands, warnings) = genesis_commands(&players, &raids);
+    let (guild, commands, warnings) = genesis_commands(&players, &raids, deprecation_days);
     for w in &warnings {
         eprintln!("warning: {w}");
     }

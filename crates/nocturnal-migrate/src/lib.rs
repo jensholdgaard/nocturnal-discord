@@ -109,9 +109,13 @@ fn convert_item(i: &LegacyItem) -> Item {
 }
 
 /// Build the genesis command stream. Deterministic: same input, same output.
+/// `raid_deprecation_days` seeds the guild config (legacy default: 90) —
+/// useful when migrating a stale snapshot whose players would otherwise all
+/// fall outside the activity window.
 pub fn genesis_commands(
     players: &[LegacyPlayer],
     raids: &[LegacyRaid],
+    raid_deprecation_days: Option<i64>,
 ) -> (u64, Vec<Command>, Vec<String>) {
     let mut warnings = Vec::new();
     let guild = players
@@ -122,6 +126,14 @@ pub fn genesis_commands(
         .unwrap_or(0);
 
     let mut commands = Vec::new();
+    if let Some(days) = raid_deprecation_days {
+        commands.push(Command::UpdateConfig {
+            patch: nocturnal_core::event::ConfigPatch {
+                raid_deprecation_ms: Some(days * nocturnal_core::state::DAY_MS),
+                ..Default::default()
+            },
+        });
+    }
     for (i, r) in raids.iter().enumerate() {
         let raid_id = r.id.clone().unwrap_or_else(|| format!("legacy-{i:04}"));
         commands.push(Command::ImportRaid {

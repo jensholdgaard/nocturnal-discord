@@ -28,7 +28,7 @@ const RAIDS: &str = r#"[
 fn genesis_round_trips_and_verifies() {
     let players: Vec<LegacyPlayer> = serde_json::from_str(PLAYERS).unwrap();
     let raids: Vec<LegacyRaid> = serde_json::from_str(RAIDS).unwrap();
-    let (guild, commands, warnings) = genesis_commands(&players, &raids);
+    let (guild, commands, warnings) = genesis_commands(&players, &raids, None);
     assert_eq!(guild, 42);
     assert_eq!(commands.len(), 3, "1 raid + 2 importable players");
     assert_eq!(warnings.len(), 2, "bad id + negative balance: {warnings:?}");
