@@ -114,6 +114,9 @@ pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)
         .name("ledger-writer".into())
         .spawn(move || {
             let metrics = Metrics::new();
+            // Seed the gauge so dashboards show the ledger head from boot,
+            // not only after the first write.
+            metrics.ledger_seq.record(ledger.next_seq(), &[]);
             while let Some(req) = rx.blocking_recv() {
                 match req {
                     Request::Query(f) => f(&ledger),

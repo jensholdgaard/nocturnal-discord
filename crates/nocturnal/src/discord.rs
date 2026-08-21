@@ -35,6 +35,7 @@ fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
 
 /// Shows the DKP of a player.
 #[poise::command(slash_command, ephemeral)]
+#[tracing::instrument(name = "command.playerdkp", skip_all)]
 pub async fn playerdkp(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -60,6 +61,7 @@ pub async fn playerdkp(
 
 /// Shows the DKP history of a player (ticks aggregated per raid, 30/page).
 #[poise::command(slash_command, ephemeral)]
+#[tracing::instrument(name = "command.dkphistory", skip_all)]
 pub async fn dkphistory(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -156,6 +158,7 @@ fn history_lines(log: &[LogEntry]) -> Vec<String> {
 
 /// List all players and their current DKP (10/page; refused during a raid).
 #[poise::command(slash_command, rename = "listplayersdkps", ephemeral)]
+#[tracing::instrument(name = "command.listplayersdkps", skip_all)]
 pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
     ctx.defer_ephemeral().await?;
@@ -291,6 +294,7 @@ pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Search the ledger's comments (literal text — audit E6; 20/page).
 #[poise::command(slash_command, rename = "searchlogs", ephemeral)]
+#[tracing::instrument(name = "command.searchlogs", skip_all)]
 pub async fn searchlogs(
     ctx: Context<'_>,
     #[description = "Search term"] search: String,

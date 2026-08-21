@@ -57,19 +57,47 @@ fn export_enabled(cfg: &TelemetryConfig) -> bool {
     cfg.endpoint.is_some() || std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok()
 }
 
+/// Parse `OTEL_EXPORTER_OTLP_HEADERS` ("k=v,k=v") ourselves so bearer auth
+/// works regardless of which env vars the exporter crate honors.
+fn env_headers() -> std::collections::HashMap<String, String> {
+    std::env::var("OTEL_EXPORTER_OTLP_HEADERS")
+        .ok()
+        .map(|s| {
+            s.split(',')
+                .filter_map(|kv| {
+                    kv.split_once('=')
+                        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+// For http/protobuf the Rust exporter treats a code-set endpoint as the FULL
+// per-signal URL, so the signal path must be appended explicitly.
 macro_rules! exporter {
-    ($builder:expr, $cfg:expr) => {{
-        let b = $builder;
-        let b = if $cfg.protocol == "http/protobuf" {
-            b.with_http().build()
+    ($builder:expr, $cfg:expr, $path:expr) => {{
+        if $cfg.protocol == "http/protobuf" {
+            let mut b = opentelemetry_otlp::WithHttpConfig::with_headers(
+                $builder.with_http(),
+                env_headers(),
+            );
+            if let Some(e) = &$cfg.endpoint {
+                b = opentelemetry_otlp::WithExportConfig::with_endpoint(
+                    b,
+                    format!("{}{}", e.trim_end_matches('/'), $path),
+                );
+            }
+            b.build()
         } else {
-            let b = b.with_tonic();
+            let b = $builder.with_tonic();
             match &$cfg.endpoint {
-                Some(e) => opentelemetry_otlp::WithExportConfig::with_endpoint(b, e).build(),
+                Some(e) => {
+                    opentelemetry_otlp::WithExportConfig::with_endpoint(b, e.clone()).build()
+                }
                 None => b.build(),
             }
-        };
-        b
+        }
     }};
 }
 
@@ -102,8 +130,12 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .with_service_name(cfg.service_name.clone())
         .build();
 
-    let span_exporter = exporter!(opentelemetry_otlp::SpanExporter::builder(), cfg)
-        .context("building OTLP span exporter")?;
+    let span_exporter = exporter!(
+        opentelemetry_otlp::SpanExporter::builder(),
+        cfg,
+        "/v1/traces"
+    )
+    .context("building OTLP span exporter")?;
     let tracer_provider = SdkTracerProvider::builder()
         .with_batch_exporter(span_exporter)
         .with_resource(resource.clone())
@@ -111,7 +143,7 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
     let otel_trace_layer =
         tracing_opentelemetry::layer().with_tracer(tracer_provider.tracer("nocturnal"));
 
-    let log_exporter = exporter!(opentelemetry_otlp::LogExporter::builder(), cfg)
+    let log_exporter = exporter!(opentelemetry_otlp::LogExporter::builder(), cfg, "/v1/logs")
         .context("building OTLP log exporter")?;
     let logger_provider = SdkLoggerProvider::builder()
         .with_batch_exporter(log_exporter)
@@ -119,8 +151,12 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .build();
     let otel_log_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
-    let metric_exporter = exporter!(opentelemetry_otlp::MetricExporter::builder(), cfg)
-        .context("building OTLP metric exporter")?;
+    let metric_exporter = exporter!(
+        opentelemetry_otlp::MetricExporter::builder(),
+        cfg,
+        "/v1/metrics"
+    )
+    .context("building OTLP metric exporter")?;
     let meter_provider = SdkMeterProvider::builder()
         .with_periodic_exporter(metric_exporter)
         .with_resource(resource)
