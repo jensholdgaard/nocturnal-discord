@@ -50,7 +50,9 @@ fn arb_command() -> impl Strategy<Value = Command> {
             item: Item {
                 id: "1".into(),
                 name: "item".into(),
-                url: None
+                url: None,
+                data: None,
+                image: None
             },
             flavor: Flavor::Short,
             min_bid: 0,

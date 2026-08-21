@@ -14,6 +14,8 @@ fn item() -> Item {
         id: "9".into(),
         name: "Cloak".into(),
         url: Some("https://x".into()),
+        data: Some("WT: 5".into()),
+        image: None,
     }
 }
 

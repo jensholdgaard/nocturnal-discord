@@ -140,6 +140,13 @@ version = "0.1.0"
 [[package]]
 name = "nocturnal-migrate"
 version = "0.1.0"
+dependencies = [
+ "nocturnal-core",
+ "nocturnal-store",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "nocturnal-provision"

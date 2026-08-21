@@ -1,11 +1,20 @@
 [package]
 name = "nocturnal-migrate"
-description = "placeholder"
+description = "Legacy nocturnal-dkp-bot data -> genesis events, with balance verification"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[dependencies]
+nocturnal-core = { path = "../nocturnal-core" }
+nocturnal-store = { path = "../nocturnal-store" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

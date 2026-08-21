@@ -40,6 +40,8 @@ fn item(name: &str) -> Item {
         id: name.to_owned(),
         name: name.to_owned(),
         url: None,
+        data: None,
+        image: None,
     }
 }
 

@@ -75,9 +75,14 @@ replay, finish — and asserts every balance to the point.
 
 - [ ] Compaction: sealed WAL segments → month-partitioned Parquet, crash-safe
       and idempotent (B5); replay reads Parquet + WAL tail seamlessly.
-- [ ] `nocturnal-migrate`: Atlas export → genesis events (`*.imported`).
-- [ ] **Balance verification report**: per-player legacy vs replayed (B10),
-      run against the real production export.
+- [x] `nocturnal-migrate`: legacy backup JSONs → genesis events with a
+      per-player balance verification report; skips unparseable ids with
+      warnings, carries legacy negative balances honestly.
+- [x] **Balance verification report** run against real production data
+      (2024-12-19 snapshot recovered from the Discord log channel): 163
+      players, 145 raids, 308 genesis events, **all balances match**; two
+      legacy negative balances confirmed (audit #46 in the wild). A fresh
+      snapshot needs read access to `#bot-backups` (or an officer repost).
 - [ ] Backup = tar of data dir; restore test.
 
 **Exit:** production data migrated on a workstation; verification report at

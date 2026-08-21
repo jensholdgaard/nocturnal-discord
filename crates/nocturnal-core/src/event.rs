@@ -25,6 +25,12 @@ pub struct Item {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// Legacy stat-block text (embed body).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+    /// Legacy icon URL (embed thumbnail).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 /// Reference to a raid stored on ledger entries (legacy log shape).

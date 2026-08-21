@@ -26,6 +26,8 @@ fn item() -> Item {
         id: "1".into(),
         name: "item".into(),
         url: None,
+        data: None,
+        image: None,
     }
 }
 
