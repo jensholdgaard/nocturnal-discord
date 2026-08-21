@@ -94,13 +94,20 @@ replay, finish — and asserts every balance to the point.
 
 First contact with Discord, zero risk: nothing mutates.
 
-- [ ] serenity/poise wiring: immediate defer, error hook, panic containment,
-      command registration on definition-hash change only.
-- [ ] `/dkp`, `/history` (+ pagination helper — one, shared), roster/attendance
-      views, running in a **test server** against the migrated production data.
+- [x] serenity/poise wiring: immediate defer, error hook, guild-scoped
+      registration (never global while the legacy bot lives; definition-hash
+      skip is a later nicety). Single-writer driver thread (decide → fsync →
+      apply; reads as closures on the same thread), layered TOML/env config
+      with `--check`/`--print-config`/`--offline`, flock instance lock (B2,
+      verified: second instance refuses), `/healthz` + `/readyz`.
+- [x] `/playerdkp`, `/dkphistory`, `/listplayersdkps`, `/searchlogs` with the
+      one shared pagination helper (S12), legacy embed formats. Compiles and
+      boots against migrated production data; **live test-server run needs a
+      fresh bot application token + test guild id from the maintainer**.
 - [ ] OTLP wiring: traces + logs + metrics into everquest-observability via
-      the `nocturnal-telemetry` crate generated from `semconv/`; `/healthz`.
-- [ ] flock double-instance guard (B2) with test.
+      the `nocturnal-telemetry` crate generated from `semconv/`. (`/healthz`
+      + `/readyz` already live.)
+- [x] flock double-instance guard (B2), verified against the real data dir.
 
 **Exit:** officers can browse real (migrated) balances and history in the test
 server; spans visible in Jaeger.

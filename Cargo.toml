@@ -32,3 +32,10 @@ arrow-schema = "56"
 parquet = { version = "56", default-features = false, features = ["arrow", "snap"] }
 proptest = "1"
 tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "time"] }
+poise = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+toml = "0.8"
+anyhow = "1"
+rustix = { version = "1", features = ["fs"] }

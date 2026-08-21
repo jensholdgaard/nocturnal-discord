@@ -1,9 +1,85 @@
-//! Bin crate: wiring (config → store → core → discord → telemetry),
-//! scheduler, health endpoints, graceful shutdown. See docs/operations.md.
+//! Nocturnal — event-sourced Discord DKP + telemetry-provisioning bot.
+//!
+//! Boot: config → tracing → instance lock (B2) → replay → health → gateway.
+//! See docs/operations.md for the operational contract.
 
-fn main() {
-    println!(
-        "nocturnal {} — scaffold; the ledger arrives in M1 (docs/plan.md)",
-        env!("CARGO_PKG_VERSION")
-    );
+mod config;
+mod discord;
+mod driver;
+mod health;
+mod lock;
+
+use anyhow::Context as _;
+use config::Config;
+
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    let mut config_path: Option<&str> = None;
+    let mut mode_check = false;
+    let mut mode_print = false;
+    let mut offline = false;
+    let mut it = args.iter().skip(1);
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--config" => config_path = it.next().map(String::as_str),
+            "--check" => mode_check = true,
+            "--print-config" => mode_print = true,
+            "--offline" => offline = true,
+            "--version" | "-V" => {
+                println!("nocturnal {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            other => anyhow::bail!(
+                "unknown argument {other:?} (known: --config <path>, --check, --print-config, --offline, --version)"
+            ),
+        }
+    }
+
+    let cfg = Config::load(config_path)?;
+    if mode_print {
+        println!("{}", cfg.printable());
+        return Ok(());
+    }
+
+    let filter = tracing_subscriber::EnvFilter::try_from_env("NOCTURNAL_LOG")
+        .or_else(|_| tracing_subscriber::EnvFilter::try_from_default_env())
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&cfg.log.level));
+    if cfg.log.format == "json" {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .json()
+            .init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
+
+    // One writer, ever (hazard B2). Held until exit.
+    let _lock = lock::acquire(&cfg.data.dir)?;
+
+    let (driver, replayed) = driver::start(&cfg.data.dir)?;
+    if mode_check {
+        println!("config ok; ledger ok ({replayed} events)");
+        return Ok(());
+    }
+
+    let readiness = health::Readiness::default();
+    if let Some(bind) = &cfg.health.bind {
+        health::serve(bind, readiness.clone())?;
+    }
+
+    if offline {
+        tracing::info!(
+            replayed,
+            "offline mode: ledger up, no gateway; ctrl-c to exit"
+        );
+        readiness.set_ready();
+        let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+        rt.block_on(async {
+            let _ = tokio::signal::ctrl_c().await;
+        });
+        return Ok(());
+    }
+
+    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    rt.block_on(discord::run(&cfg, driver, readiness))
 }
