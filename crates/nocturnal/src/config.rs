@@ -79,6 +79,11 @@ pub struct DiscordConfig {
     /// Guild for scoped command registration (a test server during M3–M7).
     /// Commands are NEVER registered globally while the legacy bot lives.
     pub guild_id: Option<u64>,
+    /// Prepended to every slash-command name (e.g. "controels-" makes
+    /// /controels-playerdkp). Lets a test server share a bot application with
+    /// other deployments without colliding names. Empty for production.
+    #[serde(default)]
+    pub command_prefix: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -142,6 +147,19 @@ impl Config {
         if let Ok(v) = std::env::var("NOCTURNAL_HEALTH__BIND") {
             cfg.health.bind = Some(v);
         }
+        if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__COMMAND_PREFIX") {
+            cfg.discord.command_prefix = v;
+        }
+        let prefix = &cfg.discord.command_prefix;
+        if !prefix
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+            || prefix.len() > 20
+        {
+            bail!(
+                "discord.command_prefix must be lowercase [a-z0-9-_], at most 20 chars, got {prefix:?}"
+            );
+        }
         if cfg.otlp.protocol != "grpc" && cfg.otlp.protocol != "http/protobuf" {
             bail!(
                 "otlp.protocol must be \"grpc\" or \"http/protobuf\", got {:?}",
@@ -173,11 +191,12 @@ impl Config {
     /// Redacted, resolved view for `--print-config`.
     pub fn printable(&self) -> String {
         format!(
-            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\nhealth.bind = {:?}\notlp.endpoint = {:?}\notlp.protocol = {:?}\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
+            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\notlp.endpoint = {:?}\notlp.protocol = {:?}\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
             self.data.dir,
             self.log.level,
             self.log.format,
             self.discord.guild_id,
+            self.discord.command_prefix,
             self.health.bind,
             self.otlp.endpoint,
             self.otlp.protocol,

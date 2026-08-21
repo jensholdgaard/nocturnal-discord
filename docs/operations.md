@@ -23,6 +23,11 @@ fail-fast errors that name the offending key:
 3. **Secrets** — never in the file: `DISCORD_TOKEN` (or `DISCORD_TOKEN_FILE`
    for Docker/K8s secrets). Config dumps and spans never echo secrets.
 
+`discord.command_prefix` prepends every slash-command name (e.g.
+`controels-` → `/controels-playerdkp`), so a test server can share the bot
+application with other deployments without name collisions; empty in
+production.
+
 Provisioning (M8) adds a `[provision]` section: `tokens_path`,
 `perses_provisioning_dir`, `roles_map_path`, `dashboard_url` — all optional;
 absent config cleanly disables `/dpstoken`//`/dpsrevoke`. The roles map stays a

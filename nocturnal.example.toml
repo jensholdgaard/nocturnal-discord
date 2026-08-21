@@ -15,6 +15,10 @@
 # endpoint = ""                # empty = telemetry export off; OTEL_EXPORTER_OTLP_ENDPOINT honored
 # protocol = "grpc"            # or "http/protobuf"
 
+[discord]
+# guild_id = 0                 # test server for guild-scoped command registration
+# command_prefix = "controels-" # /controels-playerdkp etc.; empty for production
+
 [health]
 # bind = ""                    # e.g. "0.0.0.0:8080" → /healthz /readyz /metrics
 

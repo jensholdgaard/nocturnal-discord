@@ -456,8 +456,16 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         .discord
         .guild_id
         .context("discord.guild_id is required — commands register guild-scoped only (test server) while the legacy bot is alive")?;
+    let mut commands = vec![playerdkp(), dkphistory(), listplayersdkps(), searchlogs()];
+    // A test server can share the bot application with other deployments by
+    // prefixing every command name (e.g. /controels-playerdkp).
+    if !cfg.discord.command_prefix.is_empty() {
+        for cmd in &mut commands {
+            cmd.name = format!("{}{}", cfg.discord.command_prefix, cmd.name);
+        }
+    }
     let options = poise::FrameworkOptions {
-        commands: vec![playerdkp(), dkphistory(), listplayersdkps(), searchlogs()],
+        commands,
         on_error: |error| Box::pin(on_error(error)),
         ..Default::default()
     };
