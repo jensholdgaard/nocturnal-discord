@@ -112,7 +112,9 @@ impl Wal {
             Self::read_segment(seg, last_segment, &mut envelopes)?;
         }
 
-        let mut next_seq = 0u64;
+        // Contiguity within the WAL; the chain may start above 0 once older
+        // events have been compacted to Parquet (Store validates the join).
+        let mut next_seq = envelopes.first().map_or(0, |e| e.seq);
         for env in &envelopes {
             if env.seq != next_seq {
                 return Err(WalError::SequenceGap {
@@ -196,6 +198,41 @@ impl Wal {
 
     pub fn next_seq(&self) -> u64 {
         self.next_seq
+    }
+
+    /// Align an empty WAL to continue after `n` already-compacted events.
+    /// No-op error if the WAL already has records.
+    pub fn align_next_seq(&mut self, n: u64) {
+        if self.bytes == 0 {
+            self.next_seq = self.next_seq.max(n);
+        }
+    }
+
+    /// Force-rotate so the current segment becomes sealed (compactable).
+    /// No-op on an empty segment.
+    pub fn seal(&mut self) -> Result<(), WalError> {
+        if self.bytes > 0 {
+            self.rotate(self.next_seq)?;
+        }
+        Ok(())
+    }
+
+    /// Sealed segment paths (everything except the active append target),
+    /// sorted — the compaction input set.
+    pub fn sealed_segments(&self) -> Result<Vec<PathBuf>, WalError> {
+        let mut v: Vec<PathBuf> = fs::read_dir(&self.dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|e| e == SEGMENT_EXT) && *p != self.path)
+            .collect();
+        v.sort();
+        Ok(v)
+    }
+
+    /// Re-read one sealed segment (used by compaction).
+    pub fn read_sealed(path: &Path) -> Result<Vec<Envelope>, WalError> {
+        let mut out = Vec::new();
+        Self::read_segment(path, false, &mut out)?;
+        Ok(out)
     }
 
     /// Durably append envelopes: written, flushed, and fsynced before Ok.

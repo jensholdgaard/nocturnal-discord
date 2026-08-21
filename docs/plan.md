@@ -73,8 +73,10 @@ replay, finish — and asserts every balance to the point.
 
 ## M2 — Parquet + migration *(~1 week)*
 
-- [ ] Compaction: sealed WAL segments → month-partitioned Parquet, crash-safe
-      and idempotent (B5); replay reads Parquet + WAL tail seamlessly.
+- [x] Compaction: sealed WAL segments → month-partitioned Parquet
+      (temp-write → rename → read-back verify → delete), idempotent after
+      partial crash (B5); `Store::open` replays Parquet + WAL seamlessly.
+      Real data: 16 MB genesis WAL → 2.3 MB Parquet, boot in ~90 ms.
 - [x] `nocturnal-migrate`: legacy backup JSONs → genesis events with a
       per-player balance verification report; skips unparseable ids with
       warnings, carries legacy negative balances honestly.
@@ -83,7 +85,7 @@ replay, finish — and asserts every balance to the point.
       players, 145 raids, 308 genesis events, **all balances match**; two
       legacy negative balances confirmed (audit #46 in the wild). A fresh
       snapshot needs read access to `#bot-backups` (or an officer repost).
-- [ ] Backup = tar of data dir; restore test.
+- [ ] Backup = tar of data dir; restore test. (Trivial now; lands with M6 ops.)
 
 **Exit:** production data migrated on a workstation; verification report at
 100 % (or diffs explained); history queryable via DataFusion CLI for fun.

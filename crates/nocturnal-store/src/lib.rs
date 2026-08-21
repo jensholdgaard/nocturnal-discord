@@ -5,8 +5,10 @@
 //! returning. On open, a torn *trailing* record (crash mid-write, hazard B1)
 //! is truncated away; corruption anywhere else refuses to load.
 //!
-//! Parquet compaction of sealed segments lands in M2.
+//! Sealed segments compact into month-partitioned Parquet (`compact::Store`).
 
+pub mod compact;
 pub mod wal;
 
+pub use compact::{CompactionReport, Store};
 pub use wal::{Wal, WalError};

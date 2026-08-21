@@ -11,6 +11,9 @@ rust-version.workspace = true
 nocturnal-core = { path = "../nocturnal-core" }
 serde_json.workspace = true
 crc32fast.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+parquet.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
