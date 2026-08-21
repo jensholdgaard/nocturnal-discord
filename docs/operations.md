@@ -44,6 +44,10 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
 
 ## Observability
 
+- **Export allowlist** — only telemetry from `nocturnal*` crate targets is
+  exported (hazard B13); dependency spans/logs never leave the process, no
+  matter what libraries stuff into their fields. The allowlist is pinned by a
+  unit test.
 - **Traces** — `tracing` + OTLP export (grpc or http/protobuf, configurable;
   off by default outside containers). One span per interaction from gateway
   receive → decide → fsync → reply, with `guild_id`, `command`, `event.seq`

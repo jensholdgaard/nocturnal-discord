@@ -13,6 +13,7 @@ use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::Resource;
+use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use tracing_subscriber::Layer as _;
@@ -55,6 +56,22 @@ impl Drop for TelemetryGuard {
 
 fn export_enabled(cfg: &TelemetryConfig) -> bool {
     cfg.endpoint.is_some() || std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok()
+}
+
+/// Export allowlist (OTel sensitive-data guidance: don't collect what you
+/// didn't deliberately author). Only spans/events from our own crates leave
+/// the process; library internals stay local — serenity, for one, dumps whole
+/// gateway payloads (Identify incl. the bot token, InteractionCreate incl.
+/// interaction tokens and member data) into its span fields.
+fn export_targets() -> Targets {
+    Targets::new()
+        .with_target("nocturnal", LevelFilter::TRACE)
+        .with_target("nocturnal_core", LevelFilter::TRACE)
+        .with_target("nocturnal_store", LevelFilter::TRACE)
+        .with_target("nocturnal_telemetry", LevelFilter::TRACE)
+        .with_target("nocturnal_discord", LevelFilter::TRACE)
+        .with_target("nocturnal_provision", LevelFilter::TRACE)
+        .with_target("nocturnal_migrate", LevelFilter::TRACE)
 }
 
 /// Parse `OTEL_EXPORTER_OTLP_HEADERS` ("k=v,k=v") ourselves so bearer auth
@@ -140,8 +157,9 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .with_batch_exporter(span_exporter)
         .with_resource(resource.clone())
         .build();
-    let otel_trace_layer =
-        tracing_opentelemetry::layer().with_tracer(tracer_provider.tracer("nocturnal"));
+    let otel_trace_layer = tracing_opentelemetry::layer()
+        .with_tracer(tracer_provider.tracer("nocturnal"))
+        .with_filter(export_targets());
 
     let log_exporter = exporter!(opentelemetry_otlp::LogExporter::builder(), cfg, "/v1/logs")
         .context("building OTLP log exporter")?;
@@ -149,7 +167,8 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .with_batch_exporter(log_exporter)
         .with_resource(resource.clone())
         .build();
-    let otel_log_layer = OpenTelemetryTracingBridge::new(&logger_provider);
+    let otel_log_layer =
+        OpenTelemetryTracingBridge::new(&logger_provider).with_filter(export_targets());
 
     let metric_exporter = exporter!(
         opentelemetry_otlp::MetricExporter::builder(),
@@ -255,5 +274,41 @@ impl Metrics {
 impl Default for Metrics {
     fn default() -> Self {
         Metrics::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::export_targets;
+    use tracing::Level;
+
+    /// The allowlist is the leak barrier — pin it.
+    #[test]
+    fn only_our_crates_are_exported() {
+        let targets = export_targets();
+        for ours in [
+            "nocturnal",
+            "nocturnal::driver",
+            "nocturnal_core::decide",
+            "nocturnal_discord::commands",
+        ] {
+            assert!(
+                targets.would_enable(ours, &Level::DEBUG),
+                "{ours} must export"
+            );
+        }
+        for theirs in [
+            "serenity::gateway::shard",
+            "serenity::http::request",
+            "poise::dispatch",
+            "hyper_util::client",
+            "reqwest",
+            "opentelemetry_sdk",
+        ] {
+            assert!(
+                !targets.would_enable(theirs, &Level::ERROR),
+                "{theirs} must NOT export"
+            );
+        }
     }
 }
