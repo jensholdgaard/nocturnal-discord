@@ -37,6 +37,7 @@ audit's failure classes are impossible rather than patched.
 | [docs/operations.md](docs/operations.md) | Production readiness: config layering, OTLP, health, containers, CI, backups |
 | [docs/plan.md](docs/plan.md) | Milestones M0–M7 with acceptance criteria |
 | [docs/audit-2026-08.md](docs/audit-2026-08.md) | Full August 2026 audit of the legacy bot (all 88 findings, file:line) |
+| [semconv/](semconv/) | OTel Weaver registry: governed attribute/metric/span names mirroring the event taxonomy |
 | [docs/hazards.md](docs/hazards.md) | Failure modes: audit classes → how the design addresses them, plus new hazards this design introduces |
 
 ## Process

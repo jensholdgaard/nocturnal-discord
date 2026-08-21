@@ -135,6 +135,8 @@ crates/
                       # Ourios parquet conventions where sensible.)
   nocturnal-discord   # serenity/poise: slash commands, components, embeds,
                       # pagination, /who log parsing UI.
+  nocturnal-telemetry # weaver-generated constants from semconv/ (attribute
+                      # names, metric names) + OTLP wiring helpers.
   nocturnal-migrate   # one-shot: Mongo export (or live Atlas read) → genesis
                       # events; balance-verification report vs legacy output.
   nocturnal           # bin: wiring, scheduler, config, OTLP, health.

@@ -1,0 +1,115 @@
+groups:
+  - id: registry.nocturnal
+    type: attribute_group
+    display_name: Nocturnal Attributes
+    stability: development
+    brief: >
+      Attributes shared by Nocturnal spans, logs and metrics. Names mirror the
+      ledger's event taxonomy (docs/events.md) so telemetry and the event log
+      speak one vocabulary.
+    attributes:
+      - id: nocturnal.guild.id
+        type: string
+        stability: development
+        brief: Discord guild (server) snowflake, as a string.
+        examples: ['181234567890123456']
+      - id: nocturnal.command
+        type: string
+        stability: development
+        brief: Slash command name without the leading slash.
+        examples: ['startbid', 'parsedkps']
+      - id: nocturnal.interaction.kind
+        type:
+          members:
+            - id: command
+              value: 'command'
+              stability: development
+            - id: button
+              value: 'button'
+              stability: development
+            - id: modal
+              value: 'modal'
+              stability: development
+            - id: dm
+              value: 'dm'
+              stability: development
+            - id: scheduler
+              value: 'scheduler'
+              stability: development
+        stability: development
+        brief: How the request entered the single-writer core.
+      - id: nocturnal.event.kind
+        type: string
+        stability: development
+        brief: Ledger event discriminant, exactly as in the event envelope.
+        examples: ['dkp.adjusted', 'auction.finalized', 'raid.tick']
+      - id: nocturnal.event.seq
+        type: int
+        stability: development
+        brief: Contiguous ledger sequence number — the clock of the system.
+        examples: [48213]
+      - id: nocturnal.event.version
+        type: int
+        stability: development
+        brief: Payload schema version for the event kind.
+        examples: [1]
+      - id: nocturnal.decision.outcome
+        type:
+          members:
+            - id: accepted
+              value: 'accepted'
+              stability: development
+              brief: The command produced one or more appended events.
+            - id: rejected
+              value: 'rejected'
+              stability: development
+              brief: The decide step refused the command; nothing was appended.
+            - id: error
+              value: 'error'
+              stability: development
+              brief: Infrastructure failure (WAL, I/O) — not a domain rejection.
+        stability: development
+        brief: Outcome of the decide step in the single-writer core.
+      - id: nocturnal.decision.rejection
+        type: string
+        stability: development
+        brief: >
+          Machine-readable rejection reason when outcome is rejected. Bounded,
+          low-cardinality set defined by nocturnal-core.
+        examples: ['insufficient_balance', 'auction_closed', 'raid_already_active']
+      - id: nocturnal.auction.id
+        type: string
+        stability: development
+        brief: Auction identifier (the correlation_id of its event stream).
+        examples: ['ac_01J5XY3TQK']
+      - id: nocturnal.auction.flavor
+        type:
+          members:
+            - id: short
+              value: 'short'
+              stability: development
+            - id: long
+              value: 'long'
+              stability: development
+        stability: development
+        brief: Auction flavor in the unified auction state machine.
+      - id: nocturnal.raid.id
+        type: string
+        stability: development
+        brief: Raid identifier (the correlation_id of its event stream).
+        examples: ['rd_01J5XY3TQK']
+      - id: nocturnal.raid.tick_no
+        type: int
+        stability: development
+        brief: Monotonic tick number within a raid (idempotence key).
+        examples: [17]
+      - id: nocturnal.wal.segment
+        type: string
+        stability: development
+        brief: WAL segment file name.
+        examples: ['000123.jsonl']
+      - id: nocturnal.compaction.partition
+        type: string
+        stability: development
+        brief: Target Parquet partition of a compaction run.
+        examples: ['2026-08']

@@ -1,0 +1,43 @@
+groups:
+  - id: span.nocturnal.interaction
+    type: span
+    span_kind: server
+    stability: development
+    brief: >
+      One Discord interaction end-to-end: gateway receive, decide, WAL append +
+      fsync, apply, reply. Child spans cover the WAL write and Discord REST
+      calls. Actor id is a span attribute here (fine at trace granularity),
+      never a metric attribute.
+    attributes:
+      - ref: nocturnal.guild.id
+        requirement_level: required
+      - ref: nocturnal.command
+      - ref: nocturnal.interaction.kind
+        requirement_level: required
+      - ref: nocturnal.decision.outcome
+        requirement_level: required
+      - ref: nocturnal.decision.rejection
+      - ref: nocturnal.event.seq
+      - ref: nocturnal.auction.id
+      - ref: nocturnal.raid.id
+  - id: span.nocturnal.scheduler.fire
+    type: span
+    span_kind: internal
+    stability: development
+    brief: A timer firing (auction close, raid tick, compaction) injected into the core.
+    attributes:
+      - ref: nocturnal.guild.id
+      - ref: nocturnal.raid.id
+      - ref: nocturnal.raid.tick_no
+      - ref: nocturnal.auction.id
+      - ref: nocturnal.decision.outcome
+  - id: span.nocturnal.compaction
+    type: span
+    span_kind: internal
+    stability: development
+    brief: One WAL-segment-to-Parquet compaction run, including verification read-back.
+    attributes:
+      - ref: nocturnal.wal.segment
+        requirement_level: required
+      - ref: nocturnal.compaction.partition
+        requirement_level: required

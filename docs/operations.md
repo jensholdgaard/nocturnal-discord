@@ -54,6 +54,22 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
   connected + WAL writable), `/metrics`. Used by Docker `HEALTHCHECK` and any
   future orchestrator.
 
+### Semantic conventions (`semconv/`)
+
+Telemetry names are governed, not improvised — same Weaver workflow as Ourios:
+
+- `semconv/` holds the registry (attributes, metrics, spans). Attribute names
+  mirror the event taxonomy (`nocturnal.event.kind`, `nocturnal.auction.id`,
+  …) so the ledger, traces, logs, and dashboards share one vocabulary.
+- `weaver registry check -r semconv` gates CI; `weaver registry generate`
+  emits the `nocturnal-telemetry` constants crate (M3) — a misspelled
+  attribute is a compile error, not an empty dashboard panel.
+- **Cardinality rule:** actor/player ids never appear on metrics — only on
+  spans and in the ledger. Metric attributes come exclusively from the
+  registry's bounded enums and low-cardinality ids.
+- Generated markdown docs of the registry feed the Perses dashboard work and
+  give Ourios stable attribute names to prune on.
+
 ## Container & deployment
 
 - **Image** — multi-stage build: `rust:1.x` builder → `gcr.io/distroless/cc`

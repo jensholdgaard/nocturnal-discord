@@ -38,9 +38,12 @@ written down before code.
       Discord modal (the audit's own suggestion — kills the closed-DM and
       cross-auction-collector failure classes #5/#39/#50 outright).
 - [ ] Decide the fate of the voice/bell feature with officers (default: drop).
-- [ ] Cargo workspace scaffold, CI (fmt, clippy, test), crate skeletons —
-      per `operations.md` (config layering, OTLP, health, container, CI are
-      specified there and land across M3/M6).
+- [x] Telemetry semantic-convention registry (`semconv/`, OTel Weaver format,
+      `weaver registry check` clean) — attributes/metrics/spans mirroring the
+      event taxonomy; codegen to `nocturnal-telemetry` lands in M3.
+- [ ] Cargo workspace scaffold, CI (fmt, clippy, test, `weaver registry
+      check`), crate skeletons — per `operations.md` (config layering, OTLP,
+      health, container, CI are specified there and land across M3/M6).
 
 **Exit:** `commands.md` reviewed by the guildie/officers (sign-off on the
 deliberate-changes list + the three open decisions); workspace compiles.
@@ -86,7 +89,8 @@ First contact with Discord, zero risk: nothing mutates.
       command registration on definition-hash change only.
 - [ ] `/dkp`, `/history` (+ pagination helper — one, shared), roster/attendance
       views, running in a **test server** against the migrated production data.
-- [ ] OTLP wiring: traces + logs into everquest-observability; `/healthz`.
+- [ ] OTLP wiring: traces + logs + metrics into everquest-observability via
+      the `nocturnal-telemetry` crate generated from `semconv/`; `/healthz`.
 - [ ] flock double-instance guard (B2) with test.
 
 **Exit:** officers can browse real (migrated) balances and history in the test

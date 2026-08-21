@@ -1,0 +1,114 @@
+groups:
+  # Cardinality rule: no actor/player ids on metrics — ever. Players live on
+  # spans and in the ledger; metrics stay aggregate.
+  - id: metric.nocturnal.commands
+    type: metric
+    metric_name: nocturnal.commands
+    stability: development
+    brief: Interactions processed by the single-writer core.
+    instrument: counter
+    unit: "{interaction}"
+    attributes:
+      - ref: nocturnal.command
+      - ref: nocturnal.interaction.kind
+      - ref: nocturnal.decision.outcome
+      - ref: nocturnal.decision.rejection
+        requirement_level:
+          conditionally_required: when outcome is `rejected`
+  - id: metric.nocturnal.interaction.ack.duration
+    type: metric
+    metric_name: nocturnal.interaction.ack.duration
+    stability: development
+    brief: >
+      Gateway receive to Discord acknowledgment (defer). The legacy bot's
+      3-second-window killer; alert well below 3s.
+    instrument: histogram
+    unit: s
+    attributes:
+      - ref: nocturnal.interaction.kind
+  - id: metric.nocturnal.interaction.commit.duration
+    type: metric
+    metric_name: nocturnal.interaction.commit.duration
+    stability: development
+    brief: Gateway receive to fsynced ledger event (the real user-visible latency).
+    instrument: histogram
+    unit: s
+    attributes:
+      - ref: nocturnal.command
+  - id: metric.nocturnal.ledger.events
+    type: metric
+    metric_name: nocturnal.ledger.events
+    stability: development
+    brief: Events appended to the ledger.
+    instrument: counter
+    unit: "{event}"
+    attributes:
+      - ref: nocturnal.event.kind
+  - id: metric.nocturnal.ledger.seq
+    type: metric
+    metric_name: nocturnal.ledger.seq
+    stability: development
+    brief: Current head sequence number (progress + replay-lag indicator).
+    instrument: updowncounter
+    unit: "{event}"
+  - id: metric.nocturnal.wal.fsync.duration
+    type: metric
+    metric_name: nocturnal.wal.fsync.duration
+    stability: development
+    brief: Duration of the per-event WAL fsync (hazard B7 watchdog).
+    instrument: histogram
+    unit: s
+  - id: metric.nocturnal.wal.size
+    type: metric
+    metric_name: nocturnal.wal.size
+    stability: development
+    brief: Bytes in unsealed WAL segments awaiting compaction.
+    instrument: updowncounter
+    unit: By
+  - id: metric.nocturnal.compaction.runs
+    type: metric
+    metric_name: nocturnal.compaction.runs
+    stability: development
+    brief: Compaction runs by outcome; any `error` is a page (hazard B5).
+    instrument: counter
+    unit: "{run}"
+    attributes:
+      - ref: nocturnal.compaction.partition
+      - ref: nocturnal.decision.outcome
+  - id: metric.nocturnal.auctions.active
+    type: metric
+    metric_name: nocturnal.auctions.active
+    stability: development
+    brief: Currently open auctions.
+    instrument: updowncounter
+    unit: "{auction}"
+    attributes:
+      - ref: nocturnal.auction.flavor
+  - id: metric.nocturnal.raids.active
+    type: metric
+    metric_name: nocturnal.raids.active
+    stability: development
+    brief: Currently active raids (0 or 1 per guild by invariant — >1 is an alarm).
+    instrument: updowncounter
+    unit: "{raid}"
+  - id: metric.nocturnal.scheduler.drift
+    type: metric
+    metric_name: nocturnal.scheduler.drift
+    stability: development
+    brief: Lateness of timer firings (auction close, raid tick) vs their due instant.
+    instrument: histogram
+    unit: s
+  - id: metric.nocturnal.scheduler.heartbeat
+    type: metric
+    metric_name: nocturnal.scheduler.heartbeat
+    stability: development
+    brief: Scheduler cycles; absence of increase is the liveness page.
+    instrument: counter
+    unit: "{cycle}"
+  - id: metric.nocturnal.discord.reconnects
+    type: metric
+    metric_name: nocturnal.discord.reconnects
+    stability: development
+    brief: Gateway reconnects.
+    instrument: counter
+    unit: "{reconnect}"
