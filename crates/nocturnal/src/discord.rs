@@ -16,6 +16,9 @@ use crate::health::Readiness;
 
 pub struct Data {
     pub driver: DriverHandle,
+    /// Test-server mapping: serve this ledger guild for interactions from the
+    /// registration guild (see `discord.data_guild_id`).
+    pub data_guild: Option<(u64, u64)>,
 }
 
 type Error = anyhow::Error;
@@ -27,10 +30,17 @@ fn ts_sec(ms: i64) -> i64 {
     ms / 1000
 }
 
+/// The ledger guild for this interaction: normally the Discord guild itself,
+/// remapped when a test server serves imported production data.
 fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
-    ctx.guild_id()
+    let guild = ctx
+        .guild_id()
         .map(|g| g.get())
-        .context("This command can only be used in a discord server")
+        .context("This command can only be used in a discord server")?;
+    Ok(match ctx.data().data_guild {
+        Some((from, to)) if from == guild => to,
+        _ => guild,
+    })
 }
 
 /// Shows the DKP of a player.
@@ -473,6 +483,14 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         on_error: |error| Box::pin(on_error(error)),
         ..Default::default()
     };
+    let data_guild = cfg.discord.data_guild_id.map(|to| (guild_id, to));
+    if let Some((from, to)) = data_guild {
+        tracing::info!(
+            from,
+            to,
+            "serving remapped ledger guild for the test server"
+        );
+    }
     let framework = poise::Framework::builder()
         .options(options)
         .setup(move |ctx, ready, framework| {
@@ -485,7 +503,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 .await?;
                 tracing::info!(user = %ready.user.name, guild_id, "gateway ready, commands registered");
                 readiness.set_ready();
-                Ok(Data { driver })
+                Ok(Data { driver, data_guild })
             })
         })
         .build();

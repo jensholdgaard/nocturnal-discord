@@ -9,6 +9,7 @@ format = "json"
 [discord]
 guild_id = 1540111927995539506   # test server (legacy fork testing)
 command_prefix = "controels-"
+data_guild_id = 1169758926825324645  # serve the imported production ledger
 
 [health]
 bind = "127.0.0.1:8090"
