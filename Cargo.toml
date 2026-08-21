@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/nocturnal-core",
+    "crates/nocturnal-store",
+    "crates/nocturnal-telemetry",
+    "crates/nocturnal-discord",
+    "crates/nocturnal-provision",
+    "crates/nocturnal-migrate",
+    "crates/nocturnal",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/jensholdgaard/nocturnal-discord"
+rust-version = "1.80"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"

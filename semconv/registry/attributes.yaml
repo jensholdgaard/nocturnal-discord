@@ -103,6 +103,20 @@ groups:
         stability: development
         brief: Monotonic tick number within a raid (idempotence key).
         examples: [17]
+      - id: nocturnal.provision.operation
+        type:
+          members:
+            - id: issue
+              value: 'issue'
+              stability: development
+            - id: refresh
+              value: 'refresh'
+              stability: development
+            - id: revoke
+              value: 'revoke'
+              stability: development
+        stability: development
+        brief: Telemetry-provisioning operation (/dpstoken, /dpsrevoke).
       - id: nocturnal.wal.segment
         type: string
         stability: development

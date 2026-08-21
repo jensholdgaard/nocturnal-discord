@@ -23,6 +23,12 @@ fail-fast errors that name the offending key:
 3. **Secrets** — never in the file: `DISCORD_TOKEN` (or `DISCORD_TOKEN_FILE`
    for Docker/K8s secrets). Config dumps and spans never echo secrets.
 
+Provisioning (M8) adds a `[provision]` section: `tokens_path`,
+`perses_provisioning_dir`, `roles_map_path`, `dashboard_url` — all optional;
+absent config cleanly disables `/dpstoken`//`/dpsrevoke`. The roles map stays a
+live-editable YAML file (officers edit it today; re-read per command), not
+ledger state.
+
 Per-guild *behavioural* config (channels, roles, bid rules) is **state, not
 deployment config** — it stays in the event log via `/configure`
 (`config.updated` events), exactly as the legacy bot's officers expect.

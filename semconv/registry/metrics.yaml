@@ -105,6 +105,16 @@ groups:
     brief: Scheduler cycles; absence of increase is the liveness page.
     instrument: counter
     unit: "{cycle}"
+  - id: metric.nocturnal.provision.operations
+    type: metric
+    metric_name: nocturnal.provision.operations
+    stability: development
+    brief: Token/dashboard provisioning operations (usernames on spans only, never here).
+    instrument: counter
+    unit: "{operation}"
+    attributes:
+      - ref: nocturnal.provision.operation
+      - ref: nocturnal.decision.outcome
   - id: metric.nocturnal.discord.reconnects
     type: metric
     metric_name: nocturnal.discord.reconnects

@@ -94,6 +94,8 @@ second against in-memory maps plus one fsync each.
 - `attendance`: rolling windows used for tie-breaks (computed from raid events)
 - `config`: guild options (admin roles, tick interval, defaults)
 - `history` indexes: per-player event refs for `/history` pagination
+- `telemetry`: OTLP tokens + Perses roles (dpsbot absorbed) — materialized to
+  the gateway/Perses files as derived state, re-written on boot (self-healing)
 
 ### Timers
 
@@ -137,6 +139,8 @@ crates/
                       # pagination, /who log parsing UI.
   nocturnal-telemetry # weaver-generated constants from semconv/ (attribute
                       # names, metric names) + OTLP wiring helpers.
+  nocturnal-provision # dpsbot successor: token/dashboard projections →
+                      # tokens.txt + Perses YAML materialization.
   nocturnal-migrate   # one-shot: Mongo export (or live Atlas read) → genesis
                       # events; balance-verification report vs legacy output.
   nocturnal           # bin: wiring, scheduler, config, OTLP, health.

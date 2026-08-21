@@ -6,6 +6,10 @@ is a Node.js/MongoDB bot whose August 2026 audit found 88 verified issues, nearl
 rooted in three systemic causes: no process-level error handling, maximally expensive
 database access, and unguarded concurrency around DKP mutations.
 
+The bot also absorbs the observability stack's provisioning bot
+(`everquest-observability/bot/dpsbot.py` — `/dpstoken`, `/dpsrevoke`), so the
+guild runs a single bot for DKP and telemetry access.
+
 This rewrite keeps the external behaviour officers know (same slash commands, same
 embeds, same auction flows) and replaces the internals with an architecture where the
 audit's failure classes are impossible rather than patched.

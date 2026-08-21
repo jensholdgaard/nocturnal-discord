@@ -175,6 +175,48 @@ character list, errors. Note legacy quirks: `raid` boolean is passed where a
 raid object is expected → `{_id: null}` history entries (E10); character
 lookup is case-sensitive (E11) and not guild-scoped on the first check.
 
+## Telemetry provisioning (`/dpstoken`, `/dpsrevoke`)
+
+Absorbed from `everquest-observability/bot/dpsbot.py` (Python, retired at
+cutover) so one bot serves the guild. Same UX, ledger-backed internals.
+
+| Command | Access | Behaviour |
+|---|---|---|
+| `/dpstoken` | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
+| `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
+
+Contract (from the legacy implementation):
+
+- Username must match `^[a-z0-9._]{2,32}$`; guild-only commands.
+- **Role mapping**: Discord roles → Perses role (`editor` > `viewer`), from a
+  live-editable `roles.yaml` (path configurable; re-read per command). No
+  mapped rank → friendly refusal.
+- **Issue**: 48-hex-char token; DM with the token, the Windows PowerShell
+  one-liner installer, and dashboard URL; closed DMs → ephemeral fallback with
+  the token in a spoiler. Already has a token → refresh dashboard role +
+  personal project only ("ask an officer to /dpsrevoke first").
+- **Materialized files** (paths configurable, legacy-compatible formats):
+  - `tokens.txt`: `{token} # {username}` per line (gateway auth).
+  - Perses provisioning dir: `rb-{user}.yaml` (RoleBinding in project
+    `everquest`), `50-project-{user}.yaml` (personal project `u-{user}`),
+    `51-ds-{user}.yaml` (its Prometheus datasource), `52-rb-own-{user}.yaml`
+    (owner binding). Root-owned systemd `.path` units still watch these files;
+    the bot stays unprivileged.
+- **Revoke**: remove the token line, delete all four provisioning files
+  (plus legacy `user-{user}.yaml`).
+
+What changes inside: issue/refresh/revoke are ledger events
+(`telemetry.token.issued/.access_updated/.revoked` — see `events.md`), and the
+files are **derived state**: rewritten idempotently from the projection after
+every change *and on boot*. A half-written file, a lost VM, or a manual edit
+gone wrong heals itself at the next startup — and "who had a token last
+March?" is a ledger query, which today has no answer at all.
+
+Deployment note: these commands need the observability VM's filesystem, so the
+unified bot deploys **on that VM** (it is a small static binary; the DKP side
+doesn't care where it runs). Paths and the dashboard URL are config
+(`operations.md`); both commands disable cleanly when unconfigured.
+
 ## Deliberate changes (officer sign-off — all fixes, no feature changes)
 
 1. Long-auction winners are debited at finalization.

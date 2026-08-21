@@ -1,0 +1,18 @@
+[package]
+name = "nocturnal"
+description = "Nocturnal — event-sourced Discord DKP + telemetry-provisioning bot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nocturnal-core = { path = "../nocturnal-core" }
+nocturnal-store = { path = "../nocturnal-store" }
+nocturnal-telemetry = { path = "../nocturnal-telemetry" }
+nocturnal-discord = { path = "../nocturnal-discord" }
+nocturnal-provision = { path = "../nocturnal-provision" }
+
+[lints]
+workspace = true

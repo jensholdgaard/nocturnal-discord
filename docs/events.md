@@ -64,6 +64,17 @@ Rules:
 | `auction.finalized` | auction_id, winners[{player, amount}] | **Is** the debit — fold decrements balances here. No separate charge step to forget |
 | `auction.cancelled` | auction_id, reason | |
 
+### Telemetry provisioning (dpsbot absorbed)
+| Kind | Payload | Notes |
+|---|---|---|
+| `telemetry.token.issued` | username, token, perses_role | Token value lives in the payload: the ledger sits on the same host, with the same access boundary, as `tokens.txt` — hash-only events (token secret kept outside the log) are a documented option if that ever changes |
+| `telemetry.token.revoked` | username, actor | Removes token + all dashboard access in the fold |
+| `telemetry.access.updated` | username, perses_role | Role refresh on re-run of `/dpstoken` after a rank change |
+
+The projection (`telemetry` map: user → token, role) is materialized to
+`tokens.txt` + the Perses provisioning YAMLs after each event and on boot —
+files are derived, never authoritative.
+
 ### Config & ops
 | Kind | Payload | Notes |
 |---|---|---|

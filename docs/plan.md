@@ -41,9 +41,9 @@ written down before code.
 - [x] Telemetry semantic-convention registry (`semconv/`, OTel Weaver format,
       `weaver registry check` clean) — attributes/metrics/spans mirroring the
       event taxonomy; codegen to `nocturnal-telemetry` lands in M3.
-- [ ] Cargo workspace scaffold, CI (fmt, clippy, test, `weaver registry
-      check`), crate skeletons — per `operations.md` (config layering, OTLP,
-      health, container, CI are specified there and land across M3/M6).
+- [x] Cargo workspace scaffold (7 crates incl. `nocturnal-provision`), CI
+      (fmt, clippy -D warnings, test, `weaver registry check`),
+      `nocturnal.example.toml` — fmt/clippy/test green.
 
 **Exit:** `commands.md` reviewed by the guildie/officers (sign-off on the
 deliberate-changes list + the three open decisions); workspace compiles.
@@ -139,6 +139,25 @@ step by step against the new bot and is boring.
       guild, final migration run, Atlas archived (export kept), done.
 - [ ] Two-week soak with legacy bot restorable, then retire it.
 
+## M8 — Telemetry provisioning (dpsbot absorbed) *(~1 week, parallelizable)*
+
+Independent of the DKP cutover — can land any time after M3's Discord layer
+exists; the Python dpsbot retires when this ships.
+
+- [ ] `telemetry.*` events + projection + property tests (issue/refresh/revoke
+      idempotence; materialization is a pure function of the projection).
+- [ ] File materializers: `tokens.txt` + Perses provisioning YAMLs, atomic
+      write + rename, byte-compatible with the legacy formats; re-materialize
+      on boot; golden-file tests against outputs captured from dpsbot.
+- [ ] `/dpstoken` `/dpsrevoke` with the exact legacy UX (DM template, spoiler
+      fallback, role-map refusal); `roles.yaml` mapping re-read per command.
+- [ ] Migration: parse existing `tokens.txt` + provisioning dir → genesis
+      `telemetry.*` events; verify re-materialization is byte-identical.
+- [ ] Deploy the unified bot on the observability VM; retire `dpsbot.py`.
+
+**Exit:** `/dpstoken` on the real VM issues a working token; `kill -9` between
+event and file write heals on restart; dpsbot's systemd unit disabled.
+
 ---
 
 ## Sequencing notes
@@ -154,6 +173,8 @@ step by step against the new bot and is boring.
 
 - Multi-guild support (design keeps `guild_id`, nothing more).
 - Web UI / dashboards beyond what Perses+Ourios give for free.
-- Rewriting `dpsbot.py` — same patterns apply later, separate project.
+- ~~Rewriting `dpsbot.py`~~ — **pulled into scope 2026-08-21** as milestone
+  M8: the unified bot absorbs `/dpstoken`//`/dpsrevoke` (see `commands.md`
+  §Telemetry provisioning).
 - Temporal — revisit only if replay-based resume proves insufficient (it won't
   at this scale).
