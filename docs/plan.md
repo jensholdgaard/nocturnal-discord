@@ -83,8 +83,10 @@ replay, finish — and asserts every balance to the point.
 - [x] **Balance verification report** run against real production data
       (2024-12-19 snapshot recovered from the Discord log channel): 163
       players, 145 raids, 308 genesis events, **all balances match**; two
-      legacy negative balances confirmed (audit #46 in the wild). A fresh
-      snapshot needs read access to `#bot-backups` (or an officer repost).
+      legacy negative balances confirmed (audit #46 in the wild). 2026-08-21:
+      re-run on a **fresh backup (2026-08-20)** — 281 players, 506 raids, 787
+      genesis events, all balances match (worst double-spend casualty: −237);
+      deployed to the VM, standard 90-day window.
 - [ ] Backup = tar of data dir; restore test. (Trivial now; lands with M6 ops.)
 
 **Exit:** production data migrated on a workstation; verification report at
