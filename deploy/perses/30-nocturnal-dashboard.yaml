@@ -12,14 +12,6 @@ spec:
     name: Nocturnal Bot
   duration: 6h
   refreshInterval: 1m
-  variables:
-  - kind: TextVariable
-    spec:
-      name: trace
-      display:
-        name: Trace id
-        description: 'Filled from the ?var-trace URL parameter on page load (ctrl+click a trace name above), or paste a trace id directly.'
-      value: ''
   panels:
     stat_ledger_seq:
       kind: Panel
@@ -187,17 +179,14 @@ spec:
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_wal_fsync_duration_seconds_bucket[5m])))
                 seriesNameFormat: fsync p95
-    trace_table:
+    traces:
       kind: Panel
       spec:
         display:
-          name: Recent commands (traces)
-          description: 'One row per interaction. Ctrl+click (or middle-click) the underlined trace name to open the timeline in a new tab — Perses only reads the ?var-trace URL parameter on a full page load, so a plain click needs an F5 after it. (Perses 0.54 limitation; row clicks only select.)'
+          name: Traces
         plugin:
           kind: TraceTable
-          spec:
-            links:
-              trace: ?var-trace=${traceId}&trace=${traceId}
+          spec: {}
         queries:
         - kind: TraceQuery
           spec:
@@ -209,25 +198,6 @@ spec:
                   name: jaeger
                 service: nocturnal
                 limit: 50
-    trace_gantt:
-      kind: Panel
-      spec:
-        display:
-          name: Command timeline
-          description: Gantt view of the selected trace — the interaction with its ledger decide/append/apply inside.
-        plugin:
-          kind: TracingGanttChart
-          spec: {}
-        queries:
-        - kind: TraceQuery
-          spec:
-            plugin:
-              kind: JaegerTraceQuery
-              spec:
-                datasource:
-                  kind: JaegerDatasource
-                  name: jaeger
-                traceId: $trace
   layouts:
   - kind: Grid
     spec:
@@ -301,12 +271,6 @@ spec:
       - x: 0
         y: 0
         width: 24
-        height: 8
-        content:
-          $ref: '#/spec/panels/trace_table'
-      - x: 0
-        y: 8
-        width: 24
         height: 10
         content:
-          $ref: '#/spec/panels/trace_gantt'
+          $ref: '#/spec/panels/traces'
