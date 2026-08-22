@@ -117,6 +117,10 @@ groups:
               stability: development
         stability: development
         brief: Telemetry-provisioning operation (/dpstoken, /dpsrevoke).
+      - id: nocturnal.discord.ratelimit.global
+        type: boolean
+        stability: development
+        brief: Whether a rate-limit delay was the global bucket (true) or a per-route bucket.
       - id: nocturnal.wal.segment
         type: string
         stability: development

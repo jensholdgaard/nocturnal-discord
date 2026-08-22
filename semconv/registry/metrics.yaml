@@ -115,6 +115,33 @@ groups:
     attributes:
       - ref: nocturnal.provision.operation
       - ref: nocturnal.decision.outcome
+  - id: metric.nocturnal.discord.ratelimit.delays
+    type: metric
+    metric_name: nocturnal.discord.ratelimit.delays
+    stability: development
+    brief: >
+      Requests the Discord HTTP client delayed to respect rate limits — the
+      early-warning signal that fires BEFORE Discord would return 429s.
+    instrument: counter
+    unit: "{delay}"
+    attributes:
+      - ref: nocturnal.discord.ratelimit.global
+  - id: metric.nocturnal.discord.ratelimit.delay.duration
+    type: metric
+    metric_name: nocturnal.discord.ratelimit.delay.duration
+    stability: development
+    brief: How long rate-limited requests waited before being sent.
+    instrument: histogram
+    unit: s
+    attributes:
+      - ref: nocturnal.discord.ratelimit.global
+  - id: metric.nocturnal.discord.gateway.latency
+    type: metric
+    metric_name: nocturnal.discord.gateway.latency
+    stability: development
+    brief: Gateway heartbeat round-trip latency (shard 0).
+    instrument: gauge
+    unit: s
   - id: metric.nocturnal.discord.reconnects
     type: metric
     metric_name: nocturnal.discord.reconnects

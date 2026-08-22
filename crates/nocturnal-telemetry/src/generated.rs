@@ -9,6 +9,7 @@ pub mod attr {
     pub const NOCTURNAL_COMPACTION_PARTITION: &str = "nocturnal.compaction.partition";
     pub const NOCTURNAL_DECISION_OUTCOME: &str = "nocturnal.decision.outcome";
     pub const NOCTURNAL_DECISION_REJECTION: &str = "nocturnal.decision.rejection";
+    pub const NOCTURNAL_DISCORD_RATELIMIT_GLOBAL: &str = "nocturnal.discord.ratelimit.global";
     pub const NOCTURNAL_EVENT_KIND: &str = "nocturnal.event.kind";
     pub const NOCTURNAL_EVENT_SEQ: &str = "nocturnal.event.seq";
     pub const NOCTURNAL_EVENT_VERSION: &str = "nocturnal.event.version";
@@ -25,6 +26,10 @@ pub mod metric {
     pub const NOCTURNAL_AUCTIONS_ACTIVE: &str = "nocturnal.auctions.active";
     pub const NOCTURNAL_COMMANDS: &str = "nocturnal.commands";
     pub const NOCTURNAL_COMPACTION_RUNS: &str = "nocturnal.compaction.runs";
+    pub const NOCTURNAL_DISCORD_GATEWAY_LATENCY: &str = "nocturnal.discord.gateway.latency";
+    pub const NOCTURNAL_DISCORD_RATELIMIT_DELAY_DURATION: &str =
+        "nocturnal.discord.ratelimit.delay.duration";
+    pub const NOCTURNAL_DISCORD_RATELIMIT_DELAYS: &str = "nocturnal.discord.ratelimit.delays";
     pub const NOCTURNAL_DISCORD_RECONNECTS: &str = "nocturnal.discord.reconnects";
     pub const NOCTURNAL_INTERACTION_ACK_DURATION: &str = "nocturnal.interaction.ack.duration";
     pub const NOCTURNAL_INTERACTION_COMMIT_DURATION: &str = "nocturnal.interaction.commit.duration";

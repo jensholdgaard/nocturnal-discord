@@ -11,7 +11,7 @@ use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_sdk::trace::{BatchSpanProcessor, SdkTracerProvider, SpanData, SpanProcessor};
 use opentelemetry_sdk::Resource;
 use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::layer::SubscriberExt as _;
@@ -65,6 +65,11 @@ fn export_enabled(cfg: &TelemetryConfig) -> bool {
 /// interaction tokens and member data) into its span fields.
 fn export_targets() -> Targets {
     Targets::new()
+        // serenity's HTTP request spans are the Discord *client spans* —
+        // exported for causality/latency, with attributes stripped to the
+        // safe allowlist by [`RedactSpans`] (their raw fields dump whole
+        // requests, incl. auth — the B13 incident).
+        .with_target("serenity::http", LevelFilter::DEBUG)
         .with_target("nocturnal", LevelFilter::TRACE)
         .with_target("nocturnal_core", LevelFilter::TRACE)
         .with_target("nocturnal_store", LevelFilter::TRACE)
@@ -72,6 +77,51 @@ fn export_targets() -> Targets {
         .with_target("nocturnal_discord", LevelFilter::TRACE)
         .with_target("nocturnal_provision", LevelFilter::TRACE)
         .with_target("nocturnal_migrate", LevelFilter::TRACE)
+}
+
+/// Attribute allowlist for exported spans (OTel redaction guidance: fail
+/// closed). Only keys we deliberately author — or harmless runtime metadata —
+/// survive; everything else (library field dumps like serenity's `req`)
+/// is deleted before export.
+fn safe_attribute(key: &str) -> bool {
+    key.starts_with("nocturnal.")
+        || key.starts_with("code.")
+        || key.starts_with("thread.")
+        || key.starts_with("otel.")
+        || key.starts_with("http.")
+        || key == "busy_ns"
+        || key == "idle_ns"
+}
+
+/// Span processor decorator that applies [`safe_attribute`] to every span
+/// before handing it to the wrapped (batch) processor.
+#[derive(Debug)]
+struct RedactSpans<P>(P);
+
+impl<P: SpanProcessor> SpanProcessor for RedactSpans<P> {
+    fn on_start(&self, span: &mut opentelemetry_sdk::trace::Span, cx: &opentelemetry::Context) {
+        self.0.on_start(span, cx);
+    }
+
+    fn on_end(&self, mut span: SpanData) {
+        span.attributes.retain(|kv| safe_attribute(kv.key.as_str()));
+        self.0.on_end(span);
+    }
+
+    fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.force_flush()
+    }
+
+    fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.shutdown()
+    }
+
+    fn shutdown_with_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.shutdown_with_timeout(timeout)
+    }
 }
 
 /// Parse `OTEL_EXPORTER_OTLP_HEADERS` ("k=v,k=v") ourselves so bearer auth
@@ -154,7 +204,9 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
     )
     .context("building OTLP span exporter")?;
     let tracer_provider = SdkTracerProvider::builder()
-        .with_batch_exporter(span_exporter)
+        .with_span_processor(RedactSpans(
+            BatchSpanProcessor::builder(span_exporter).build(),
+        ))
         .with_resource(resource.clone())
         .build();
     let otel_trace_layer = tracing_opentelemetry::layer()
@@ -214,6 +266,10 @@ pub struct Metrics {
     pub ledger_seq: Gauge<u64>,
     pub wal_fsync_duration: Histogram<f64>,
     pub discord_reconnects: Counter<u64>,
+    /// Requests delayed by the client-side rate limiter — fires BEFORE 429s.
+    pub ratelimit_delays: Counter<u64>,
+    pub ratelimit_delay_duration: Histogram<f64>,
+    pub gateway_latency: Gauge<f64>,
 }
 
 impl Metrics {
@@ -243,6 +299,18 @@ impl Metrics {
             discord_reconnects: meter
                 .u64_counter(metric::NOCTURNAL_DISCORD_RECONNECTS)
                 .with_unit("{reconnect}")
+                .build(),
+            ratelimit_delays: meter
+                .u64_counter(metric::NOCTURNAL_DISCORD_RATELIMIT_DELAYS)
+                .with_unit("{delay}")
+                .build(),
+            ratelimit_delay_duration: meter
+                .f64_histogram(metric::NOCTURNAL_DISCORD_RATELIMIT_DELAY_DURATION)
+                .with_unit("s")
+                .build(),
+            gateway_latency: meter
+                .f64_gauge(metric::NOCTURNAL_DISCORD_GATEWAY_LATENCY)
+                .with_unit("s")
                 .build(),
         }
     }
@@ -282,6 +350,24 @@ mod tests {
     use super::export_targets;
     use tracing::Level;
 
+    #[test]
+    fn span_attribute_allowlist_fails_closed() {
+        use super::safe_attribute;
+        for ok in [
+            "nocturnal.command",
+            "code.line.number",
+            "http.status_code",
+            "busy_ns",
+        ] {
+            assert!(safe_attribute(ok), "{ok}");
+        }
+        for bad in [
+            "req", "response", "event", "self", "settings", "token", "presence",
+        ] {
+            assert!(!safe_attribute(bad), "{bad} must be stripped");
+        }
+    }
+
     /// The allowlist is the leak barrier — pin it.
     #[test]
     fn only_our_crates_are_exported() {
@@ -291,6 +377,7 @@ mod tests {
             "nocturnal::driver",
             "nocturnal_core::decide",
             "nocturnal_discord::commands",
+            "serenity::http::client", // Discord client spans, redacted
         ] {
             assert!(
                 targets.would_enable(ours, &Level::DEBUG),
@@ -299,7 +386,6 @@ mod tests {
         }
         for theirs in [
             "serenity::gateway::shard",
-            "serenity::http::request",
             "poise::dispatch",
             "hyper_util::client",
             "reqwest",

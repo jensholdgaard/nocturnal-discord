@@ -179,6 +179,48 @@ spec:
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_wal_fsync_duration_seconds_bucket[5m])))
                 seriesNameFormat: fsync p95
+    ts_gateway_latency:
+      kind: Panel
+      spec:
+        display:
+          name: Gateway heartbeat latency
+        plugin:
+          kind: TimeSeriesChart
+          spec: {}
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: nocturnal_discord_gateway_latency_seconds
+                seriesNameFormat: shard 0
+    ts_ratelimit:
+      kind: Panel
+      spec:
+        display:
+          name: Rate-limit delays (pre-429 early warning)
+          description: Requests the client delayed to respect Discord buckets. Sustained values mean we are riding the limit; 429s would come next.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_discord_ratelimit_global) (rate(nocturnal_discord_ratelimit_delays_total[5m]))
+                seriesNameFormat: 'delays (global={{nocturnal_discord_ratelimit_global}})'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m])))
+                seriesNameFormat: delay p95 (s)
     traces:
       kind: Panel
       spec:
@@ -263,6 +305,25 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_latency'
+  - kind: Grid
+    spec:
+      display:
+        title: Discord
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_gateway_latency'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_ratelimit'
   - kind: Grid
     spec:
       display:

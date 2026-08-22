@@ -9,7 +9,12 @@ use crate::reject::Rejection;
 use crate::state::{AuctionStatus, Bid, State};
 
 pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rejection> {
-    let g = state.guild(ctx.guild).cloned().unwrap_or_default();
+    // Borrow, never clone: guild state carries the full imported history and
+    // deep-copying it per command turned a 160-bid storm into a multi-minute
+    // grind on the writer thread (found live, 2026-08-22).
+    static EMPTY: std::sync::LazyLock<crate::state::GuildState> =
+        std::sync::LazyLock::new(crate::state::GuildState::default);
+    let g: &crate::state::GuildState = state.guild(ctx.guild).unwrap_or(&EMPTY);
 
     match cmd {
         Command::LinkCharacter { player, character } => {
@@ -47,7 +52,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 player: *player,
                 delta: *delta,
                 comment: comment.clone(),
-                raid: active_raid_ref(&g),
+                raid: active_raid_ref(g),
                 item: item.clone(),
             }])
         }
@@ -272,7 +277,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             if auction.status != AuctionStatus::Closed {
                 return Err(Rejection::AuctionNotClosed);
             }
-            let winners = compute_winners(&g, auction_id, *seed);
+            let winners = compute_winners(g, auction_id, *seed);
             Ok(vec![Event::AuctionFinalized {
                 auction_id: auction_id.clone(),
                 winners,

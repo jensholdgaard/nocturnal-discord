@@ -528,11 +528,53 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
             })
         })
         .build();
+    // Discord HTTP client with rate-limit visibility: serenity calls this
+    // back whenever it *delays* a request to respect a bucket — the early
+    // warning that fires before Discord would 429 us.
+    let metrics = nocturnal_telemetry::Metrics::new();
+    let rl_metrics = std::sync::Arc::new(metrics);
+    let cb_metrics = rl_metrics.clone();
+    let mut http = serenity::HttpBuilder::new(&token).build();
+    if let Some(ratelimiter) = http.ratelimiter.as_mut() {
+        ratelimiter.set_ratelimit_callback(Box::new(move |info| {
+            tracing::warn!(
+                path = ?info.path,
+                method = ?info.method,
+                timeout_ms = info.timeout.as_millis() as u64,
+                global = info.global,
+                "discord request delayed by rate limiter"
+            );
+            let attrs = [opentelemetry::KeyValue::new(
+                nocturnal_telemetry::attr::NOCTURNAL_DISCORD_RATELIMIT_GLOBAL,
+                info.global,
+            )];
+            cb_metrics.ratelimit_delays.add(1, &attrs);
+            cb_metrics
+                .ratelimit_delay_duration
+                .record(info.timeout.as_secs_f64(), &attrs);
+        }));
+    }
     let mut client =
-        serenity::ClientBuilder::new(&token, serenity::GatewayIntents::non_privileged())
+        serenity::ClientBuilder::new_with_http(http, serenity::GatewayIntents::non_privileged())
             .framework(framework)
             .await
             .context("building Discord client")?;
+
+    // Gateway heartbeat latency, sampled every 30 s.
+    let latency_shards = client.shard_manager.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            let runners = latency_shards.runners.lock().await;
+            if let Some(info) = runners.values().next() {
+                if let Some(latency) = info.latency {
+                    rl_metrics
+                        .gateway_latency
+                        .record(latency.as_secs_f64(), &[]);
+                }
+            }
+        }
+    });
 
     let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {
@@ -1360,6 +1402,12 @@ pub async fn stresstest(
     }
 
     let run_id = chrono_now_ms();
+    tracing::info!(
+        n_auctions,
+        n_bidders = players.len(),
+        n_lookups,
+        "stresstest: starting"
+    );
     let t0 = std::time::Instant::now();
 
     // Phase 1: open the auctions.
@@ -1445,6 +1493,7 @@ pub async fn stresstest(
         rejected += r;
     }
     let storm = t0.elapsed();
+    tracing::info!(accepted, rejected, elapsed = ?storm, "stresstest: bid storm done");
 
     // Phase 3: close, then finalize or cancel.
     let mut winners = 0usize;
