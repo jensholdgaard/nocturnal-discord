@@ -862,22 +862,43 @@ async fn component_is_officer(
     admin_role.is_some_and(|r| member.roles.iter().any(|role| role.get() == r))
 }
 
-async fn ephemeral(
+/// Acknowledge the click **immediately**. Discord allows 3 seconds; the
+/// legacy bot died exactly here (audit #2/#33: `i.update()` as the first
+/// response, after the handler had already done work). Everything this
+/// handler does afterwards — ledger queries, DM round-trips — happens on
+/// borrowed time we no longer owe Discord.
+async fn ack(
+    ctx: &serenity::Context,
+    interaction: &serenity::ComponentInteraction,
+) -> anyhow::Result<()> {
+    interaction
+        .create_response(
+            ctx,
+            serenity::CreateInteractionResponse::Defer(
+                serenity::CreateInteractionResponseMessage::new().ephemeral(true),
+            ),
+        )
+        .await
+        .context("deferring component interaction")
+}
+
+/// Answer an already-acknowledged click. Never a second `create_response` —
+/// that is the audit's #5 (reply-after-acknowledge throwing inside a catch).
+async fn reply(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
     text: impl Into<String>,
 ) -> anyhow::Result<()> {
     interaction
-        .create_response(
+        .create_followup(
             ctx,
-            serenity::CreateInteractionResponse::Message(
-                serenity::CreateInteractionResponseMessage::new()
-                    .content(text.into())
-                    .ephemeral(true),
-            ),
+            serenity::CreateInteractionResponseFollowup::new()
+                .content(text.into())
+                .ephemeral(true),
         )
         .await
-        .context("ephemeral component reply")
+        .context("component follow-up")?;
+    Ok(())
 }
 
 /// The DM bid flow (legacy UX, kept — hardened). Fixes from the audit:
@@ -906,7 +927,7 @@ async fn dm_bid_flow(
         .unwrap_or_else(|| "the item".to_owned());
 
     if !data.auctions.dm_open(player, auction_id) {
-        return ephemeral(
+        return reply(
             ctx,
             interaction,
             "You already have a bid prompt open — check your DMs.",
@@ -919,7 +940,7 @@ async fn dm_bid_flow(
         Err(e) => {
             data.auctions.dm_done(player, auction_id);
             tracing::info!(error = %e, "DM channel unavailable; using ephemeral fallback");
-            return ephemeral(
+            return reply(
                 ctx,
                 interaction,
                 format!(
@@ -943,14 +964,14 @@ async fn dm_bid_flow(
     if let Err(e) = prompt {
         data.auctions.dm_done(player, auction_id);
         tracing::info!(error = %e, "DM send failed; using ephemeral fallback");
-        return ephemeral(
+        return reply(
             ctx,
             interaction,
             format!("Couldn't DM you. Bid here instead: `/controels-bid auctionid:{auction_id} dkps:<amount>`"),
         )
         .await;
     }
-    ephemeral(ctx, interaction, "Sent — check your DMs. 📨").await?;
+    reply(ctx, interaction, "Sent — check your DMs. 📨").await?;
 
     let reply = serenity::collector::MessageCollector::new(ctx)
         .channel_id(dm.id)
@@ -1025,6 +1046,8 @@ pub async fn handle_component(
         return Ok(()); // not ours (item pickers, pagination, …)
     };
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
+    // Defer-first: nothing below this line races the 3-second window.
+    ack(ctx, interaction).await?;
     let Some(discord_guild) = interaction.guild_id.map(|g| g.get()) else {
         return Ok(());
     };
@@ -1044,13 +1067,13 @@ pub async fn handle_component(
         .await;
     // Stale button from before a restart, or an auction already settled (B12).
     let Some(status) = status else {
-        return ephemeral(ctx, interaction, ":no_entry: This auction has ended.").await;
+        return reply(ctx, interaction, ":no_entry: This auction has ended.").await;
     };
 
     match action {
         Action::Bid | Action::BidAlt => {
             if status != AuctionStatus::Open {
-                return ephemeral(
+                return reply(
                     ctx,
                     interaction,
                     ":no_entry: Bidding on this auction has closed.",
@@ -1069,7 +1092,7 @@ pub async fn handle_component(
         }
         Action::Cancel => {
             if !component_is_officer(interaction, &data.driver, ledger_guild).await {
-                return ephemeral(
+                return reply(
                     ctx,
                     interaction,
                     ":no_entry: You don't have permissions, what do you want your tombstone to say?",
@@ -1091,7 +1114,7 @@ pub async fn handle_component(
                 Ok(_) => "Auction cancelled.".to_owned(),
                 Err(e) => rejection_text(e),
             };
-            ephemeral(ctx, interaction, text).await?;
+            reply(ctx, interaction, text).await?;
             refresh(
                 ctx.http.as_ref(),
                 &data.auctions,
@@ -1104,10 +1127,10 @@ pub async fn handle_component(
         }
         Action::Confirm => {
             if !component_is_officer(interaction, &data.driver, ledger_guild).await {
-                return ephemeral(ctx, interaction, ":no_entry: Officers only.").await;
+                return reply(ctx, interaction, ":no_entry: Officers only.").await;
             }
             if status != AuctionStatus::Closed {
-                return ephemeral(
+                return reply(
                     ctx,
                     interaction,
                     ":no_entry: This auction is not awaiting confirmation.",
@@ -1145,7 +1168,7 @@ pub async fn handle_component(
                 }
                 Err(e) => rejection_text(e),
             };
-            ephemeral(ctx, interaction, text).await?;
+            reply(ctx, interaction, text).await?;
             refresh(
                 ctx.http.as_ref(),
                 &data.auctions,

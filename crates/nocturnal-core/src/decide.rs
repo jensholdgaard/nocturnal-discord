@@ -43,7 +43,8 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 let balance = g.balance(*player);
                 if balance + *delta < 0 {
                     return Err(Rejection::InsufficientBalance {
-                        balance,
+                        available: balance,
+                        committed: 0,
                         needed: -*delta,
                     });
                 }
@@ -226,7 +227,8 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             let committed = g.committed_elsewhere(*player, auction_id);
             if *amount > p.balance - committed {
                 return Err(Rejection::InsufficientBalance {
-                    balance: p.balance - committed,
+                    available: p.balance - committed,
+                    committed,
                     needed: *amount,
                 });
             }

@@ -461,7 +461,9 @@ async fn on_event(
     if let serenity::FullEvent::InteractionCreate { interaction } = event {
         if let Some(component) = interaction.as_message_component() {
             if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
-                tracing::warn!(error = %e, "auction component handler failed");
+                // `{:#}` prints the whole anyhow chain — the outermost context
+                // alone hid the real cause of a failed component reply.
+                tracing::warn!(error = format!("{e:#}"), "auction component handler failed");
             }
         }
     }
@@ -778,31 +780,61 @@ async fn execute(
 }
 
 pub fn rejection_text(e: &ExecError) -> String {
-    match e {
-        ExecError::Rejected(r) => match r {
-            nocturnal_core::Rejection::RaidAlreadyActive { name } => {
-                format!(":no_entry: There is already an active raid: {name}")
-            }
-            nocturnal_core::Rejection::NoActiveRaid => {
-                ":no_entry: There is no active raid, use /startraid to start one first".into()
-            }
-            nocturnal_core::Rejection::InsufficientBalance { balance, .. } => {
-                format!(":no_entry: DKP Bot scowls at you. Not enough DKP (current: {balance})")
-            }
-            nocturnal_core::Rejection::CharacterAlreadyRegistered { character } => {
-                format!(":no_entry: Character {character} already registered")
-            }
-            nocturnal_core::Rejection::CharacterNotRegistered { character } => {
-                format!(":no_entry: Character {character} not registered")
-            }
-            nocturnal_core::Rejection::InvalidAmount => {
-                ":no_entry: DKP Bot scowls at you. Invalid amount".into()
-            }
-            other => format!(":no_entry: {other}"),
-        },
+    use nocturnal_core::Rejection as R;
+    let rejection = match e {
+        ExecError::Rejected(r) => r,
         ExecError::Storage(_) => {
-            ":no_entry: Storage failure — the command was NOT applied. Check the logs.".into()
+            return ":no_entry: Storage failure — the command was NOT applied. Check the logs."
+                .to_owned()
         }
+    };
+    match rejection {
+        // The one people hit most: they tried to spend more than they have.
+        R::InsufficientBalance {
+            available,
+            committed,
+            needed,
+        } if *committed > 0 => format!(
+            ":no_entry: DKP Bot scowls at you. {needed} is more than you can cover: \
+             you have **{}** DKP but **{committed}** is already committed to your bids on \
+             other open auctions, leaving **{available}** available.",
+            available + committed
+        ),
+        R::InsufficientBalance { available, needed, .. } => format!(
+            ":no_entry: DKP Bot scowls at you. {needed} is greater than your current DKP (**{available}**)"
+        ),
+        R::BidBelowMinimum { min_bid } => format!(
+            ":no_entry: DKP Bot scowls at you. Bid amount is less than the minimum bid ({min_bid})"
+        ),
+        R::InvalidAmount => {
+            ":no_entry: DKP Bot scowls at you. Bid amount must be a whole number greater than 0"
+                .to_owned()
+        }
+        R::AuctionNotFound => ":no_entry: Auction not found".to_owned(),
+        R::AuctionNotActive => ":no_entry: Bidding on this auction has closed".to_owned(),
+        R::AuctionNotClosed => ":no_entry: This auction is not awaiting confirmation".to_owned(),
+        R::AuctionIdTaken => ":no_entry: That auction id already exists".to_owned(),
+        R::RaidAlreadyActive { name } => {
+            format!(":no_entry: There is already an active raid: {name}")
+        }
+        R::NoActiveRaid => {
+            ":no_entry: There is no active raid, use /startraid to start one first".to_owned()
+        }
+        R::RaidNotFound => ":no_entry: Raid not found".to_owned(),
+        R::TickTooSoon => ":no_entry: The next raid tick is not due yet".to_owned(),
+        R::PlayerNotFound => {
+            ":no_entry: No DKP record for that player yet — earn a tick first".to_owned()
+        }
+        R::CharacterNotRegistered { character } => {
+            format!(":no_entry: Character {character} not registered")
+        }
+        R::CharacterAlreadyRegistered { character } => {
+            format!(":no_entry: Character {character} already registered")
+        }
+        R::AlreadyProvisioned { username } => {
+            format!(":no_entry: {username} already has a token")
+        }
+        R::NotProvisioned { username } => format!(":no_entry: {username} has no token"),
     }
 }
 

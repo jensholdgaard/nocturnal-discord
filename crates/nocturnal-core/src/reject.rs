@@ -6,11 +6,24 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rejection {
     PlayerNotFound,
-    CharacterNotRegistered { character: String },
-    CharacterAlreadyRegistered { character: String },
+    CharacterNotRegistered {
+        character: String,
+    },
+    CharacterAlreadyRegistered {
+        character: String,
+    },
     InvalidAmount,
-    InsufficientBalance { balance: i64, needed: i64 },
-    RaidAlreadyActive { name: String },
+    /// `available` = balance minus `committed` (standing bids on other open
+    /// auctions). Carrying both lets the Discord layer explain the
+    /// cross-auction reservation instead of just refusing.
+    InsufficientBalance {
+        available: i64,
+        committed: i64,
+        needed: i64,
+    },
+    RaidAlreadyActive {
+        name: String,
+    },
     NoActiveRaid,
     RaidNotFound,
     TickTooSoon,
@@ -18,9 +31,15 @@ pub enum Rejection {
     AuctionIdTaken,
     AuctionNotActive,
     AuctionNotClosed,
-    BidBelowMinimum { min_bid: i64 },
-    AlreadyProvisioned { username: String },
-    NotProvisioned { username: String },
+    BidBelowMinimum {
+        min_bid: i64,
+    },
+    AlreadyProvisioned {
+        username: String,
+    },
+    NotProvisioned {
+        username: String,
+    },
 }
 
 impl Rejection {

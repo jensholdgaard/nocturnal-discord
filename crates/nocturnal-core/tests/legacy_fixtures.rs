@@ -589,3 +589,85 @@ fn second_raid_and_double_tick_rejected() {
         .is_ok());
     assert_eq!(l.state().guild(GUILD).unwrap().balance(P1), 2); // Start + 1 tick
 }
+
+// --- what the bot must be able to *tell* you --------------------------------
+
+/// Overspending is refused with the numbers needed to explain it: what you
+/// have, what is already committed elsewhere, and what you asked for.
+#[test]
+fn insufficient_balance_carries_the_reservation() {
+    use nocturnal_core::Rejection;
+
+    // Plain overspend on a single auction: nothing committed elsewhere.
+    let mut l = Ledger::new();
+    give(&mut l, P1, 50);
+    open_auction(&mut l, "a", 0, 1, 0, 0);
+    let err = l
+        .execute(
+            &ctx(3_000),
+            &Command::PlaceBid {
+                auction_id: "a".into(),
+                player: P1,
+                amount: 80,
+                for_main: true,
+            },
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        Rejection::InsufficientBalance {
+            available: 50,
+            committed: 0,
+            needed: 80
+        }
+    );
+
+    // Committed elsewhere: the message can say *why* 40 is too much.
+    let mut l = Ledger::new();
+    give(&mut l, P1, 100);
+    open_auction(&mut l, "a", 0, 1, 0, 0);
+    open_auction(&mut l, "b", 0, 1, 0, 0);
+    bid(&mut l, "a", P1, 70, true);
+    let err = l
+        .execute(
+            &ctx(3_100),
+            &Command::PlaceBid {
+                auction_id: "b".into(),
+                player: P1,
+                amount: 40,
+                for_main: true,
+            },
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        Rejection::InsufficientBalance {
+            available: 30,
+            committed: 70,
+            needed: 40
+        }
+    );
+
+    // Debits report the plain balance, with nothing reserved.
+    let mut l = Ledger::new();
+    give(&mut l, P1, 10);
+    let err = l
+        .execute(
+            &ctx(3_200),
+            &Command::AdjustDkp {
+                player: P1,
+                delta: -25,
+                comment: "loot".into(),
+                item: None,
+            },
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        Rejection::InsufficientBalance {
+            available: 10,
+            committed: 0,
+            needed: 25
+        }
+    );
+}
