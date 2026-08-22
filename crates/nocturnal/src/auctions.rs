@@ -239,7 +239,7 @@ impl AuctionUi {
 
     /// Record that this user owes us a bid amount. Returns false if they
     /// already have a live prompt.
-    fn arm_prompt(&self, user: u64, pending: PendingBid) -> bool {
+    pub fn arm_prompt(&self, user: u64, pending: PendingBid) -> bool {
         let Ok(mut p) = self.pending.lock() else {
             return false;
         };
@@ -1036,10 +1036,40 @@ pub async fn handle_dm(
     data: &Data,
 ) -> anyhow::Result<()> {
     let player = message.author.id.get();
-    let Some(pending) = data.auctions.take_prompt(player, message.channel_id.get()) else {
+    let channel = message.channel_id.get();
+    let Some((text, refresh_id)) = resolve_dm_bid(data, player, channel, &message.content).await
+    else {
         return Ok(()); // not answering a prompt of ours
     };
-    let raw = message.content.trim().to_owned();
+    if let Err(e) = message.channel_id.say(ctx, &text).await {
+        tracing::warn!(player, error = %e, "could not confirm bid in DM");
+    }
+    if let Some(auction_id) = refresh_id {
+        let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
+        refresh(
+            ctx.http.as_ref(),
+            &data.auctions,
+            &data.driver,
+            ledger_guild,
+            &auction_id,
+        )
+        .await;
+    }
+    Ok(())
+}
+
+/// The DM decision itself, free of serenity types so it can be tested end to
+/// end against a real ledger. Returns the reply text plus the auction whose
+/// embed needs re-rendering, or `None` when the message is not answering a
+/// prompt of ours.
+pub async fn resolve_dm_bid(
+    data: &Data,
+    player: PlayerId,
+    channel: u64,
+    content: &str,
+) -> Option<(String, Option<String>)> {
+    let pending = data.auctions.take_prompt(player, channel)?;
+    let raw = content.trim().to_owned();
     tracing::info!(
         player,
         auction_id = %pending.auction_id,
@@ -1047,10 +1077,8 @@ pub async fn handle_dm(
         "DM bid reply received"
     );
 
-    let ledger_guild = data.data_guild.map_or_else(
-        || message.guild_id.map(|g| g.get()).unwrap_or_default(),
-        |(_, to)| to,
-    );
+    // A DM has no guild, so the ledger guild is the configured one.
+    let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
     let aid = pending.auction_id.clone();
     let item_name = data
         .driver
@@ -1063,14 +1091,10 @@ pub async fn handle_dm(
         .unwrap_or_else(|| "the item".to_owned());
 
     let Ok(amount) = raw.parse::<i64>() else {
-        let _ = message
-            .channel_id
-            .say(
-                ctx,
-                format!("`{raw}` is not a number — click the button again to retry."),
-            )
-            .await;
-        return Ok(());
+        return Some((
+            format!("`{raw}` is not a number — click the button again to retry."),
+            None,
+        ));
     };
 
     let cmd = if amount == 0 {
@@ -1105,20 +1129,8 @@ pub async fn handle_dm(
         accepted = outcome.is_ok(),
         "DM bid resolved"
     );
-    if let Err(e) = message.channel_id.say(ctx, &text).await {
-        tracing::warn!(player, error = %e, "could not confirm bid in DM");
-    }
-    if outcome.is_ok() {
-        refresh(
-            ctx.http.as_ref(),
-            &data.auctions,
-            &data.driver,
-            ledger_guild,
-            &pending.auction_id,
-        )
-        .await;
-    }
-    Ok(())
+    let refresh_id = outcome.is_ok().then(|| pending.auction_id.clone());
+    Some((text, refresh_id))
 }
 
 /// Dispatch a component click. Everything needed is in the custom id and the
@@ -1387,6 +1399,133 @@ mod tests {
         // An answer after the auction ended is not applied.
         assert!(ui.arm_prompt(8, bid("au-3", crate::discord::chrono_now_ms() - 1)));
         assert!(ui.take_prompt(8, 99).is_none());
+    }
+
+    /// End to end over a real ledger and WAL, minus Discord: arm a prompt the
+    /// way a button click does, then feed the DM reply through the same
+    /// function the gateway calls. This is the path that silently did nothing
+    /// when it hung on a per-click collector.
+    #[tokio::test]
+    async fn dm_reply_places_a_real_bid() {
+        use super::{resolve_dm_bid, AuctionUi, PendingBid};
+        use crate::discord::Data;
+        use nocturnal_core::event::Flavor;
+        use nocturnal_core::{Actor, Command, Item};
+
+        const GUILD: u64 = 42;
+        const PLAYER: u64 = 7;
+        const DM: u64 = 555;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (driver, _) = crate::driver::start(dir.path()).expect("driver");
+        let data = Data {
+            driver: driver.clone(),
+            default_guild: GUILD,
+            data_guild: None,
+            auctions: std::sync::Arc::new(AuctionUi::default()),
+            items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("items")),
+        };
+
+        driver
+            .execute(
+                GUILD,
+                Actor::System,
+                Command::AdjustDkp {
+                    player: PLAYER,
+                    delta: 100,
+                    comment: "seed".into(),
+                    item: None,
+                },
+            )
+            .await
+            .expect("seed balance");
+        driver
+            .execute(
+                GUILD,
+                Actor::System,
+                Command::OpenAuction {
+                    auction_id: "au-1".into(),
+                    item: Item {
+                        id: "1".into(),
+                        name: "Cloak".into(),
+                        url: None,
+                        data: None,
+                        image: None,
+                    },
+                    flavor: Flavor::Short,
+                    min_bid: 0,
+                    num_items: 1,
+                    min_bid_to_lock_for_main: 0,
+                    over_bid_to_win_main: 0,
+                    duration_ms: 60_000,
+                },
+            )
+            .await
+            .expect("open auction");
+
+        let arm = |auction: &str| {
+            data.auctions.arm_prompt(
+                PLAYER,
+                PendingBid {
+                    auction_id: auction.to_owned(),
+                    for_main: true,
+                    dm_channel: DM,
+                    expires_ms: crate::discord::chrono_now_ms() + 60_000,
+                },
+            )
+        };
+
+        // A DM with no prompt outstanding is ignored entirely.
+        assert!(resolve_dm_bid(&data, PLAYER, DM, "50").await.is_none());
+
+        // Click → prompt → "50" lands as a real, fsynced bid.
+        assert!(arm("au-1"));
+        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, " 50 ")
+            .await
+            .expect("prompt answered");
+        assert!(text.contains("Bid placed"), "{text}");
+        assert_eq!(refresh.as_deref(), Some("au-1"));
+        let bids = driver
+            .query(|l| {
+                l.state()
+                    .guild(GUILD)
+                    .map(|g| g.auctions["au-1"].bids.clone())
+                    .unwrap_or_default()
+            })
+            .await;
+        assert_eq!(bids.len(), 1);
+        assert_eq!(bids[0].amount, 50);
+
+        // Overspending explains itself instead of silently failing.
+        assert!(arm("au-1"));
+        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, "500")
+            .await
+            .expect("answered");
+        assert!(text.contains("greater than your current DKP"), "{text}");
+        assert!(refresh.is_none());
+
+        // Garbage is answered, not swallowed.
+        assert!(arm("au-1"));
+        let (text, _) = resolve_dm_bid(&data, PLAYER, DM, "abc")
+            .await
+            .expect("answered");
+        assert!(text.contains("not a number"), "{text}");
+
+        // 0 retracts.
+        assert!(arm("au-1"));
+        let (text, _) = resolve_dm_bid(&data, PLAYER, DM, "0")
+            .await
+            .expect("answered");
+        assert!(text.contains("cancelled"), "{text}");
+        let bids = driver
+            .query(|l| {
+                l.state()
+                    .guild(GUILD)
+                    .map(|g| g.auctions["au-1"].bids.clone())
+                    .unwrap_or_default()
+            })
+            .await;
+        assert!(bids.is_empty(), "retraction removed the bid");
     }
 
     #[test]

@@ -18,6 +18,8 @@ use crate::health::Readiness;
 
 pub struct Data {
     pub driver: DriverHandle,
+    /// Registration guild — the ledger guild for context-free events (DMs).
+    pub default_guild: u64,
     pub auctions: std::sync::Arc<crate::auctions::AuctionUi>,
     /// Test-server mapping: serve this ledger guild for interactions from the
     /// registration guild (see `discord.data_guild_id`).
@@ -582,6 +584,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 }));
                 Ok(Data {
                     driver,
+                    default_guild: guild_id,
                     auctions: auction_ui,
                     data_guild,
                     items: std::sync::Arc::new(
