@@ -18,7 +18,7 @@ spec:
       name: trace
       display:
         name: Trace id
-        description: Click a row in the recent-commands table to fill this in, or paste a trace id.
+        description: Click a trace name in the recent-commands table to fill this in, or paste a trace id.
       value: ''
   panels:
     stat_ledger_seq:
@@ -192,7 +192,7 @@ spec:
       spec:
         display:
           name: Recent commands (traces)
-          description: Every span the bot exported — one row per interaction. Click a row to open it in the timeline below.
+          description: One row per interaction. Click the underlined trace NAME (first column) — not the row — to load it in the timeline below; row clicks only select.
         plugin:
           kind: TraceTable
           spec:
