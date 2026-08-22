@@ -1,0 +1,7 @@
+[Unit]
+Description=Nocturnal ledger backup
+After=nocturnal.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nocturnal-backup

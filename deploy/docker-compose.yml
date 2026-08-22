@@ -1,0 +1,29 @@
+# Production compose. Secrets come from an env file that is never committed:
+#   DISCORD_TOKEN=...
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318   (optional)
+#   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+#   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer ...
+services:
+  nocturnal:
+    image: ghcr.io/jensholdgaard/nocturnal:latest
+    restart: unless-stopped
+    env_file: [./nocturnal.env]
+    volumes:
+      - nocturnal-data:/data
+      - ./nocturnal.toml:/etc/nocturnal/nocturnal.toml:ro
+    command: ["--config", "/etc/nocturnal/nocturnal.toml"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      # readyz is only green once the ledger has replayed and the gateway is up.
+      test: ["CMD", "/usr/local/bin/nocturnal", "--check"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  nocturnal-data:

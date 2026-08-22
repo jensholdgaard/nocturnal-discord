@@ -184,15 +184,19 @@ policy-blocked).
 
 ## M6 — Ops & hardening *(~1 week)*
 
-- [ ] Docker image (distroless, static binary), volume layout, fsync behaviour
-      verified on the actual host (B7); scheduled backups.
+- [x] Docker image (distroless, static musl binary, non-root, read-only
+      rootfs, `/data` volume) + compose stack; backup script with verification
+      and retention, plus a nightly systemd timer.
+- [ ] fsync behaviour verified on the actual host volume (B7).
 - [x] Item-info lookup (`crates/nocturnal/src/items.rs`): pqdi.cc (Quarm) +
       takproject allaclone (TAKP), 5 s timeouts, URL-encoded queries, status
       checks, null-safe parsing, permanent in-memory cache — audit #42/E12
       fixed. `/searchitem` ports the legacy picker UX (1 hit → embed, 2–25 →
       button picker, 26–40 → list, >40 → refine).
 - [ ] Admin/config commands (`/setadminrole`, options → `config.updated`).
-- [ ] Runbook: deploy, restore, dispute-resolution via log grep, RPO statement.
+- [x] Runbook (`docs/runbook.md`): health checks, deploy, backup/restore with
+      an RPO statement, dispute resolution by grepping the ledger, the common
+      situations, and rollback rules.
 
 ## M7 — Shadow & cutover *(~1–2 raid weeks, calendar time)*
 
