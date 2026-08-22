@@ -64,8 +64,12 @@ fi
 mkdir -p /etc/nocturnal
 install -m 0644 /tmp/nocturnal.toml /etc/nocturnal/nocturnal.toml
 umask 077
+# Telemetry: the standard OpenTelemetry environment, nothing bespoke.
 cat > /etc/nocturnal/env <<EOF
 DISCORD_TOKEN=${DISCORD_BOT_TOKEN}
+OTEL_SERVICE_NAME=nocturnal
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer ${NOC_TOKEN}
 EOF
 chmod 600 /etc/nocturnal/env

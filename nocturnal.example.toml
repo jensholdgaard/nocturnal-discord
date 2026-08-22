@@ -1,5 +1,5 @@
 # Nocturnal configuration — every key optional, shown with its default.
-# Env overrides: NOCTURNAL_<SECTION>__<KEY>, e.g. NOCTURNAL_OTLP__ENDPOINT.
+# Env overrides: NOCTURNAL_<SECTION>__<KEY>, e.g. NOCTURNAL_DATA__DIR.
 # Secrets are env-only: DISCORD_TOKEN or DISCORD_TOKEN_FILE.
 
 [data]
@@ -11,13 +11,10 @@
 # level = "info"               # or NOCTURNAL_LOG / RUST_LOG per-module
 # format = "text"              # "json" in containers
 
-[otlp]
-# endpoint = ""                # empty = telemetry export off; OTEL_EXPORTER_OTLP_ENDPOINT honored
-# protocol = "grpc"            # or "http/protobuf"
-
-[discord]
-# guild_id = 0                 # test server for guild-scoped command registration
-# command_prefix = "controels-" # /controels-playerdkp etc.; empty for production
+# Telemetry: standard OpenTelemetry environment variables only —
+# OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL (grpc |
+# http/protobuf), OTEL_EXPORTER_OTLP_HEADERS, OTEL_SERVICE_NAME,
+# OTEL_RESOURCE_ATTRIBUTES, OTEL_SDK_DISABLED. Unset endpoint = no export.
 
 [health]
 # bind = ""                    # e.g. "0.0.0.0:8080" → /healthz /readyz /metrics

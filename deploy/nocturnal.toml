@@ -14,9 +14,7 @@ data_guild_id = 1169758926825324645  # serve the imported production ledger
 [health]
 bind = "127.0.0.1:8090"
 
-[otlp]
-# Through the on-box gateway collector like every other reporter (bearer auth
-# via OTEL_EXPORTER_OTLP_HEADERS in the env file); it routes metrics ->
-# Prometheus and traces -> Jaeger.
-endpoint = "http://127.0.0.1:4319"
-protocol = "http/protobuf"
+# Telemetry is configured by the standard OpenTelemetry environment variables
+# in /etc/nocturnal/env (OTEL_EXPORTER_OTLP_ENDPOINT / _PROTOCOL / _HEADERS,
+# OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES, OTEL_SDK_DISABLED) — never by
+# bot-specific keys.

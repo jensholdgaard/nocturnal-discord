@@ -19,27 +19,7 @@ pub struct Config {
     #[serde(default)]
     pub health: HealthConfig,
     #[serde(default)]
-    pub otlp: OtlpConfig,
-    #[serde(default)]
     pub provision: ProvisionConfig,
-}
-
-/// Telemetry export (wired in the OTLP milestone step; parsed and validated now).
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OtlpConfig {
-    pub endpoint: Option<String>,
-    #[serde(default = "default_otlp_protocol")]
-    pub protocol: String,
-}
-
-impl Default for OtlpConfig {
-    fn default() -> Self {
-        OtlpConfig {
-            endpoint: None,
-            protocol: default_otlp_protocol(),
-        }
-    }
 }
 
 /// dpsbot successor (M8); absent = /dpstoken and /dpsrevoke disabled.
@@ -50,10 +30,6 @@ pub struct ProvisionConfig {
     pub perses_provisioning_dir: Option<PathBuf>,
     pub roles_map_path: Option<PathBuf>,
     pub dashboard_url: Option<String>,
-}
-
-fn default_otlp_protocol() -> String {
-    "grpc".into()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,18 +127,6 @@ impl Config {
         if let Ok(v) = std::env::var("NOCTURNAL_HEALTH__BIND") {
             cfg.health.bind = Some(v);
         }
-        if let Ok(v) = std::env::var("NOCTURNAL_OTLP__ENDPOINT") {
-            cfg.otlp.endpoint = Some(v);
-        }
-        if let Ok(v) = std::env::var("NOCTURNAL_OTLP__PROTOCOL") {
-            cfg.otlp.protocol = v;
-        }
-        if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__DATA_GUILD_ID") {
-            cfg.discord.data_guild_id = Some(
-                v.parse()
-                    .context("NOCTURNAL_DISCORD__DATA_GUILD_ID must be a snowflake")?,
-            );
-        }
         if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__COMMAND_PREFIX") {
             cfg.discord.command_prefix = v;
         }
@@ -174,12 +138,6 @@ impl Config {
         {
             bail!(
                 "discord.command_prefix must be lowercase [a-z0-9-_], at most 20 chars, got {prefix:?}"
-            );
-        }
-        if cfg.otlp.protocol != "grpc" && cfg.otlp.protocol != "http/protobuf" {
-            bail!(
-                "otlp.protocol must be \"grpc\" or \"http/protobuf\", got {:?}",
-                cfg.otlp.protocol
             );
         }
         if cfg.log.format != "text" && cfg.log.format != "json" {
@@ -207,7 +165,7 @@ impl Config {
     /// Redacted, resolved view for `--print-config`.
     pub fn printable(&self) -> String {
         format!(
-            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\notlp.endpoint = {:?}\notlp.protocol = {:?}\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
+            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\notlp = standard OTEL_* environment (endpoint: {:?}, protocol: {:?})\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
             self.data.dir,
             self.log.level,
             self.log.format,
@@ -215,8 +173,8 @@ impl Config {
             self.discord.data_guild_id,
             self.discord.command_prefix,
             self.health.bind,
-            self.otlp.endpoint,
-            self.otlp.protocol,
+            std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok(),
+            std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").ok(),
             self.provision.tokens_path,
             self.provision.perses_provisioning_dir,
             self.provision.roles_map_path,

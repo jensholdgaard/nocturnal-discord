@@ -4,6 +4,8 @@
 
 use std::time::Duration;
 
+use tracing::Instrument as _;
+
 use anyhow::Context as _;
 use poise::serenity_prelude as serenity;
 
@@ -16,24 +18,25 @@ use crate::health::Readiness;
 
 pub struct Data {
     pub driver: DriverHandle,
+    pub auctions: std::sync::Arc<crate::auctions::AuctionUi>,
     /// Test-server mapping: serve this ledger guild for interactions from the
     /// registration guild (see `discord.data_guild_id`).
     pub data_guild: Option<(u64, u64)>,
     pub items: std::sync::Arc<crate::items::ItemSearch>,
 }
 
-type Error = anyhow::Error;
-type Context<'a> = poise::Context<'a, Data, Error>;
+pub type Error = anyhow::Error;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 const EMBED_BLUE: u32 = 0x0099ff;
 
-fn ts_sec(ms: i64) -> i64 {
+pub fn ts_sec(ms: i64) -> i64 {
     ms / 1000
 }
 
 /// The ledger guild for this interaction: normally the Discord guild itself,
 /// remapped when a test server serves imported production data.
-fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
+pub fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
     let guild = ctx
         .guild_id()
         .map(|g| g.get())
@@ -441,12 +444,28 @@ async fn paginate(ctx: Context<'_>, pages: Vec<serenity::CreateEmbed>) -> Result
     Ok(())
 }
 
-fn chrono_now_ms() -> i64 {
+pub fn chrono_now_ms() -> i64 {
     #[allow(clippy::expect_used)]
     let d = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock after 1970");
     d.as_millis() as i64
+}
+
+/// Gateway events we handle outside the command framework: auction buttons.
+async fn on_event(
+    ctx: &serenity::Context,
+    event: &serenity::FullEvent,
+    data: &Data,
+) -> Result<(), Error> {
+    if let serenity::FullEvent::InteractionCreate { interaction } = event {
+        if let Some(component) = interaction.as_message_component() {
+            if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
+                tracing::warn!(error = %e, "auction component handler failed");
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
@@ -488,6 +507,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         searchitem(),
         stresstest(),
     ];
+    commands.extend(crate::auctions::commands());
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
     if !cfg.discord.command_prefix.is_empty() {
@@ -498,8 +518,10 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     let options = poise::FrameworkOptions {
         commands,
         on_error: |error| Box::pin(on_error(error)),
+        event_handler: |ctx, event, _framework, data| Box::pin(on_event(ctx, event, data)),
         ..Default::default()
     };
+    let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
     let data_guild = cfg.discord.data_guild_id.map(|to| (guild_id, to));
     if let Some((from, to)) = data_guild {
         tracing::info!(
@@ -520,14 +542,25 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 .await?;
                 tracing::info!(user = %ready.user.name, guild_id, "gateway ready, commands registered");
                 readiness.set_ready();
+                // Boot recovery: auctions still open in the ledger get fresh
+                // embeds so their buttons work again (hazard B11).
+                crate::auctions::repost_open_auctions(
+                    ctx.http.as_ref(),
+                    &auction_ui,
+                    &driver,
+                    data_guild.map_or(guild_id, |(_, to)| to),
+                )
+                .await;
                 tokio::spawn(crate::scheduler::run(crate::scheduler::Scheduler {
                     ctx: ctx.clone(),
                     driver: driver.clone(),
+                    auctions: auction_ui.clone(),
                     discord_guild: guild_id,
                     ledger_guild: data_guild.map_or(guild_id, |(_, to)| to),
                 }));
                 Ok(Data {
                     driver,
+                    auctions: auction_ui,
                     data_guild,
                     items: std::sync::Arc::new(
                         crate::items::ItemSearch::new().expect("item search client"),
@@ -690,12 +723,15 @@ async fn send_log_embed(ctx: &Context<'_>, embed: serenity::CreateEmbed) {
         })
         .await;
     if let Some(channel) = log_channel {
-        if let Err(e) = serenity::ChannelId::new(channel)
-            .send_message(
-                ctx.serenity_context(),
-                serenity::CreateMessage::new().embed(embed),
-            )
-            .await
+        if let Err(e) = discord_call("send log embed", async {
+            serenity::ChannelId::new(channel)
+                .send_message(
+                    ctx.serenity_context(),
+                    serenity::CreateMessage::new().embed(embed),
+                )
+                .await
+        })
+        .await
         {
             tracing::warn!(error = %e, "log channel embed failed");
         }
@@ -704,7 +740,7 @@ async fn send_log_embed(ctx: &Context<'_>, embed: serenity::CreateEmbed) {
 
 /// Legacy `restricted` gate: guild Administrators bypass; otherwise the
 /// member needs the configured officer role.
-async fn officer_check(ctx: Context<'_>) -> Result<bool, Error> {
+pub async fn officer_check(ctx: Context<'_>) -> Result<bool, Error> {
     let Some(member) = ctx.author_member().await else {
         return Ok(false);
     };
@@ -741,7 +777,7 @@ async fn execute(
         .await)
 }
 
-fn rejection_text(e: &ExecError) -> String {
+pub fn rejection_text(e: &ExecError) -> String {
     match e {
         ExecError::Rejected(r) => match r {
             nocturnal_core::Rejection::RaidAlreadyActive { name } => {
@@ -1528,17 +1564,20 @@ pub async fn stresstest(
             .await
             .map_err(|e| anyhow::anyhow!("open auction: {e}"))?;
         let t = std::time::Instant::now();
-        let msg = channel
-            .send_message(
-                &http,
-                serenity::CreateMessage::new().embed(stress_embed(
-                    &stress_items[i],
-                    0,
-                    "bidding…",
-                    EMBED_ORANGE,
-                )),
-            )
-            .await?;
+        let msg = discord_call("post auction embed", async {
+            channel
+                .send_message(
+                    &http,
+                    serenity::CreateMessage::new().embed(stress_embed(
+                        stress_item,
+                        0,
+                        "bidding…",
+                        EMBED_ORANGE,
+                    )),
+                )
+                .await
+        })
+        .await?;
         post_ms.push(t.elapsed().as_secs_f64() * 1000.0);
         messages.push(msg);
         auction_ids.push(auction_id);
@@ -1555,44 +1594,52 @@ pub async fn stresstest(
         let auction_ids = auction_ids.clone();
         let editor_items = stress_items.clone();
         let message_ids: Vec<serenity::MessageId> = messages.iter().map(|m| m.id).collect();
-        tokio::spawn(async move {
-            let mut edit_ms: Vec<f64> = Vec::new();
-            while editing.load(std::sync::atomic::Ordering::Acquire) {
-                for (i, (auction_id, msg_id)) in auction_ids.iter().zip(&message_ids).enumerate() {
-                    let aid = auction_id.clone();
-                    let bids = driver
-                        .query(move |l| {
-                            l.state()
-                                .guild(ledger_guild)
-                                .and_then(|g| g.auctions.get(&aid).map(|a| a.bids.len()))
-                                .unwrap_or_default()
+        // Spawned tasks do not inherit the current span: attach it explicitly
+        // or their Discord calls land in a separate, parentless trace.
+        let task_span = tracing::info_span!("stresstest.editor", otel.kind = "internal");
+        tokio::spawn(
+            async move {
+                let mut edit_ms: Vec<f64> = Vec::new();
+                while editing.load(std::sync::atomic::Ordering::Acquire) {
+                    for (i, (auction_id, msg_id)) in
+                        auction_ids.iter().zip(&message_ids).enumerate()
+                    {
+                        let aid = auction_id.clone();
+                        let bids = driver
+                            .query(move |l| {
+                                l.state()
+                                    .guild(ledger_guild)
+                                    .and_then(|g| g.auctions.get(&aid).map(|a| a.bids.len()))
+                                    .unwrap_or_default()
+                            })
+                            .await;
+                        let t = std::time::Instant::now();
+                        let result = discord_call("edit auction embed", async {
+                            channel
+                                .edit_message(
+                                    &http,
+                                    *msg_id,
+                                    serenity::EditMessage::new().embed(stress_embed(
+                                        &editor_items[i],
+                                        bids,
+                                        "bidding…",
+                                        EMBED_ORANGE,
+                                    )),
+                                )
+                                .await
                         })
                         .await;
-                    let t = std::time::Instant::now();
-                    let result = discord_call("edit auction embed", async {
-                        channel
-                            .edit_message(
-                                &http,
-                                *msg_id,
-                                serenity::EditMessage::new().embed(stress_embed(
-                                    &editor_items[i],
-                                    bids,
-                                    "bidding…",
-                                    EMBED_ORANGE,
-                                )),
-                            )
-                            .await
-                    })
-                    .await;
-                    edit_ms.push(t.elapsed().as_secs_f64() * 1000.0);
-                    if let Err(e) = result {
-                        tracing::warn!(error = %e, "stress edit failed");
+                        edit_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+                        if let Err(e) = result {
+                            tracing::warn!(error = %e, "stress edit failed");
+                        }
                     }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                edit_ms
             }
-            edit_ms
-        })
+            .instrument(task_span),
+        )
     };
 
     // Phase 2: every bidder at once — lookups then a bid on every auction.
@@ -1600,45 +1647,49 @@ pub async fn stresstest(
     for &player in &players {
         let driver = driver.clone();
         let auction_ids = auction_ids.clone();
-        tasks.push(tokio::spawn(async move {
-            let mut lookup_ms = Vec::new();
-            let mut bid_ms = Vec::new();
-            let mut accepted = 0usize;
-            let mut rejected = 0usize;
-            for _ in 0..n_lookups {
-                let t = std::time::Instant::now();
-                let _balance = driver
-                    .query(move |l| {
-                        l.state()
-                            .guild(ledger_guild)
-                            .map(|g| g.balance(player))
-                            .unwrap_or_default()
-                    })
-                    .await;
-                lookup_ms.push(t.elapsed().as_secs_f64() * 1000.0);
-            }
-            for auction_id in &auction_ids {
-                let t = std::time::Instant::now();
-                let result = driver
-                    .execute(
-                        ledger_guild,
-                        Actor::User(player),
-                        Command::PlaceBid {
-                            auction_id: auction_id.clone(),
-                            player,
-                            amount: 1,
-                            for_main: true,
-                        },
-                    )
-                    .await;
-                bid_ms.push(t.elapsed().as_secs_f64() * 1000.0);
-                match result {
-                    Ok(_) => accepted += 1,
-                    Err(_) => rejected += 1,
+        let bidder_span = tracing::info_span!("stresstest.bidder", otel.kind = "internal");
+        tasks.push(tokio::spawn(
+            async move {
+                let mut lookup_ms = Vec::new();
+                let mut bid_ms = Vec::new();
+                let mut accepted = 0usize;
+                let mut rejected = 0usize;
+                for _ in 0..n_lookups {
+                    let t = std::time::Instant::now();
+                    let _balance = driver
+                        .query(move |l| {
+                            l.state()
+                                .guild(ledger_guild)
+                                .map(|g| g.balance(player))
+                                .unwrap_or_default()
+                        })
+                        .await;
+                    lookup_ms.push(t.elapsed().as_secs_f64() * 1000.0);
                 }
+                for auction_id in &auction_ids {
+                    let t = std::time::Instant::now();
+                    let result = driver
+                        .execute(
+                            ledger_guild,
+                            Actor::User(player),
+                            Command::PlaceBid {
+                                auction_id: auction_id.clone(),
+                                player,
+                                amount: 1,
+                                for_main: true,
+                            },
+                        )
+                        .await;
+                    bid_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+                    match result {
+                        Ok(_) => accepted += 1,
+                        Err(_) => rejected += 1,
+                    }
+                }
+                (lookup_ms, bid_ms, accepted, rejected)
             }
-            (lookup_ms, bid_ms, accepted, rejected)
-        }));
+            .instrument(bidder_span),
+        ));
     }
     let mut lookup_ms = Vec::new();
     let mut bid_ms = Vec::new();

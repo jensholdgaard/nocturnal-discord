@@ -144,14 +144,26 @@ live mock night.)*
 
 ## M5 — Auctions *(~2 weeks — the crown jewel)*
 
-- [ ] One auction state machine, `flavor: short | long` (legacy dup collapsed).
-- [ ] Bid via button and DM; re-bid replaces; committed-bid reservation across
-      concurrent auctions; deterministic close at `auction.closed` seq.
-- [ ] Tie-break as recorded draw (`auction.tie_broken`).
-- [ ] Finalization-as-debit; multi-winner/quantity support as per legacy behaviour.
-- [ ] Stale-button handling (B12); re-post active auction embeds on boot (B11).
+- [x] One auction state machine, `flavor: short | long` — the legacy ~80 %
+      duplicated `/startbid` and `/startlongbid` code paths collapse into one
+      (audit S3), sharing item lookup, embeds and lifecycle.
+- [x] Bid via button and DM (legacy UX kept, hardened: collector bound to its
+      auction (#50), no stacked prompts (#39), closed DMs fall back to an
+      ephemeral hint (#5)); `/bid` for long auctions with 0 = retract;
+      re-bid replaces; cross-auction reservation; deterministic close.
+- [x] Finalization-as-debit with a recorded tie-break seed; multi-winner and
+      quantity support.
+- [x] Stale-button handling (B12) and boot re-post of open auctions (B11) —
+      buttons are stateless (auction id in the custom id), so a restart
+      mid-auction changes nothing.
+- [x] Auction timers in the scheduler: deadline → close, long + 20 min grace →
+      finalize; both idempotent and state-derived.
+- [x] `/auctiondetails` (with the legacy public "peek" callout).
+- [ ] Bell sound at short-auction start — needs the voice stack; deliberately
+      deferred as its own slice (decorative, strictly fire-and-forget).
 - [ ] Chaos suite: N overlapping auctions + raid ticks + kill -9 at random
-      points → resume, finish, verify every invariant.
+      points → resume, finish, verify every invariant. (`/stresstest` already
+      drives the load half of this.)
 
 **Exit:** the "anatomy of a typical crash" scenario from the audit is replayed
 step by step against the new bot and is boring.

@@ -3,6 +3,7 @@
 //! Boot: config → tracing → instance lock (B2) → replay → health → gateway.
 //! See docs/operations.md for the operational contract.
 
+mod auctions;
 mod config;
 mod discord;
 mod driver;
@@ -47,9 +48,7 @@ fn main() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
     let _rt_guard = rt.enter();
     let _telemetry = nocturnal_telemetry::init(&nocturnal_telemetry::TelemetryConfig {
-        endpoint: cfg.otlp.endpoint.clone(),
-        protocol: cfg.otlp.protocol.clone(),
-        service_name: "nocturnal".to_owned(),
+        default_service_name: "nocturnal".to_owned(),
         log_filter: cfg.log.level.clone(),
         log_json: cfg.log.format == "json",
     })?;

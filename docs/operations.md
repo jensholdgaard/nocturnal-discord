@@ -16,11 +16,15 @@ fail-fast errors that name the offending key:
    (`nocturnal.example.toml`); every knob has a sane default — an empty file
    is a valid config.
 2. **Environment** — `NOCTURNAL_*` overrides for every file key (12-factor,
-   container-friendly), e.g. `NOCTURNAL_OTLP__ENDPOINT`. Standard OTel vars
-   (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`)
-   are honored as the fallback for telemetry, so the bot drops into the
-   everquest-observability stack with zero bot-specific config.
-3. **Secrets** — never in the file: `DISCORD_TOKEN` (or `DISCORD_TOKEN_FILE`
+   container-friendly), e.g. `NOCTURNAL_OTLP__ENDPOINT`. 
+3. **Telemetry** — the standard OpenTelemetry environment only
+   (`OTEL_EXPORTER_OTLP_ENDPOINT` and per-signal variants, `_PROTOCOL`,
+   `_HEADERS`, `_TIMEOUT`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`,
+   `OTEL_SDK_DISABLED`). The bot defines **no** telemetry config keys of its
+   own: operators configure it like any other OTel component, and the SDK
+   resolves endpoints, per-signal paths, headers and timeouts itself. No
+   endpoint set = local logging only, all instruments no-ops.
+4. **Secrets** — never in the file: `DISCORD_TOKEN` (or `DISCORD_TOKEN_FILE`
    for Docker/K8s secrets). Config dumps and spans never echo secrets.
 
 `discord.command_prefix` prepends every slash-command name (e.g.

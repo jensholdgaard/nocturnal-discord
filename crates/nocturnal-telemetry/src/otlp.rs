@@ -1,7 +1,12 @@
-//! OTLP wiring: traces, logs, and metrics exporters plus the tracing
-//! subscriber stack. With no endpoint configured (and none in the standard
-//! `OTEL_EXPORTER_OTLP_ENDPOINT` env), only local fmt logging is installed —
-//! the bot runs identically, just unexported.
+//! OTLP wiring.
+//!
+//! Configuration is **entirely** the standard OpenTelemetry environment:
+//! `OTEL_EXPORTER_OTLP_ENDPOINT` (and per-signal variants), `_PROTOCOL`,
+//! `_HEADERS`, `_TIMEOUT`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`,
+//! `OTEL_SDK_DISABLED`. We invent no names of our own and set nothing
+//! programmatically, so this bot is configured like any other OTel component.
+//! With no endpoint configured, only local `fmt` logging is installed and every
+//! instrument is a no-op.
 
 use anyhow::Context as _;
 use opentelemetry::global;
@@ -22,13 +27,9 @@ use crate::metric;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryConfig {
-    /// Explicit OTLP endpoint; `None` falls back to the standard
-    /// `OTEL_EXPORTER_OTLP_ENDPOINT` env var; neither = export disabled.
-    pub endpoint: Option<String>,
-    /// "grpc" or "http/protobuf".
-    pub protocol: String,
-    pub service_name: String,
-    /// tracing filter directive (e.g. "info").
+    /// Service name used only when `OTEL_SERVICE_NAME` is unset.
+    pub default_service_name: String,
+    /// tracing filter directive for local logging (e.g. "info").
     pub log_filter: String,
     pub log_json: bool,
 }
@@ -54,22 +55,48 @@ impl Drop for TelemetryGuard {
     }
 }
 
-fn export_enabled(cfg: &TelemetryConfig) -> bool {
-    cfg.endpoint.is_some() || std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok()
+fn export_enabled() -> bool {
+    if std::env::var("OTEL_SDK_DISABLED").is_ok_and(|v| v.eq_ignore_ascii_case("true")) {
+        return false;
+    }
+    [
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+    ]
+    .iter()
+    .any(|v| std::env::var(v).is_ok())
+}
+
+/// The one dispatch the Rust SDK cannot make from the environment: gRPC vs
+/// HTTP transport. Everything downstream (URL, per-signal paths, headers,
+/// timeouts, compression) is resolved by the SDK from the same env vars.
+fn use_http(signal_protocol_var: &str) -> bool {
+    std::env::var(signal_protocol_var)
+        .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL"))
+        .unwrap_or_default()
+        .starts_with("http")
+}
+
+macro_rules! exporter {
+    ($builder:expr, $signal_protocol_var:expr) => {{
+        if use_http($signal_protocol_var) {
+            $builder.with_http().build()
+        } else {
+            $builder.with_tonic().build()
+        }
+    }};
 }
 
 /// Export allowlist (OTel sensitive-data guidance: don't collect what you
 /// didn't deliberately author). Only spans/events from our own crates leave
-/// the process; library internals stay local — serenity, for one, dumps whole
-/// gateway payloads (Identify incl. the bot token, InteractionCreate incl.
-/// interaction tokens and member data) into its span fields.
+/// the process. NOT serenity: its request path emits five generic internal
+/// spans per call whose fields dump whole requests including auth (the B13
+/// incident) — we emit our own CLIENT `discord.request` spans instead, which
+/// cover the same latency with attributes we author.
 fn export_targets() -> Targets {
     Targets::new()
-        // serenity's HTTP request spans are the Discord *client spans* —
-        // exported for causality/latency, with attributes stripped to the
-        // safe allowlist by [`RedactSpans`] (their raw fields dump whole
-        // requests, incl. auth — the B13 incident).
-        .with_target("serenity::http", LevelFilter::DEBUG)
         .with_target("nocturnal", LevelFilter::TRACE)
         .with_target("nocturnal_core", LevelFilter::TRACE)
         .with_target("nocturnal_store", LevelFilter::TRACE)
@@ -79,10 +106,8 @@ fn export_targets() -> Targets {
         .with_target("nocturnal_migrate", LevelFilter::TRACE)
 }
 
-/// Attribute allowlist for exported spans (OTel redaction guidance: fail
-/// closed). Only keys we deliberately author — or harmless runtime metadata —
-/// survive; everything else (library field dumps like serenity's `req`)
-/// is deleted before export.
+/// Attribute allowlist for exported spans (fail closed). Only keys we
+/// deliberately author, or harmless runtime metadata, survive.
 fn safe_attribute(key: &str) -> bool {
     key.starts_with("nocturnal.")
         || key.starts_with("code.")
@@ -97,8 +122,7 @@ fn safe_attribute(key: &str) -> bool {
         || key == "events"
 }
 
-/// Span processor decorator that applies [`safe_attribute`] to every span
-/// before handing it to the wrapped (batch) processor.
+/// Span processor decorator applying [`safe_attribute`] before export.
 #[derive(Debug)]
 struct RedactSpans<P>(P);
 
@@ -127,56 +151,12 @@ impl<P: SpanProcessor> SpanProcessor for RedactSpans<P> {
         self.0.shutdown_with_timeout(timeout)
     }
 
-    /// MUST delegate: the SDK hands the Resource (service.name and friends)
-    /// to processors this way. Without it the wrapped exporter ships spans
-    /// with an empty resource and they land under "missing-service-name".
+    /// MUST delegate: the SDK hands the Resource (service.name and friends) to
+    /// processors this way. Without it the wrapped exporter ships spans with
+    /// an empty resource and they land under "missing-service-name".
     fn set_resource(&mut self, resource: &Resource) {
         self.0.set_resource(resource);
     }
-}
-
-/// Parse `OTEL_EXPORTER_OTLP_HEADERS` ("k=v,k=v") ourselves so bearer auth
-/// works regardless of which env vars the exporter crate honors.
-fn env_headers() -> std::collections::HashMap<String, String> {
-    std::env::var("OTEL_EXPORTER_OTLP_HEADERS")
-        .ok()
-        .map(|s| {
-            s.split(',')
-                .filter_map(|kv| {
-                    kv.split_once('=')
-                        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-// For http/protobuf the Rust exporter treats a code-set endpoint as the FULL
-// per-signal URL, so the signal path must be appended explicitly.
-macro_rules! exporter {
-    ($builder:expr, $cfg:expr, $path:expr) => {{
-        if $cfg.protocol == "http/protobuf" {
-            let mut b = opentelemetry_otlp::WithHttpConfig::with_headers(
-                $builder.with_http(),
-                env_headers(),
-            );
-            if let Some(e) = &$cfg.endpoint {
-                b = opentelemetry_otlp::WithExportConfig::with_endpoint(
-                    b,
-                    format!("{}{}", e.trim_end_matches('/'), $path),
-                );
-            }
-            b.build()
-        } else {
-            let b = $builder.with_tonic();
-            match &$cfg.endpoint {
-                Some(e) => {
-                    opentelemetry_otlp::WithExportConfig::with_endpoint(b, e.clone()).build()
-                }
-                None => b.build(),
-            }
-        }
-    }};
 }
 
 /// Install the global tracing subscriber (fmt + OTLP layers) and the global
@@ -192,7 +172,7 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         tracing_subscriber::fmt::layer().boxed()
     };
 
-    if !export_enabled(cfg) {
+    if !export_enabled() {
         tracing_subscriber::registry()
             .with(filter)
             .with(fmt_layer)
@@ -204,14 +184,18 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         });
     }
 
-    let resource = Resource::builder()
-        .with_service_name(cfg.service_name.clone())
-        .build();
+    // OTEL_SERVICE_NAME / OTEL_RESOURCE_ATTRIBUTES win; ours is the fallback.
+    let resource = if std::env::var("OTEL_SERVICE_NAME").is_ok() {
+        Resource::builder().build()
+    } else {
+        Resource::builder()
+            .with_service_name(cfg.default_service_name.clone())
+            .build()
+    };
 
     let span_exporter = exporter!(
         opentelemetry_otlp::SpanExporter::builder(),
-        cfg,
-        "/v1/traces"
+        "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
     )
     .context("building OTLP span exporter")?;
     let tracer_provider = SdkTracerProvider::builder()
@@ -224,8 +208,11 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .with_tracer(tracer_provider.tracer("nocturnal"))
         .with_filter(export_targets());
 
-    let log_exporter = exporter!(opentelemetry_otlp::LogExporter::builder(), cfg, "/v1/logs")
-        .context("building OTLP log exporter")?;
+    let log_exporter = exporter!(
+        opentelemetry_otlp::LogExporter::builder(),
+        "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"
+    )
+    .context("building OTLP log exporter")?;
     let logger_provider = SdkLoggerProvider::builder()
         .with_batch_exporter(log_exporter)
         .with_resource(resource.clone())
@@ -235,8 +222,7 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
 
     let metric_exporter = exporter!(
         opentelemetry_otlp::MetricExporter::builder(),
-        cfg,
-        "/v1/metrics"
+        "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"
     )
     .context("building OTLP metric exporter")?;
     let meter_provider = SdkMeterProvider::builder()
@@ -253,12 +239,9 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .init();
 
     tracing::info!(
-        endpoint = cfg
-            .endpoint
-            .as_deref()
-            .unwrap_or("(from OTEL_EXPORTER_OTLP_ENDPOINT)"),
-        protocol = cfg.protocol,
-        "OTLP export enabled"
+        endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default(),
+        protocol = std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").unwrap_or_default(),
+        "OTLP export enabled (configured by OTEL_* environment)"
     );
 
     Ok(TelemetryGuard {
@@ -358,14 +341,13 @@ impl Default for Metrics {
 
 #[cfg(test)]
 mod tests {
-    use super::export_targets;
+    use super::{export_targets, safe_attribute, use_http, RedactSpans};
     use tracing::Level;
 
     /// The redaction wrapper must delegate *every* hook — a missed
     /// `set_resource` silently strips service.name from exported spans.
     #[test]
     fn redact_wrapper_forwards_set_resource() {
-        use super::RedactSpans;
         use opentelemetry_sdk::error::OTelSdkResult;
         use opentelemetry_sdk::trace::{SpanData, SpanProcessor};
         use opentelemetry_sdk::Resource;
@@ -400,11 +382,12 @@ mod tests {
 
     #[test]
     fn span_attribute_allowlist_fails_closed() {
-        use super::safe_attribute;
         for ok in [
             "nocturnal.command",
             "code.line.number",
             "http.status_code",
+            "server.address",
+            "otel.kind",
             "busy_ns",
         ] {
             assert!(safe_attribute(ok), "{ok}");
@@ -425,7 +408,6 @@ mod tests {
             "nocturnal::driver",
             "nocturnal_core::decide",
             "nocturnal_discord::commands",
-            "serenity::http::client", // Discord client spans, redacted
         ] {
             assert!(
                 targets.would_enable(ours, &Level::DEBUG),
@@ -434,6 +416,7 @@ mod tests {
         }
         for theirs in [
             "serenity::gateway::shard",
+            "serenity::http::client",
             "poise::dispatch",
             "hyper_util::client",
             "reqwest",
@@ -444,5 +427,41 @@ mod tests {
                 "{theirs} must NOT export"
             );
         }
+    }
+
+    /// Transport selection follows the standard env vars, never our own.
+    #[test]
+    fn transport_follows_standard_env() {
+        temp_env::with_vars(
+            [
+                ("OTEL_EXPORTER_OTLP_PROTOCOL", Some("http/protobuf")),
+                ("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", None),
+            ],
+            || assert!(use_http("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")),
+        );
+        temp_env::with_vars(
+            [
+                ("OTEL_EXPORTER_OTLP_PROTOCOL", Some("http/protobuf")),
+                ("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", Some("grpc")),
+            ],
+            || {
+                assert!(
+                    !use_http("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"),
+                    "signal var wins"
+                )
+            },
+        );
+        temp_env::with_vars(
+            [
+                ("OTEL_EXPORTER_OTLP_PROTOCOL", None::<&str>),
+                ("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", None),
+            ],
+            || {
+                assert!(
+                    !use_http("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"),
+                    "grpc default"
+                )
+            },
+        );
     }
 }

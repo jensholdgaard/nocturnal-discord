@@ -5,17 +5,24 @@
 
 use std::time::Duration;
 
+use nocturnal_core::event::Flavor;
+use nocturnal_core::state::AuctionStatus;
 use nocturnal_core::{Actor, Command, GuildId};
 use poise::serenity_prelude as serenity;
 
 use crate::discord::{raid_embed, voice_members, EMBED_BLUE_TICK};
 use crate::driver::{DriverHandle, ExecError};
 
+fn now_ms() -> i64 {
+    crate::discord::chrono_now_ms()
+}
+
 const CYCLE: Duration = Duration::from_secs(10);
 
 pub struct Scheduler {
     pub ctx: serenity::Context,
     pub driver: DriverHandle,
+    pub auctions: std::sync::Arc<crate::auctions::AuctionUi>,
     /// Discord guild whose voice channels are scanned.
     pub discord_guild: GuildId,
     /// Ledger guild ticks are written to (differs on the test server).
@@ -37,6 +44,9 @@ pub async fn run(s: Scheduler) {
         if let Err(e) = cycle(&s).await {
             // Side-effect failures are logged and never fatal (audit #3/#8).
             tracing::warn!(error = %e, "scheduler cycle error");
+        }
+        if let Err(e) = auction_cycle(&s).await {
+            tracing::warn!(error = %e, "auction cycle error");
         }
     }
 }
@@ -104,6 +114,74 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
         }
         Err(ExecError::Rejected(_)) => { /* not due yet — the normal case */ }
         Err(e @ ExecError::Storage(_)) => return Err(anyhow::anyhow!(e.to_string())),
+    }
+    Ok(())
+}
+
+/// Auction timers, derived from ledger state (hazard B6): an auction past its
+/// deadline closes; a *long* auction closed longer than the legacy grace
+/// period finalizes (which is the debit). Both are idempotent — a rejected
+/// command just means another cycle already did it, and a restart mid-auction
+/// simply resumes here.
+#[tracing::instrument(name = "scheduler.auctions", skip_all, fields(otel.kind = "internal"))]
+async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
+    let ledger_guild = s.ledger_guild;
+    let now = now_ms();
+    let due = s
+        .driver
+        .query(move |l| {
+            let Some(g) = l.state().guild(ledger_guild) else {
+                return Vec::new();
+            };
+            g.auctions
+                .iter()
+                .filter_map(|(id, a)| match a.status {
+                    AuctionStatus::Open if a.deadline_ts_ms <= now => {
+                        Some((id.clone(), a.flavor, false))
+                    }
+                    AuctionStatus::Closed
+                        if a.flavor == Flavor::Long
+                            && a.deadline_ts_ms + crate::auctions::LONG_AUCTION_GRACE_MS <= now =>
+                    {
+                        Some((id.clone(), a.flavor, true))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .await;
+
+    for (auction_id, flavor, finalize) in due {
+        let cmd = if finalize {
+            Command::FinalizeAuction {
+                auction_id: auction_id.clone(),
+                // Recorded in the event, so any tie-break draw is reproducible.
+                seed: now as u64,
+            }
+        } else {
+            Command::CloseAuction {
+                auction_id: auction_id.clone(),
+            }
+        };
+        match s.driver.execute(ledger_guild, Actor::System, cmd).await {
+            Ok(_) => tracing::info!(
+                auction_id,
+                ?flavor,
+                action = if finalize { "finalized" } else { "closed" },
+                "auction timer fired"
+            ),
+            // Another cycle got there first, or an officer already acted.
+            Err(crate::driver::ExecError::Rejected(_)) => continue,
+            Err(e) => return Err(anyhow::anyhow!(e.to_string())),
+        }
+        crate::auctions::refresh(
+            s.ctx.http.as_ref(),
+            &s.auctions,
+            &s.driver,
+            ledger_guild,
+            &auction_id,
+        )
+        .await;
     }
     Ok(())
 }
