@@ -212,6 +212,15 @@ pub fn apply(state: &mut State, env: &Envelope) {
             ..
         } => {
             let item = g.auctions.get(auction_id).map(|a| a.item.clone());
+            // Attribute the loot to the raid it was won in, exactly like the
+            // legacy `removeDKP(..., raid, item)` call. Without this the raid
+            // summary and /dkphistory cannot say who won what.
+            let raid_ref = g.active_raid.as_ref().and_then(|id| {
+                g.raids.get(id).map(|r| crate::event::RaidRef {
+                    raid_id: id.clone(),
+                    name: r.name.clone(),
+                })
+            });
             if let Some(a) = g.auctions.get_mut(auction_id) {
                 a.status = AuctionStatus::Finalized;
                 a.winners = winners.clone();
@@ -225,7 +234,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     dkp: -w.amount,
                     comment: item.as_ref().map_or_else(String::new, |i| i.name.clone()),
                     ts_ms: ts,
-                    raid: None,
+                    raid: raid_ref.clone(),
                     item: item.clone(),
                 });
             }

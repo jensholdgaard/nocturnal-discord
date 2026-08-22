@@ -671,3 +671,47 @@ fn insufficient_balance_carries_the_reservation() {
         }
     );
 }
+
+/// Loot won during a raid must be attributed to that raid, or the raid
+/// summary and /dkphistory cannot say who won what (legacy passed the active
+/// raid to removeDKP; the fold dropped it).
+#[test]
+fn auction_loot_is_attributed_to_the_active_raid() {
+    let mut l = Ledger::new();
+    give(&mut l, P1, 100);
+    l.execute(
+        &ctx(5_000),
+        &Command::StartRaid {
+            raid_id: "naggy".into(),
+            name: "Nagafen".into(),
+            tick_interval_ms: 60_000,
+            dkp_per_tick: 1,
+            players_present: vec![P1],
+            event_id: None,
+        },
+    )
+    .unwrap();
+    open_auction(&mut l, "a", 0, 1, 0, 0);
+    bid(&mut l, "a", P1, 30, true);
+    finish(&mut l, "a");
+
+    let g = l.state().guild(GUILD).unwrap();
+    let debit = g.players[&P1]
+        .log
+        .iter()
+        .find(|e| e.dkp == -30)
+        .expect("winner was charged");
+    let raid = debit.raid.as_ref().expect("loot carries its raid");
+    assert_eq!(raid.raid_id, "naggy");
+    assert_eq!(raid.name, "Nagafen");
+    assert_eq!(debit.item.as_ref().map(|i| i.name.as_str()), Some("item"));
+
+    // Outside a raid there is nothing to attribute it to.
+    let mut l = Ledger::new();
+    give(&mut l, P2, 100);
+    open_auction(&mut l, "b", 0, 1, 0, 0);
+    bid(&mut l, "b", P2, 10, true);
+    finish(&mut l, "b");
+    let g = l.state().guild(GUILD).unwrap();
+    assert!(g.players[&P2].log.iter().find(|e| e.dkp == -10).unwrap().raid.is_none());
+}

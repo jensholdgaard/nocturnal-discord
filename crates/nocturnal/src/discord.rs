@@ -597,11 +597,19 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 .record(info.timeout.as_secs_f64(), &attrs);
         }));
     }
-    let mut client =
-        serenity::ClientBuilder::new_with_http(http, serenity::GatewayIntents::non_privileged())
-            .framework(framework)
-            .await
-            .context("building Discord client")?;
+    let mut client = serenity::ClientBuilder::new_with_http(
+        http,
+        // Exactly what the bot needs, spelled out: guild/channel data,
+        // voice states (raid tick attendance), and DMs (the bid flow).
+        // Message *content* in DMs with the app is exempt from the
+        // privileged MESSAGE_CONTENT intent, so bids still read.
+        serenity::GatewayIntents::GUILDS
+            | serenity::GatewayIntents::GUILD_VOICE_STATES
+            | serenity::GatewayIntents::DIRECT_MESSAGES,
+    )
+    .framework(framework)
+    .await
+    .context("building Discord client")?;
 
     // Gateway heartbeat latency, sampled every 30 s.
     let latency_shards = client.shard_manager.clone();
@@ -1114,28 +1122,26 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
                 ts_ms: i64,
                 text: String,
             }
-            let mut moves: Vec<Movement> = Vec::new();
-            let mut agg: Option<(String, i64, i64)> = None; // comment, dkps, ts
-            for e in &raid.entries {
-                match &mut agg {
-                    Some((comment, dkps, _)) if *comment == e.comment => *dkps += e.amount,
-                    _ => {
-                        if let Some((comment, dkps, ts)) = agg.take() {
-                            moves.push(Movement {
-                                ts_ms: ts,
-                                text: format!("<t:{}:t> *{comment}* ({dkps} dkps)", ts / 1000),
-                            });
+            // One line per attendance entry — every Start, Tick and End, as
+            // officers are used to reading them (the legacy code aggregated
+            // into a variable it then never used).
+            let mut moves: Vec<Movement> = raid
+                .entries
+                .iter()
+                .map(|e| Movement {
+                    ts_ms: e.ts_ms,
+                    text: format!(
+                        "<t:{}:t> *{}*{}",
+                        e.ts_ms / 1000,
+                        e.comment,
+                        if e.amount != 0 {
+                            format!(" — {} dkp to {} player(s)", e.amount, e.players.len())
+                        } else {
+                            String::new()
                         }
-                        agg = Some((e.comment.clone(), e.amount, e.ts_ms));
-                    }
-                }
-            }
-            if let Some((comment, dkps, ts)) = agg {
-                moves.push(Movement {
-                    ts_ms: ts,
-                    text: format!("<t:{}:t> *{comment}* ({dkps} dkps)", ts / 1000),
-                });
-            }
+                    ),
+                })
+                .collect();
             for (player, p) in &g.players {
                 for e in &p.log {
                     if e.dkp < 0 && e.raid.as_ref().is_some_and(|r| r.raid_id == rid) {

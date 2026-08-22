@@ -916,15 +916,16 @@ async fn dm_bid_flow(
     let user = interaction.user.id;
     let player: PlayerId = user.get();
     let aid = auction_id.to_owned();
-    let item_name = data
+    let (item_name, deadline_ts_ms) = data
         .driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
-                .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
+                .and_then(|g| g.auctions.get(&aid))
+                .map(|a| (a.item.name.clone(), a.deadline_ts_ms))
+                .unwrap_or_else(|| ("the item".to_owned(), 0))
         })
-        .await
-        .unwrap_or_else(|| "the item".to_owned());
+        .await;
 
     if !data.auctions.dm_open(player, auction_id) {
         return reply(
@@ -934,12 +935,42 @@ async fn dm_bid_flow(
         )
         .await;
     }
+    // From here on every exit path must clear the guard, or the bidder can
+    // never click this auction again.
+    let result = dm_bid_inner(
+        ctx,
+        interaction,
+        data,
+        ledger_guild,
+        auction_id,
+        for_main,
+        user,
+        player,
+        &item_name,
+        deadline_ts_ms,
+    )
+    .await;
+    data.auctions.dm_done(player, auction_id);
+    result
+}
 
+#[allow(clippy::too_many_arguments)]
+async fn dm_bid_inner(
+    ctx: &serenity::Context,
+    interaction: &serenity::ComponentInteraction,
+    data: &Data,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    for_main: bool,
+    user: serenity::UserId,
+    player: PlayerId,
+    item_name: &str,
+    deadline_ts_ms: i64,
+) -> anyhow::Result<()> {
     let dm = match user.create_dm_channel(ctx).await {
         Ok(dm) => dm,
         Err(e) => {
-            data.auctions.dm_done(player, auction_id);
-            tracing::info!(error = %e, "DM channel unavailable; using ephemeral fallback");
+            tracing::info!(player, error = %e, "DM channel unavailable; ephemeral fallback");
             return reply(
                 ctx,
                 interaction,
@@ -954,16 +985,16 @@ async fn dm_bid_flow(
         dm.say(
             ctx,
             format!(
-                "How much do you want to `{}` bid on {item_name}?, 0 to cancel",
-                if for_main { "MAIN" } else { "ALT" }
+                "How much do you want to `{}` bid on **{item_name}**? Reply with a number (0 to cancel).\nBidding closes <t:{}:R>.",
+                if for_main { "MAIN" } else { "ALT" },
+                ts_sec(deadline_ts_ms)
             ),
         )
         .await
     })
     .await;
     if let Err(e) = prompt {
-        data.auctions.dm_done(player, auction_id);
-        tracing::info!(error = %e, "DM send failed; using ephemeral fallback");
+        tracing::info!(player, error = %e, "DM send failed; ephemeral fallback");
         return reply(
             ctx,
             interaction,
@@ -972,23 +1003,37 @@ async fn dm_bid_flow(
         .await;
     }
     reply(ctx, interaction, "Sent — check your DMs. 📨").await?;
+    tracing::info!(
+        player,
+        auction_id,
+        for_main,
+        "DM bid prompt sent; awaiting reply"
+    );
 
-    let reply = serenity::collector::MessageCollector::new(ctx)
+    // Listen exactly as long as the auction lives (a 60-second auction gets a
+    // 60-second window), plus a few seconds so a reply sent right at the bell
+    // still arrives to be judged by the ledger rather than dropped here.
+    let remaining_ms = (deadline_ts_ms - chrono_now_ms()).max(0) + 5_000;
+    let reply_msg = serenity::collector::MessageCollector::new(ctx)
         .channel_id(dm.id)
         .author_id(user)
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_millis(remaining_ms as u64))
         .await;
-    data.auctions.dm_done(player, auction_id);
 
-    let Some(reply) = reply else {
-        let _ = dm.say(ctx, "Bid timed out.").await;
+    let Some(reply_msg) = reply_msg else {
+        tracing::info!(player, auction_id, "DM bid prompt timed out");
+        let _ = dm
+            .say(ctx, "Bid timed out — click the button again to retry.")
+            .await;
         return Ok(());
     };
-    let Ok(amount) = reply.content.trim().parse::<i64>() else {
+    let raw = reply_msg.content.trim().to_owned();
+    tracing::info!(player, auction_id, len = raw.len(), "DM bid reply received");
+    let Ok(amount) = raw.parse::<i64>() else {
         let _ = dm
             .say(
                 ctx,
-                "That is not a number — click the button again to retry.",
+                format!("`{raw}` is not a number — click the button again to retry."),
             )
             .await;
         return Ok(());
@@ -1013,10 +1058,22 @@ async fn dm_bid_flow(
         .await;
     let text = match &outcome {
         Ok(_) if amount == 0 => "Bid cancelled".to_owned(),
-        Ok(_) => "Bid placed".to_owned(),
+        Ok(_) => format!(
+            "Bid placed: **{amount}** DKP as {} on {item_name}",
+            if for_main { "MAIN" } else { "ALT" }
+        ),
         Err(e) => rejection_text(e),
     };
-    let _ = dm.say(ctx, text).await;
+    tracing::info!(
+        player,
+        auction_id,
+        amount,
+        accepted = outcome.is_ok(),
+        "DM bid resolved"
+    );
+    if let Err(e) = dm.say(ctx, &text).await {
+        tracing::warn!(player, error = %e, "could not confirm bid in DM");
+    }
     if outcome.is_ok() {
         refresh(
             ctx.http.as_ref(),
