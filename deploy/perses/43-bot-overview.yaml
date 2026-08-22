@@ -5,11 +5,11 @@
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
-  name: nocturnal-bot
-  project: everquest
+  name: overview
+  project: nocturnal
 spec:
   display:
-    name: Nocturnal Bot
+    name: Overview
   duration: 6h
   refreshInterval: 1m
   panels:
@@ -186,7 +186,9 @@ spec:
           name: Traces
         plugin:
           kind: TraceTable
-          spec: {}
+          spec:
+            links:
+              trace: /projects/nocturnal/dashboards/trace?var-trace=${traceId}
         queries:
         - kind: TraceQuery
           spec:

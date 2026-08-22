@@ -1,0 +1,25 @@
+apiVersion: perses.dev/v1alpha1
+kind: Datasource
+metadata:
+  name: jaeger
+  project: nocturnal
+spec:
+  display:
+    name: Jaeger
+  default: false
+  plugin:
+    kind: JaegerDatasource
+    spec:
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://127.0.0.1:16686
+          allowedEndpoints:
+            - endpointPattern: /api/services
+              method: GET
+            - endpointPattern: /api/services/([a-zA-Z0-9_.-]+)/operations
+              method: GET
+            - endpointPattern: /api/traces
+              method: GET
+            - endpointPattern: /api/traces/([a-zA-Z0-9]+)
+              method: GET

@@ -1,0 +1,46 @@
+# Trace detail view: reached by clicking a trace on the overview dashboard.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: trace
+  project: nocturnal
+spec:
+  display:
+    name: Trace
+  duration: 6h
+  variables:
+  - kind: TextVariable
+    spec:
+      name: trace
+      display:
+        name: Trace id
+      value: ''
+  panels:
+    gantt:
+      kind: Panel
+      spec:
+        display:
+          name: Spans
+        plugin:
+          kind: TracingGanttChart
+          spec: {}
+        queries:
+        - kind: TraceQuery
+          spec:
+            plugin:
+              kind: JaegerTraceQuery
+              spec:
+                datasource:
+                  kind: JaegerDatasource
+                  name: jaeger
+                traceId: $trace
+  layouts:
+  - kind: Grid
+    spec:
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 14
+        content:
+          $ref: '#/spec/panels/gantt'

@@ -1,0 +1,9 @@
+# The bot's own Perses project — deliberately separate from the in-game
+# EverQuest telemetry project; they share nothing but the stack.
+apiVersion: perses.dev/v1alpha1
+kind: Project
+metadata:
+  name: nocturnal
+spec:
+  display:
+    name: Nocturnal Bot
