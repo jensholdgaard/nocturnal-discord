@@ -135,8 +135,14 @@ server; spans visible in Jaeger.
 - [x] Kill-and-resume covered by `raid_night.rs` (crash mid-raid + mid-
       auction, tick_no idempotence); live restart drill happens in the mock
       raid night below.
-- [ ] RaidHelper event integration (auto-name raids, event DKP awards) —
-      deferred to its own slice; needs the API key + a live event.
+- [x] RaidHelper integration (`raidhelper.rs`): `/startraid` names and links a
+      raid from an event starting within ±10 minutes; ending a linked raid
+      awards signups who actually attended (the legacy rule —
+      `min(10, max(1, attendees/2))` ticks — ported with tests); manual
+      `/addraideventdkp` for past raids; the award amount is configurable
+      (deliberate change #9) instead of hardcoded 5. Every call has a timeout
+      and a RaidHelper outage can never stop a raid starting or ending.
+      *Needs a live event and the guild's API key to exercise end to end.*
 
 **Exit:** a full mock raid night runs in the test server, bot restarted twice
 mid-raid, ledger perfect. *(Code deployed to the VM 2026-08-22; awaiting the

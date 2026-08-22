@@ -50,7 +50,12 @@ fn boot(dir: &Path) -> (Ledger, Store) {
 }
 
 /// decide → append(fsync) → apply, the driver's loop. Rejections are normal.
-fn exec(ledger: &mut Ledger, store: &mut Store, now_ms: i64, cmd: &Command) -> Option<Vec<Envelope>> {
+fn exec(
+    ledger: &mut Ledger,
+    store: &mut Store,
+    now_ms: i64,
+    cmd: &Command,
+) -> Option<Vec<Envelope>> {
     let ctx = Ctx {
         guild: GUILD,
         actor: Actor::System,
@@ -145,7 +150,11 @@ fn run_scenario(seed: u64) {
                     &Command::OpenAuction {
                         auction_id: id.clone(),
                         item: item(n),
-                        flavor: if rng.below(4) == 0 { Flavor::Long } else { Flavor::Short },
+                        flavor: if rng.below(4) == 0 {
+                            Flavor::Long
+                        } else {
+                            Flavor::Short
+                        },
                         min_bid: 0,
                         num_items: 1 + rng.below(2) as u32,
                         min_bid_to_lock_for_main: 0,
@@ -160,7 +169,8 @@ fn run_scenario(seed: u64) {
             }
             // bid
             2..=5 if !open_auctions.is_empty() => {
-                let auction_id = open_auctions[rng.below(open_auctions.len() as u64) as usize].clone();
+                let auction_id =
+                    open_auctions[rng.below(open_auctions.len() as u64) as usize].clone();
                 let player = PLAYERS[rng.below(PLAYERS.len() as u64) as usize];
                 exec(
                     &mut ledger,
@@ -217,11 +227,14 @@ fn run_scenario(seed: u64) {
                     },
                 ) {
                     for env in &envelopes {
-                        if let nocturnal_core::Event::AuctionFinalized { winners, .. } = &env.event {
+                        if let nocturnal_core::Event::AuctionFinalized { winners, .. } = &env.event
+                        {
                             let name = ledger
                                 .state()
                                 .guild(GUILD)
-                                .and_then(|g| g.auctions.get(&auction_id).map(|a| a.item.name.clone()))
+                                .and_then(|g| {
+                                    g.auctions.get(&auction_id).map(|a| a.item.name.clone())
+                                })
                                 .unwrap_or_default();
                             for w in winners {
                                 charged.push((w.player, name.clone(), w.amount));
@@ -246,7 +259,9 @@ fn run_scenario(seed: u64) {
                 if torn {
                     let g = ledger.state().guild(GUILD).cloned().unwrap_or_default();
                     open_auctions.retain(|id| {
-                        g.auctions.get(id).is_some_and(|a| a.status == AuctionStatus::Open)
+                        g.auctions
+                            .get(id)
+                            .is_some_and(|a| a.status == AuctionStatus::Open)
                     });
                     charged.retain(|(_, name, _)| {
                         g.auctions
@@ -266,7 +281,11 @@ fn run_scenario(seed: u64) {
     let g = ledger.state().guild(GUILD).expect("guild exists").clone();
 
     for (id, p) in &g.players {
-        assert!(p.balance >= 0, "seed {seed}: player {id} went negative ({})", p.balance);
+        assert!(
+            p.balance >= 0,
+            "seed {seed}: player {id} went negative ({})",
+            p.balance
+        );
     }
     let active = g.raids.values().filter(|r| r.active).count();
     assert!(active <= 1, "seed {seed}: {active} active raids");
@@ -281,9 +300,7 @@ fn run_scenario(seed: u64) {
         let found = g.players[&player]
             .log
             .iter()
-            .filter(|e| {
-                e.dkp == -amount && e.item.as_ref().is_some_and(|i| i.name == item_name)
-            })
+            .filter(|e| e.dkp == -amount && e.item.as_ref().is_some_and(|i| i.name == item_name))
             .count();
         assert_eq!(
             found, times,

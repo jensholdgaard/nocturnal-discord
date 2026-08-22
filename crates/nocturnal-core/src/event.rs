@@ -95,6 +95,8 @@ pub struct ConfigPatch {
     pub over_bid_to_win_main: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raidhelper_api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raidhelper_event_dkp: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

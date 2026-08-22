@@ -528,6 +528,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         addraiddkp(),
         parsedkps(),
         registercharacter(),
+        addraideventdkp(),
         searchitem(),
         stresstest(),
     ];
@@ -912,6 +913,11 @@ pub async fn configure(
     #[description = "Overbid needed for an ALT to win over MAIN"]
     #[min = 0]
     overbidtowinmain: Option<i64>,
+    #[description = "RaidHelper API key (enables event linking and awards)"]
+    raidhelperapikey: Option<String>,
+    #[description = "DKP awarded to signups who attended, when a linked raid ends (default 5)"]
+    #[min = 0]
+    raidhelpereventdkp: Option<i64>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     if raidchannel.id == secondraidchannel.as_ref().map(|c| c.id).unwrap_or_default() {
@@ -933,7 +939,8 @@ pub async fn configure(
         min_bid: minbid,
         min_bid_to_lock_for_main: minbidtolockformain,
         over_bid_to_win_main: overbidtowinmain,
-        raidhelper_api_key: None,
+        raidhelper_api_key: raidhelperapikey,
+        raidhelper_event_dkp: raidhelpereventdkp,
     };
     match execute(&ctx, Command::UpdateConfig { patch }).await? {
         Ok(_) => ctx.say("Configuration saved").await?,
@@ -1045,6 +1052,33 @@ pub async fn startraid(
     }
     let dkp_per_tick = dkpspertick.unwrap_or(1);
     let tick_interval_ms = tickduration.map_or(cfg_tick_ms, |m| (m * 60_000.0) as i64);
+
+    // RaidHelper: an event starting within ±10 minutes names and links the
+    // raid, exactly like the legacy /startraid.
+    let api_key = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.raidhelper_api_key.clone())
+        })
+        .await;
+    let mut event_id = None;
+    let mut name = name;
+    if let Some(key) = api_key {
+        match crate::raidhelper::event_starting_now(&key, discord_guild, chrono_now_ms()).await {
+            Ok(Some(event)) => {
+                if name.is_none() {
+                    name = Some(event.title.clone());
+                }
+                event_id = Some(event.id);
+            }
+            Ok(None) => {}
+            // A RaidHelper hiccup must never stop a raid starting.
+            Err(e) => tracing::warn!(error = %e, "raid-helper lookup failed; starting unlinked"),
+        }
+    }
     let name = name.unwrap_or_else(|| format!("<t:{}:D>", chrono_now_ms() / 1000));
     let raid_id = format!("rd-{:x}", chrono_now_ms());
     let cmd = Command::StartRaid {
@@ -1053,7 +1087,7 @@ pub async fn startraid(
         tick_interval_ms,
         dkp_per_tick,
         players_present: players.clone(),
-        event_id: None,
+        event_id: event_id.clone(),
     };
     match execute(&ctx, cmd).await? {
         Ok(_) => {
@@ -1192,6 +1226,29 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
         })
         .await;
     ctx.say(format!("Raid {raid_name} ended")).await?;
+
+    // Linked to a RaidHelper event? Award the signups who actually turned up.
+    let rid = raid_id.clone();
+    let linked = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state().guild(ledger_guild).and_then(|g| {
+                let raid = g.raids.get(&rid)?;
+                raid.event_id
+                    .clone()
+                    .map(|e| (e, g.config.raidhelper_event_dkp))
+            })
+        })
+        .await;
+    if let Some((event_id, dkp)) = linked {
+        match award_raidhelper_event(&ctx, &raid_id, &event_id, dkp).await {
+            Ok(summary) => tracing::info!(raid_id, event_id, %summary, "raid event DKP awarded"),
+            Err(e) => {
+                tracing::warn!(raid_id, error = %e, "raid event DKP failed; raid still ended")
+            }
+        }
+    }
     let chunks: Vec<&[String]> = lines.chunks(35).collect();
     let total = chunks.len().max(1);
     for (i, chunk) in chunks.iter().enumerate() {
@@ -2045,5 +2102,140 @@ pub async fn searchitem(
             }
         }
     }
+    Ok(())
+}
+
+// ===========================================================================
+// RaidHelper awards: signups who actually attended get DKP when a linked raid
+// ends, or when an officer runs it by hand for a past raid.
+// ===========================================================================
+
+fn mention_chunks(
+    label: &str,
+    players: &[nocturnal_core::PlayerId],
+) -> Vec<(String, String, bool)> {
+    if players.is_empty() {
+        return vec![(label.to_owned(), "-".to_owned(), true)];
+    }
+    players
+        .chunks(10)
+        .enumerate()
+        .map(|(i, chunk)| {
+            (
+                if i == 0 {
+                    format!("{label} ({})", players.len())
+                } else {
+                    "\u{200b}".to_owned()
+                },
+                chunk
+                    .iter()
+                    .map(|p| format!("- <@{p}>"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                true,
+            )
+        })
+        .collect()
+}
+
+/// Award the event DKP for `raid_id` and post the legacy-style report.
+/// Never fatal: a RaidHelper outage must not break ending a raid.
+async fn award_raidhelper_event(
+    ctx: &Context<'_>,
+    raid_id: &str,
+    event_id: &str,
+    dkp: i64,
+) -> anyhow::Result<String> {
+    let ledger_guild = require_guild(ctx)?;
+    let event = crate::raidhelper::fetch_event(event_id).await?;
+    let rid = raid_id.to_owned();
+    let raid = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.raids.get(&rid).cloned())
+        })
+        .await
+        .context("raid not found")?;
+
+    let award = crate::raidhelper::decide_award(&raid, &event.signups);
+    for player in &award.rewarded {
+        if dkp > 0 {
+            let _ = ctx
+                .data()
+                .driver
+                .execute(
+                    ledger_guild,
+                    Actor::User(ctx.author().id.get()),
+                    Command::AdjustDkp {
+                        player: *player,
+                        delta: dkp,
+                        comment: "Subscribed and attended raid event".into(),
+                        item: None,
+                    },
+                )
+                .await;
+        }
+    }
+
+    let mut embed = serenity::CreateEmbed::new()
+        .color(EMBED_ORANGE)
+        .title(format!("Raid Event DKP - {}", event.title))
+        .description(format!(
+            "Adding {dkp} DKP to players that subscribed and attended at least {} tick(s)",
+            award.required
+        ));
+    for (name, value, inline) in mention_chunks("Rewarded", &award.rewarded) {
+        embed = embed.field(name, value, inline);
+    }
+    let short: Vec<nocturnal_core::PlayerId> = award
+        .not_enough_attendance
+        .iter()
+        .map(|(p, _)| *p)
+        .collect();
+    for (name, value, inline) in mention_chunks("NOT enough attendance", &short) {
+        embed = embed.field(name, value, inline);
+    }
+    for (name, value, inline) in mention_chunks("NOT subscribed", &award.attended_unsigned) {
+        embed = embed.field(name, value, inline);
+    }
+    for (name, value, inline) in mention_chunks("NOT attended", &award.signed_up_absent) {
+        embed = embed.field(name, value, inline);
+    }
+    send_log_embed(ctx, embed).await;
+    Ok(format!(
+        "{} rewarded, {} short of attendance, {} signed up but absent",
+        award.rewarded.len(),
+        award.not_enough_attendance.len(),
+        award.signed_up_absent.len()
+    ))
+}
+
+/// Add DKP to raid attendants that subscribed to a RaidHelper event.
+#[tracing::instrument(name = "command.addraideventdkp", skip_all, fields(otel.kind = "server"))]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "addraideventdkp",
+    check = "officer_check"
+)]
+pub async fn addraideventdkp(
+    ctx: Context<'_>,
+    #[description = "The amount of DKP to add"]
+    #[min = 0]
+    dkp: i64,
+    #[description = "Raid ID"] raidid: String,
+    #[description = "Event ID"] eventid: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    match award_raidhelper_event(&ctx, &raidid, &eventid, dkp).await {
+        Ok(summary) => {
+            ctx.say(format!("Raid event DKP applied — {summary}"))
+                .await?
+        }
+        Err(e) => ctx.say(format!(":no_entry: {e}")).await?,
+    };
     Ok(())
 }

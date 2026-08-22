@@ -91,6 +91,9 @@ pub struct GuildConfig {
     pub min_bid_to_lock_for_main: i64,
     pub over_bid_to_win_main: i64,
     pub raidhelper_api_key: Option<String>,
+    /// DKP awarded to signups who attended, when a linked raid ends. Legacy
+    /// hardcoded 5; officers can set it.
+    pub raidhelper_event_dkp: i64,
 }
 
 pub const DAY_MS: i64 = 86_400_000;
@@ -111,6 +114,7 @@ impl Default for GuildConfig {
             min_bid_to_lock_for_main: 0,
             over_bid_to_win_main: 0,
             raidhelper_api_key: None,
+            raidhelper_event_dkp: 5,
         }
     }
 }
@@ -143,6 +147,7 @@ impl GuildConfig {
             self.long_auction_channel = Some(v);
         }
         val!(
+            raidhelper_event_dkp,
             tick_duration_ms,
             raid_deprecation_ms,
             bid_time_s,

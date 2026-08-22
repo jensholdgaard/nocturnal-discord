@@ -10,6 +10,7 @@ mod driver;
 mod health;
 mod items;
 mod lock;
+mod raidhelper;
 mod scheduler;
 
 use anyhow::Context as _;
