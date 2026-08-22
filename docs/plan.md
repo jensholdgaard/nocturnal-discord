@@ -170,7 +170,11 @@ policy-blocked).
 
 - [ ] Docker image (distroless, static binary), volume layout, fsync behaviour
       verified on the actual host (B7); scheduled backups.
-- [ ] Item-info lookup with timeout/cache (or cut it — officer call).
+- [x] Item-info lookup (`crates/nocturnal/src/items.rs`): pqdi.cc (Quarm) +
+      takproject allaclone (TAKP), 5 s timeouts, URL-encoded queries, status
+      checks, null-safe parsing, permanent in-memory cache — audit #42/E12
+      fixed. `/searchitem` ports the legacy picker UX (1 hit → embed, 2–25 →
+      button picker, 26–40 → list, >40 → refine).
 - [ ] Admin/config commands (`/setadminrole`, options → `config.updated`).
 - [ ] Runbook: deploy, restore, dispute-resolution via log grep, RPO statement.
 

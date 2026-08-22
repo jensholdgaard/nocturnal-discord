@@ -7,6 +7,7 @@ mod config;
 mod discord;
 mod driver;
 mod health;
+mod items;
 mod lock;
 mod scheduler;
 

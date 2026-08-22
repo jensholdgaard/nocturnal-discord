@@ -19,6 +19,7 @@ pub struct Data {
     /// Test-server mapping: serve this ledger guild for interactions from the
     /// registration guild (see `discord.data_guild_id`).
     pub data_guild: Option<(u64, u64)>,
+    pub items: std::sync::Arc<crate::items::ItemSearch>,
 }
 
 type Error = anyhow::Error;
@@ -484,6 +485,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         addraiddkp(),
         parsedkps(),
         registercharacter(),
+        searchitem(),
         stresstest(),
     ];
     // A test server can share the bot application with other deployments by
@@ -524,7 +526,13 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     discord_guild: guild_id,
                     ledger_guild: data_guild.map_or(guild_id, |(_, to)| to),
                 }));
-                Ok(Data { driver, data_guild })
+                Ok(Data {
+                    driver,
+                    data_guild,
+                    items: std::sync::Arc::new(
+                        crate::items::ItemSearch::new().expect("item search client"),
+                    ),
+                })
             })
         })
         .build();
@@ -1346,11 +1354,13 @@ fn stats(mut ms: Vec<f64>) -> String {
     )
 }
 
-fn stress_embed(item_no: usize, bids: usize, status: &str, color: u32) -> serenity::CreateEmbed {
-    serenity::CreateEmbed::new()
-        .color(color)
-        .title(format!("Stress Test Item #{item_no}"))
-        .description("Bid started - **0 DKP** minimum bid.")
+fn stress_embed(
+    item: &nocturnal_core::Item,
+    bids: usize,
+    status: &str,
+    color: u32,
+) -> serenity::CreateEmbed {
+    item_embed(item, color)
         .field("Bids", bids.to_string(), true)
         .field("Status", status.to_owned(), true)
 }
@@ -1437,13 +1447,50 @@ pub async fn stresstest(
         n_lookups,
         "stresstest: starting"
     );
+    // Phase 0: real item lookups, exactly like the legacy /startbid hot path
+    // (search + per-item detail scrape; audit #42 — now with timeouts and a
+    // permanent cache, so a rerun measures the cached path).
+    let mut item_ms: Vec<f64> = Vec::new();
+    let mut stress_items: Vec<nocturnal_core::Item> = Vec::new();
+    let t = std::time::Instant::now();
+    let hits = ctx
+        .data()
+        .items
+        .search("sword", crate::items::Database::Quarm)
+        .await;
+    item_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+    if let Ok(crate::items::SearchOutcome::Many(refs)) = hits {
+        for r in refs.iter().take(n_auctions) {
+            let t = std::time::Instant::now();
+            if let Ok(Some(item)) = ctx
+                .data()
+                .items
+                .by_id(&r.id, crate::items::Database::Quarm)
+                .await
+            {
+                stress_items.push(item);
+            }
+            item_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+        }
+    }
+    for i in stress_items.len()..n_auctions {
+        // Item sites unreachable: degrade to synthetic, never fail the run.
+        stress_items.push(nocturnal_core::Item {
+            id: format!("stress{i}"),
+            name: format!("Stress Test Item #{i}"),
+            url: None,
+            data: None,
+            image: None,
+        });
+    }
+
     let t0 = std::time::Instant::now();
 
     // Phase 1: open the auctions in the ledger AND post their live embeds.
     let mut auction_ids = Vec::new();
     let mut messages: Vec<serenity::Message> = Vec::new();
     let mut post_ms = Vec::new();
-    for i in 0..n_auctions {
+    for (i, stress_item) in stress_items.iter().enumerate().take(n_auctions) {
         let auction_id = format!("stress-{run_id:x}-{i}");
         driver
             .execute(
@@ -1451,13 +1498,7 @@ pub async fn stresstest(
                 actor,
                 Command::OpenAuction {
                     auction_id: auction_id.clone(),
-                    item: nocturnal_core::Item {
-                        id: format!("stress{i}"),
-                        name: format!("Stress Test Item #{i}"),
-                        url: None,
-                        data: None,
-                        image: None,
-                    },
+                    item: stress_item.clone(),
                     flavor: nocturnal_core::Flavor::Short,
                     min_bid: 0,
                     num_items: 1,
@@ -1472,7 +1513,12 @@ pub async fn stresstest(
         let msg = channel
             .send_message(
                 &http,
-                serenity::CreateMessage::new().embed(stress_embed(i, 0, "bidding…", EMBED_ORANGE)),
+                serenity::CreateMessage::new().embed(stress_embed(
+                    &stress_items[i],
+                    0,
+                    "bidding…",
+                    EMBED_ORANGE,
+                )),
             )
             .await?;
         post_ms.push(t.elapsed().as_secs_f64() * 1000.0);
@@ -1489,6 +1535,7 @@ pub async fn stresstest(
         let driver = driver.clone();
         let http = http.clone();
         let auction_ids = auction_ids.clone();
+        let editor_items = stress_items.clone();
         let message_ids: Vec<serenity::MessageId> = messages.iter().map(|m| m.id).collect();
         tokio::spawn(async move {
             let mut edit_ms: Vec<f64> = Vec::new();
@@ -1509,7 +1556,7 @@ pub async fn stresstest(
                             &http,
                             *msg_id,
                             serenity::EditMessage::new().embed(stress_embed(
-                                i,
+                                &editor_items[i],
                                 bids,
                                 "bidding…",
                                 EMBED_ORANGE,
@@ -1650,7 +1697,12 @@ pub async fn stresstest(
             .edit_message(
                 &http,
                 messages[i].id,
-                serenity::EditMessage::new().embed(stress_embed(i, bids, status, EMBED_GREEN)),
+                serenity::EditMessage::new().embed(stress_embed(
+                    &stress_items[i],
+                    bids,
+                    status,
+                    EMBED_GREEN,
+                )),
             )
             .await;
     }
@@ -1687,6 +1739,7 @@ pub async fn stresstest(
         ))
         .field("Balance lookups", stats(lookup_ms), false)
         .field("Bids (decide → fsync → apply)", stats(bid_ms), false)
+        .field("Item lookups (pqdi.cc; cached after first run)", stats(item_ms), false)
         .field("Discord: embed posts", stats(post_ms), false)
         .field(format!("Discord: live embed edits ({})", edit_ms.len()), stats(edit_ms), false)
         .field("Bids accepted / rejected", format!("{accepted} / {rejected}"), true)
@@ -1707,5 +1760,157 @@ pub async fn stresstest(
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
         .await?;
+    Ok(())
+}
+
+// ===========================================================================
+// /searchitem — legacy item lookup UX: 1 hit → embed; 2–25 → button picker;
+// 26–40 → plain list; >40 → refine. Timeouts + cache live in items.rs.
+// ===========================================================================
+
+pub fn item_embed(item: &nocturnal_core::Item, color: u32) -> serenity::CreateEmbed {
+    let separator = "--------------------------------------------------------\n";
+    let mut embed = serenity::CreateEmbed::new()
+        .color(color)
+        .title(format!("{} #{}", item.name, item.id))
+        .description(format!("{separator}{}", item.data.as_deref().unwrap_or("")));
+    if let Some(url) = &item.url {
+        embed = embed.url(url.clone());
+    }
+    if let Some(image) = &item.image {
+        embed = embed.thumbnail(image.clone());
+    }
+    embed
+}
+
+/// Search an item in the Quarm/TAKP databases.
+#[tracing::instrument(name = "command.searchitem", skip_all)]
+#[poise::command(slash_command, rename = "searchitem")]
+pub async fn searchitem(
+    ctx: Context<'_>,
+    #[description = "Item name or id"] search: String,
+    #[description = "quarm | takp (default quarm)"] database: Option<String>,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let Some(db) = crate::items::Database::parse(database.as_deref().unwrap_or("quarm")) else {
+        ctx.say("Invalid database option. Must be quarm or takp")
+            .await?;
+        return Ok(());
+    };
+    let outcome = match ctx.data().items.search(&search, db).await {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::warn!(error = %e, "item search failed");
+            ctx.say(format!(":no_entry: Item lookup failed: {e}"))
+                .await?;
+            return Ok(());
+        }
+    };
+    match outcome {
+        crate::items::SearchOutcome::None => {
+            ctx.say("No items found").await?;
+        }
+        crate::items::SearchOutcome::One(item) => {
+            ctx.send(poise::CreateReply::default().embed(item_embed(&item, EMBED_BLUE)))
+                .await?;
+        }
+        crate::items::SearchOutcome::Many(refs) if refs.len() > 40 => {
+            ctx.say(format!("List too long ({}), refine search", refs.len()))
+                .await?;
+        }
+        crate::items::SearchOutcome::Many(refs) if refs.len() > 25 => {
+            let listing = refs
+                .iter()
+                .map(|r| {
+                    format!(
+                        "#{:<10} {}{}",
+                        r.id,
+                        r.name,
+                        r.kind
+                            .as_deref()
+                            .map(|k| format!(" - {k}"))
+                            .unwrap_or_default()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let embed = serenity::CreateEmbed::new()
+                .title("Search Results")
+                .description(listing);
+            ctx.send(poise::CreateReply::default().embed(embed)).await?;
+        }
+        crate::items::SearchOutcome::Many(refs) => {
+            // Button picker, one per hit (rows of 5, 30 s window).
+            let ctx_id = ctx.id();
+            let rows: Vec<serenity::CreateActionRow> = refs
+                .chunks(5)
+                .map(|chunk| {
+                    serenity::CreateActionRow::Buttons(
+                        chunk
+                            .iter()
+                            .map(|r| {
+                                serenity::CreateButton::new(format!("{ctx_id}item{}", r.id))
+                                    .label(r.name.chars().take(80).collect::<String>())
+                                    .style(serenity::ButtonStyle::Secondary)
+                            })
+                            .collect(),
+                    )
+                })
+                .collect();
+            let msg = ctx
+                .send(
+                    poise::CreateReply::default()
+                        .content("Search Results")
+                        .components(rows),
+                )
+                .await?;
+            let press = serenity::collector::ComponentInteractionCollector::new(ctx)
+                .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+                .timeout(std::time::Duration::from_secs(30))
+                .await;
+            let Some(press) = press else {
+                msg.edit(
+                    ctx,
+                    poise::CreateReply::default()
+                        .content("Time out")
+                        .components(vec![]),
+                )
+                .await?;
+                return Ok(());
+            };
+            let id = press.data.custom_id[format!("{ctx_id}item").len()..].to_owned();
+            press.defer(ctx.serenity_context()).await?;
+            match ctx.data().items.by_id(&id, db).await {
+                Ok(Some(item)) => {
+                    msg.edit(
+                        ctx,
+                        poise::CreateReply::default()
+                            .content("")
+                            .embed(item_embed(&item, EMBED_BLUE))
+                            .components(vec![]),
+                    )
+                    .await?;
+                }
+                Ok(None) => {
+                    msg.edit(
+                        ctx,
+                        poise::CreateReply::default()
+                            .content("No items found")
+                            .components(vec![]),
+                    )
+                    .await?;
+                }
+                Err(e) => {
+                    msg.edit(
+                        ctx,
+                        poise::CreateReply::default()
+                            .content(format!(":no_entry: Item lookup failed: {e}"))
+                            .components(vec![]),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
     Ok(())
 }
