@@ -1317,10 +1317,11 @@ pub async fn registercharacter(
 }
 
 // ===========================================================================
-// /stresstest — replays the legacy bot's death scenario against the new
-// architecture: N concurrent auctions, every bidder hammering balance
-// lookups and bids at once. Auctions are cancelled by default (no balance
-// impact); pass finalize:true to exercise the debit path too.
+// /stresstest — replays the legacy bot's death scenario end to end: real
+// auction embeds posted to the auction channel, live embed edits during the
+// bid storm (the exact load that congested the legacy event loop), every bid
+// fsynced through the single writer. Auctions are cancelled by default; pass
+// finalize:true to exercise the debit path.
 // ===========================================================================
 
 fn percentile(sorted_ms: &[f64], p: f64) -> f64 {
@@ -1332,6 +1333,9 @@ fn percentile(sorted_ms: &[f64], p: f64) -> f64 {
 }
 
 fn stats(mut ms: Vec<f64>) -> String {
+    if ms.is_empty() {
+        return "-".into();
+    }
     ms.sort_by(|a, b| a.total_cmp(b));
     format!(
         "p50 `{:.2}ms`  p95 `{:.2}ms`  max `{:.2}ms`  (n={})",
@@ -1342,7 +1346,16 @@ fn stats(mut ms: Vec<f64>) -> String {
     )
 }
 
-/// Stress test: concurrent auctions + every player bidding at once.
+fn stress_embed(item_no: usize, bids: usize, status: &str, color: u32) -> serenity::CreateEmbed {
+    serenity::CreateEmbed::new()
+        .color(color)
+        .title(format!("Stress Test Item #{item_no}"))
+        .description("Bid started - **0 DKP** minimum bid.")
+        .field("Bids", bids.to_string(), true)
+        .field("Status", status.to_owned(), true)
+}
+
+/// Stress test: concurrent auctions with live embeds + every player bidding.
 #[tracing::instrument(name = "command.stresstest", skip_all)]
 #[poise::command(
     slash_command,
@@ -1350,6 +1363,7 @@ fn stats(mut ms: Vec<f64>) -> String {
     rename = "stresstest",
     check = "officer_check"
 )]
+#[allow(clippy::too_many_lines)]
 pub async fn stresstest(
     ctx: Context<'_>,
     #[description = "Concurrent auctions (default 4 — the legacy killer)"]
@@ -1366,6 +1380,7 @@ pub async fn stresstest(
     lookups: Option<usize>,
     #[description = "Actually finalize (debits winners 1 DKP) instead of cancelling"]
     finalize: Option<bool>,
+    #[description = "Delete the auction messages afterwards"] cleanup: Option<bool>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     ctx.defer_ephemeral().await?;
@@ -1373,11 +1388,25 @@ pub async fn stresstest(
     let n_bidders = bidders.unwrap_or(40);
     let n_lookups = lookups.unwrap_or(10);
     let finalize = finalize.unwrap_or(false);
+    let cleanup = cleanup.unwrap_or(false);
     let driver = ctx.data().driver.clone();
+    let http = ctx.serenity_context().http.clone();
     let actor = Actor::User(ctx.author().id.get());
 
-    // Real player ids from the ledger, richest first, able to afford one
-    // 1-DKP bid per auction under the cross-auction reservation rule.
+    let auction_channel = driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.auction_channel)
+        })
+        .await;
+    let Some(auction_channel) = auction_channel else {
+        ctx.say(":no_entry: Auction channel not set — run /configure first")
+            .await?;
+        return Ok(());
+    };
+    let channel = serenity::ChannelId::new(auction_channel);
+
     let need = n_auctions as i64;
     let players: Vec<nocturnal_core::PlayerId> = driver
         .query(move |l| {
@@ -1410,32 +1439,93 @@ pub async fn stresstest(
     );
     let t0 = std::time::Instant::now();
 
-    // Phase 1: open the auctions.
+    // Phase 1: open the auctions in the ledger AND post their live embeds.
     let mut auction_ids = Vec::new();
+    let mut messages: Vec<serenity::Message> = Vec::new();
+    let mut post_ms = Vec::new();
     for i in 0..n_auctions {
         let auction_id = format!("stress-{run_id:x}-{i}");
-        let cmd = Command::OpenAuction {
-            auction_id: auction_id.clone(),
-            item: nocturnal_core::Item {
-                id: format!("stress{i}"),
-                name: format!("Stress Test Item #{i}"),
-                url: None,
-                data: None,
-                image: None,
-            },
-            flavor: nocturnal_core::Flavor::Short,
-            min_bid: 0,
-            num_items: 1,
-            min_bid_to_lock_for_main: 0,
-            over_bid_to_win_main: 0,
-            duration_ms: 600_000,
-        };
         driver
-            .execute(ledger_guild, actor, cmd)
+            .execute(
+                ledger_guild,
+                actor,
+                Command::OpenAuction {
+                    auction_id: auction_id.clone(),
+                    item: nocturnal_core::Item {
+                        id: format!("stress{i}"),
+                        name: format!("Stress Test Item #{i}"),
+                        url: None,
+                        data: None,
+                        image: None,
+                    },
+                    flavor: nocturnal_core::Flavor::Short,
+                    min_bid: 0,
+                    num_items: 1,
+                    min_bid_to_lock_for_main: 0,
+                    over_bid_to_win_main: 0,
+                    duration_ms: 600_000,
+                },
+            )
             .await
             .map_err(|e| anyhow::anyhow!("open auction: {e}"))?;
+        let t = std::time::Instant::now();
+        let msg = channel
+            .send_message(
+                &http,
+                serenity::CreateMessage::new().embed(stress_embed(i, 0, "bidding…", EMBED_ORANGE)),
+            )
+            .await?;
+        post_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+        messages.push(msg);
         auction_ids.push(auction_id);
     }
+
+    // Live editor: continuously updates every auction embed while the storm
+    // runs — the "other auction embeds are being edited" half of the legacy
+    // crash anatomy, and the load that exercises Discord's edit buckets.
+    let editing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let editor = {
+        let editing = editing.clone();
+        let driver = driver.clone();
+        let http = http.clone();
+        let auction_ids = auction_ids.clone();
+        let message_ids: Vec<serenity::MessageId> = messages.iter().map(|m| m.id).collect();
+        tokio::spawn(async move {
+            let mut edit_ms: Vec<f64> = Vec::new();
+            while editing.load(std::sync::atomic::Ordering::Acquire) {
+                for (i, (auction_id, msg_id)) in auction_ids.iter().zip(&message_ids).enumerate() {
+                    let aid = auction_id.clone();
+                    let bids = driver
+                        .query(move |l| {
+                            l.state()
+                                .guild(ledger_guild)
+                                .and_then(|g| g.auctions.get(&aid).map(|a| a.bids.len()))
+                                .unwrap_or_default()
+                        })
+                        .await;
+                    let t = std::time::Instant::now();
+                    let result = channel
+                        .edit_message(
+                            &http,
+                            *msg_id,
+                            serenity::EditMessage::new().embed(stress_embed(
+                                i,
+                                bids,
+                                "bidding…",
+                                EMBED_ORANGE,
+                            )),
+                        )
+                        .await;
+                    edit_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+                    if let Err(e) = result {
+                        tracing::warn!(error = %e, "stress edit failed");
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            }
+            edit_ms
+        })
+    };
 
     // Phase 2: every bidder at once — lookups then a bid on every auction.
     let mut tasks = Vec::new();
@@ -1494,10 +1584,12 @@ pub async fn stresstest(
     }
     let storm = t0.elapsed();
     tracing::info!(accepted, rejected, elapsed = ?storm, "stresstest: bid storm done");
+    editing.store(false, std::sync::atomic::Ordering::Release);
+    let edit_ms = editor.await?;
 
-    // Phase 3: close, then finalize or cancel.
+    // Phase 3: close, then finalize or cancel; settle the embeds.
     let mut winners = 0usize;
-    for auction_id in &auction_ids {
+    for (i, auction_id) in auction_ids.iter().enumerate() {
         driver
             .execute(
                 ledger_guild,
@@ -1540,10 +1632,35 @@ pub async fn stresstest(
                 .await
                 .map_err(|e| anyhow::anyhow!("cancel: {e}"))?;
         }
+        let aid = auction_id.clone();
+        let bids = driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .and_then(|g| g.auctions.get(&aid).map(|a| a.bids.len()))
+                    .unwrap_or_default()
+            })
+            .await;
+        let status = if finalize {
+            "finalized"
+        } else {
+            "cancelled (stress test)"
+        };
+        let _ = channel
+            .edit_message(
+                &http,
+                messages[i].id,
+                serenity::EditMessage::new().embed(stress_embed(i, bids, status, EMBED_GREEN)),
+            )
+            .await;
+    }
+    if cleanup {
+        for msg in &messages {
+            let _ = channel.delete_message(&http, msg.id).await;
+        }
     }
     let total = t0.elapsed();
 
-    // Integrity check: the invariant the legacy bot broke under this load.
     let (negative_balances, head) = driver
         .query(move |l| {
             let neg = l
@@ -1564,12 +1681,14 @@ pub async fn stresstest(
         .color(EMBED_GREEN)
         .title("Stress test — the legacy killer scenario")
         .description(format!(
-            "**{n_auctions} concurrent auctions × {} bidders**, every bid fsynced through the single writer.\n\
+            "**{n_auctions} concurrent auctions × {} bidders**, live embeds edited throughout, every bid fsynced through the single writer.\n\
              The legacy bot died here (10062 → crash, all auctions lost). This run: nothing dropped, nothing raced.",
             players.len()
         ))
         .field("Balance lookups", stats(lookup_ms), false)
         .field("Bids (decide → fsync → apply)", stats(bid_ms), false)
+        .field("Discord: embed posts", stats(post_ms), false)
+        .field(format!("Discord: live embed edits ({})", edit_ms.len()), stats(edit_ms), false)
         .field("Bids accepted / rejected", format!("{accepted} / {rejected}"), true)
         .field("Bid storm", format!("{:.2}s", storm.as_secs_f64()), true)
         .field("Total (incl. close)", format!("{:.2}s", total.as_secs_f64()), true)
@@ -1579,6 +1698,11 @@ pub async fn stresstest(
             format!(
                 "players with a negative balance: **{negative_balances}** (the legacy import carries 2; one more would be a bug) · ledger head seq {head}"
             ),
+            false,
+        )
+        .field(
+            "Rate limiting",
+            "Watch the Overview dashboard's Discord section — edit-bucket delays show there as the pre-429 early warning.",
             false,
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
