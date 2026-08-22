@@ -28,13 +28,16 @@ impl std::fmt::Display for ExecError {
 }
 
 enum Request {
-    // Wired up by the raid/auction commands in M4; until then only queries flow.
-    #[allow(dead_code)]
     Execute {
         guild: GuildId,
         actor: Actor,
         cmd: Box<Command>,
         reply: oneshot::Sender<Result<Vec<Envelope>, ExecError>>,
+        /// In-process trace context: the caller's span, so the ledger work
+        /// done on the writer thread nests under the interaction that caused
+        /// it instead of starting its own orphan trace. (OTel guidance:
+        /// propagate context explicitly across threads you start yourself.)
+        parent: tracing::Span,
     },
     Query(Box<dyn FnOnce(&Ledger) + Send>),
 }
@@ -47,7 +50,6 @@ pub struct DriverHandle {
 impl DriverHandle {
     /// Execute a command through the single writer. `Ok` means the events are
     /// fsynced and applied.
-    #[allow(dead_code)] // first writer commands land in M4
     pub async fn execute(
         &self,
         guild: GuildId,
@@ -61,6 +63,7 @@ impl DriverHandle {
                 actor,
                 cmd: Box::new(cmd),
                 reply,
+                parent: tracing::Span::current(),
             })
             .await
             .map_err(|_| ExecError::Storage("driver gone".into()))?;
@@ -120,22 +123,34 @@ pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)
             while let Some(req) = rx.blocking_recv() {
                 match req {
                     Request::Query(f) => f(&ledger),
-                    Request::Execute { guild, actor, cmd, reply } => {
+                    Request::Execute { guild, actor, cmd, reply, parent } => {
                         let started = std::time::Instant::now();
                         let ctx = nocturnal_core::Ctx { guild, actor, now_ms: now_ms() };
                         let cmd = *cmd;
                         let command_kind = cmd.kind();
+                        // Child of the interaction span (context propagated
+                        // across the channel), INTERNAL: no process boundary.
                         let span = tracing::info_span!(
+                            parent: &parent,
                             "ledger.execute",
+                            otel.kind = "internal",
+                            otel.status_code = tracing::field::Empty,
                             { attr::NOCTURNAL_GUILD_ID } = %guild,
                             { attr::NOCTURNAL_COMMAND } = command_kind,
                             { attr::NOCTURNAL_DECISION_OUTCOME } = tracing::field::Empty,
                             { attr::NOCTURNAL_EVENT_SEQ } = tracing::field::Empty,
                         );
                         let _entered = span.enter();
-                        let result = match ledger.propose(&ctx, &cmd) {
+
+                        // decide → append(fsync) → apply, each its own span so
+                        // a slow command says *which phase* was slow.
+                        let decided = tracing::info_span!("ledger.decide", otel.kind = "internal")
+                            .in_scope(|| ledger.propose(&ctx, &cmd));
+
+                        let result = match decided {
                             Err(rej) => {
                                 span.record(attr::NOCTURNAL_DECISION_OUTCOME, "rejected");
+                                span.record("otel.status_code", "OK"); // a refusal is a valid outcome
                                 metrics.record_command(
                                     command_kind,
                                     "rejected",
@@ -146,13 +161,21 @@ pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)
                             }
                             Ok(envelopes) => {
                                 let fsync_started = std::time::Instant::now();
-                                match store.append(&envelopes) {
+                                let append_span = tracing::info_span!(
+                                    "wal.append",
+                                    otel.kind = "internal",
+                                    events = envelopes.len(),
+                                );
+                                let appended = append_span.in_scope(|| store.append(&envelopes));
+                                match appended {
                                     Ok(()) => {
                                         metrics
                                             .wal_fsync_duration
                                             .record(fsync_started.elapsed().as_secs_f64(), &[]);
-                                        ledger.commit(&envelopes);
+                                        tracing::info_span!("ledger.apply", otel.kind = "internal")
+                                            .in_scope(|| ledger.commit(&envelopes));
                                         span.record(attr::NOCTURNAL_DECISION_OUTCOME, "accepted");
+                                        span.record("otel.status_code", "OK");
                                         if let Some(last) = envelopes.last() {
                                             span.record(attr::NOCTURNAL_EVENT_SEQ, last.seq);
                                         }
@@ -176,6 +199,7 @@ pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)
                                     }
                                     Err(e) => {
                                         span.record(attr::NOCTURNAL_DECISION_OUTCOME, "error");
+                                        span.record("otel.status_code", "ERROR");
                                         tracing::error!(error = %e, "WAL append failed; command dropped");
                                         metrics.record_command(
                                             command_kind,

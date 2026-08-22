@@ -41,6 +41,7 @@ pub async fn run(s: Scheduler) {
     }
 }
 
+#[tracing::instrument(name = "scheduler.cycle", skip_all, fields(otel.kind = "internal"))]
 async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
     let ledger_guild = s.ledger_guild;
     let raid = s
@@ -92,10 +93,13 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
                     &players,
                     dkp_per_tick,
                 );
-                let _ = serenity::ChannelId::new(log_channel)
-                    .send_message(&s.ctx.http, serenity::CreateMessage::new().embed(embed))
-                    .await
-                    .map_err(|e| tracing::warn!(error = %e, "tick embed failed"));
+                let _ = crate::discord::discord_call("send tick embed", async {
+                    serenity::ChannelId::new(log_channel)
+                        .send_message(&s.ctx.http, serenity::CreateMessage::new().embed(embed))
+                        .await
+                })
+                .await
+                .map_err(|e| tracing::warn!(error = %e, "tick embed failed"));
             }
         }
         Err(ExecError::Rejected(_)) => { /* not due yet — the normal case */ }

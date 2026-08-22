@@ -46,7 +46,7 @@ fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
 
 /// Shows the DKP of a player.
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.playerdkp", skip_all)]
+#[tracing::instrument(name = "command.playerdkp", skip_all, fields(otel.kind = "server"))]
 pub async fn playerdkp(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -72,7 +72,7 @@ pub async fn playerdkp(
 
 /// Shows the DKP history of a player (ticks aggregated per raid, 30/page).
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.dkphistory", skip_all)]
+#[tracing::instrument(name = "command.dkphistory", skip_all, fields(otel.kind = "server"))]
 pub async fn dkphistory(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -169,7 +169,7 @@ fn history_lines(log: &[LogEntry]) -> Vec<String> {
 
 /// List all players and their current DKP (10/page; refused during a raid).
 #[poise::command(slash_command, rename = "listplayersdkps", ephemeral)]
-#[tracing::instrument(name = "command.listplayersdkps", skip_all)]
+#[tracing::instrument(name = "command.listplayersdkps", skip_all, fields(otel.kind = "server"))]
 pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
     ctx.defer_ephemeral().await?;
@@ -305,7 +305,7 @@ pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Search the ledger's comments (literal text — audit E6; 20/page).
 #[poise::command(slash_command, rename = "searchlogs", ephemeral)]
-#[tracing::instrument(name = "command.searchlogs", skip_all)]
+#[tracing::instrument(name = "command.searchlogs", skip_all, fields(otel.kind = "server"))]
 pub async fn searchlogs(
     ctx: Context<'_>,
     #[description = "Search term"] search: String,
@@ -610,6 +610,24 @@ use nocturnal_core::{Actor, Command};
 
 use crate::driver::ExecError;
 
+/// Wrap an outbound Discord REST call in a CLIENT span, per OTel guidance
+/// ("create a new Span prior to the remote outgoing call"). serenity's own
+/// request spans nest underneath, so a trace shows interaction → ledger →
+/// each Discord call with its real latency.
+pub async fn discord_call<F, T>(operation: &'static str, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    use tracing::Instrument as _;
+    let span = tracing::info_span!(
+        "discord.request",
+        otel.kind = "client",
+        otel.name = operation,
+        server.address = "discord.com",
+    );
+    fut.instrument(span).await
+}
+
 /// Members currently in a voice channel, from the gateway cache.
 pub fn voice_members(
     ctx: &serenity::Context,
@@ -887,7 +905,7 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Create a new raid.
-#[tracing::instrument(name = "command.startraid", skip_all)]
+#[tracing::instrument(name = "command.startraid", skip_all, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -964,7 +982,7 @@ pub async fn startraid(
 }
 
 /// End the current raid.
-#[tracing::instrument(name = "command.endraid", skip_all)]
+#[tracing::instrument(name = "command.endraid", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, rename = "endraid", check = "officer_check")]
 pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
@@ -1096,7 +1114,7 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Add DKP to a player.
-#[tracing::instrument(name = "command.adddkp", skip_all)]
+#[tracing::instrument(name = "command.adddkp", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "adddkp", check = "officer_check")]
 pub async fn adddkp(
     ctx: Context<'_>,
@@ -1127,7 +1145,7 @@ pub async fn adddkp(
 }
 
 /// Remove DKP from a player.
-#[tracing::instrument(name = "command.removedkp", skip_all)]
+#[tracing::instrument(name = "command.removedkp", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "removedkp", check = "officer_check")]
 pub async fn removedkp(
     ctx: Context<'_>,
@@ -1158,7 +1176,7 @@ pub async fn removedkp(
 }
 
 /// Add DKP to everyone in the raid channel.
-#[tracing::instrument(name = "command.addraiddkp", skip_all)]
+#[tracing::instrument(name = "command.addraiddkp", skip_all, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1234,7 +1252,7 @@ pub async fn addraiddkp(
 }
 
 /// Parse an EQ /who log and award DKP by character.
-#[tracing::instrument(name = "command.parsedkps", skip_all)]
+#[tracing::instrument(name = "command.parsedkps", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "parsedkps", check = "officer_check")]
 pub async fn parsedkps(
     ctx: Context<'_>,
@@ -1306,7 +1324,7 @@ pub async fn parsedkps(
 }
 
 /// Register an EQ character to your Discord account.
-#[tracing::instrument(name = "command.registercharacter", skip_all)]
+#[tracing::instrument(name = "command.registercharacter", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "registercharacter")]
 pub async fn registercharacter(
     ctx: Context<'_>,
@@ -1366,7 +1384,7 @@ fn stress_embed(
 }
 
 /// Stress test: concurrent auctions with live embeds + every player bidding.
-#[tracing::instrument(name = "command.stresstest", skip_all)]
+#[tracing::instrument(name = "command.stresstest", skip_all, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1551,18 +1569,21 @@ pub async fn stresstest(
                         })
                         .await;
                     let t = std::time::Instant::now();
-                    let result = channel
-                        .edit_message(
-                            &http,
-                            *msg_id,
-                            serenity::EditMessage::new().embed(stress_embed(
-                                &editor_items[i],
-                                bids,
-                                "bidding…",
-                                EMBED_ORANGE,
-                            )),
-                        )
-                        .await;
+                    let result = discord_call("edit auction embed", async {
+                        channel
+                            .edit_message(
+                                &http,
+                                *msg_id,
+                                serenity::EditMessage::new().embed(stress_embed(
+                                    &editor_items[i],
+                                    bids,
+                                    "bidding…",
+                                    EMBED_ORANGE,
+                                )),
+                            )
+                            .await
+                    })
+                    .await;
                     edit_ms.push(t.elapsed().as_secs_f64() * 1000.0);
                     if let Err(e) = result {
                         tracing::warn!(error = %e, "stress edit failed");
@@ -1784,7 +1805,7 @@ pub fn item_embed(item: &nocturnal_core::Item, color: u32) -> serenity::CreateEm
 }
 
 /// Search an item in the Quarm/TAKP databases.
-#[tracing::instrument(name = "command.searchitem", skip_all)]
+#[tracing::instrument(name = "command.searchitem", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "searchitem")]
 pub async fn searchitem(
     ctx: Context<'_>,

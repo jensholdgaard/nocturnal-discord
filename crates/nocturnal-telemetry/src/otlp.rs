@@ -89,8 +89,12 @@ fn safe_attribute(key: &str) -> bool {
         || key.starts_with("thread.")
         || key.starts_with("otel.")
         || key.starts_with("http.")
+        || key.starts_with("server.")
+        || key.starts_with("network.")
+        || key.starts_with("error.")
         || key == "busy_ns"
         || key == "idle_ns"
+        || key == "events"
 }
 
 /// Span processor decorator that applies [`safe_attribute`] to every span
@@ -121,6 +125,13 @@ impl<P: SpanProcessor> SpanProcessor for RedactSpans<P> {
         timeout: std::time::Duration,
     ) -> opentelemetry_sdk::error::OTelSdkResult {
         self.0.shutdown_with_timeout(timeout)
+    }
+
+    /// MUST delegate: the SDK hands the Resource (service.name and friends)
+    /// to processors this way. Without it the wrapped exporter ships spans
+    /// with an empty resource and they land under "missing-service-name".
+    fn set_resource(&mut self, resource: &Resource) {
+        self.0.set_resource(resource);
     }
 }
 
@@ -349,6 +360,43 @@ impl Default for Metrics {
 mod tests {
     use super::export_targets;
     use tracing::Level;
+
+    /// The redaction wrapper must delegate *every* hook — a missed
+    /// `set_resource` silently strips service.name from exported spans.
+    #[test]
+    fn redact_wrapper_forwards_set_resource() {
+        use super::RedactSpans;
+        use opentelemetry_sdk::error::OTelSdkResult;
+        use opentelemetry_sdk::trace::{SpanData, SpanProcessor};
+        use opentelemetry_sdk::Resource;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        #[derive(Debug, Clone)]
+        struct Spy(Arc<AtomicBool>);
+        impl SpanProcessor for Spy {
+            fn on_start(&self, _: &mut opentelemetry_sdk::trace::Span, _: &opentelemetry::Context) {
+            }
+            fn on_end(&self, _: SpanData) {}
+            fn force_flush(&self) -> OTelSdkResult {
+                Ok(())
+            }
+            fn shutdown_with_timeout(&self, _: std::time::Duration) -> OTelSdkResult {
+                Ok(())
+            }
+            fn set_resource(&mut self, _: &Resource) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+
+        let seen = Arc::new(AtomicBool::new(false));
+        let mut wrapped = RedactSpans(Spy(seen.clone()));
+        wrapped.set_resource(&Resource::builder().with_service_name("nocturnal").build());
+        assert!(
+            seen.load(Ordering::Acquire),
+            "set_resource was not delegated"
+        );
+    }
 
     #[test]
     fn span_attribute_allowlist_fails_closed() {

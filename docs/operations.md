@@ -48,6 +48,19 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
   exported (hazard B13); dependency spans/logs never leave the process, no
   matter what libraries stuff into their fields. The allowlist is pinned by a
   unit test.
+- **Span model** (OTel span-kind guidance):
+  - `command.<name>` — **SERVER**: Discord interaction handling (incoming
+    request/response; Discord awaits the reply inside its 3-second window).
+  - `scheduler.cycle` — **INTERNAL** root for timer-driven work.
+  - `ledger.execute` — **INTERNAL**, child of whichever span caused it. The
+    trace context is propagated explicitly across the writer channel (the
+    writer is a thread we start ourselves, so implicit context does not
+    flow), with `ledger.decide` / `wal.append` / `ledger.apply` beneath it —
+    a slow command says *which phase* was slow.
+  - `discord.request` — **CLIENT**: outbound Discord REST, created before the
+    call; serenity's own request spans nest underneath.
+  - Span status is set explicitly: a typed rejection is `OK` (a valid
+    outcome), only storage failures are `ERROR`.
 - **Traces** — `tracing` + OTLP export (grpc or http/protobuf, configurable;
   off by default outside containers). One span per interaction from gateway
   receive → decide → fsync → reply, with `guild_id`, `command`, `event.seq`
