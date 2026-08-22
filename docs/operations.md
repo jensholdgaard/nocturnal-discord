@@ -137,6 +137,25 @@ Storage), generate S3 credentials, and point `AWS_ENDPOINT_URL_S3` at that
 bucket's region endpoint. Nothing else changes — with no `bucket` set the
 archive is simply off.
 
+### The auction bell
+
+The legacy bell rings in the raid voice channels when a short auction opens.
+The sound is **compiled into the binary** (34 KB), so there is no asset to
+deploy and nothing to fetch on the hot path; `bell.path` overrides it with a
+file, and `bell.enabled: false` turns it off.
+
+Voice needs libopus, which is built from source and linked statically, so the
+release binary stays a single static artifact — no ffmpeg, no shared library,
+no ~75 MB voice stack in the image (the legacy bot's `package.json` carried
+exactly that). Two build-time notes: `LIBOPUS_STATIC` is set by the
+`audiopus_sys/static` feature, and the vendored libopus ships a CMakeLists too
+old for CMake 4, so builds export `CMAKE_POLICY_VERSION_MINIMUM=3.5`.
+
+Discord permissions: the bot needs **Connect** and **Speak** in the raid voice
+channels. Without them the bell logs "bell skipped" and the auction is
+unaffected — it is decorative by construction: its own task, bounded by a
+ten-second timeout, every failure swallowed.
+
 ## Container & deployment
 
 - **Image** — multi-stage build: `rust:1.x` builder → `gcr.io/distroless/cc`

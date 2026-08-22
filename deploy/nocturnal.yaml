@@ -11,6 +11,9 @@ discord:
   command_prefix: "controels-"
   data_guild_id: 1169758926825324645  # serve the imported production ledger
 
+bell:
+  enabled: true              # rings in the raid channels when a short auction opens
+
 health:
   bind: 127.0.0.1:8090
 

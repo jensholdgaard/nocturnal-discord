@@ -23,6 +23,10 @@ discord:
 health:
   bind: ""                   # e.g. 0.0.0.0:8080 → /healthz /readyz
 
+bell:                        # the auction bell, as officers know it
+  enabled: true
+  # path: /etc/nocturnal/bell.mp3   # optional; the sound is embedded otherwise
+
 archive:                     # off-site mirror of compacted Parquet history
   # bucket: nocturnal-ledger # unset = no archive
   prefix: ""

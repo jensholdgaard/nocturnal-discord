@@ -677,6 +677,28 @@ async fn open_auction(
                 .await?;
             }
             tracing::info!(auction_id, "auction opened");
+            // The bell, as officers know it: both raid channels, right after
+            // the auction embed goes up. Decorative and never fatal.
+            if flavor == Flavor::Short && ctx.data().bell.enabled {
+                let (raid_channel, second) = ctx
+                    .data()
+                    .driver
+                    .query(move |l| {
+                        let g = l.state().guild(ledger_guild);
+                        (
+                            g.and_then(|g| g.config.raid_channel),
+                            g.and_then(|g| g.config.second_raid_channel),
+                        )
+                    })
+                    .await;
+                let channels: Vec<u64> = [raid_channel, second].into_iter().flatten().collect();
+                crate::bell::ring(
+                    ctx.serenity_context(),
+                    ctx.guild_id().map(|g| g.get()).unwrap_or_default(),
+                    channels,
+                    ctx.data().bell.path.clone(),
+                );
+            }
         }
         Err(e) => {
             ctx.say(rejection_text(&e)).await?;
@@ -1467,6 +1489,7 @@ mod tests {
         let data = Data {
             driver: driver.clone(),
             default_guild: GUILD,
+            bell: crate::config::BellConfig::default(),
             data_guild: None,
             auctions: std::sync::Arc::new(AuctionUi::default()),
             items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("items")),

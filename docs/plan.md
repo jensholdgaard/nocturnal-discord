@@ -170,8 +170,11 @@ live mock night.)*
 - [x] Auction timers in the scheduler: deadline → close, long + 20 min grace →
       finalize; both idempotent and state-derived.
 - [x] `/auctiondetails` (with the legacy public "peek" callout).
-- [ ] Bell sound at short-auction start — needs the voice stack; deliberately
-      deferred as its own slice (decorative, strictly fire-and-forget).
+- [x] Bell sound at short-auction start: songbird with libopus built from
+      source and linked statically (no ffmpeg, no shared library, no 75 MB
+      voice stack — the sound itself is 34 KB embedded in the binary).
+      Strictly fire-and-forget: own task, ten-second timeout, every failure
+      swallowed, and `bell.enabled: false` turns it off.
 - [x] Chaos suite (`nocturnal-store/tests/chaos.rs`): 25 seeded scenarios of
       overlapping auctions + raid ticks with kill -9 at random points,
       including torn WAL tails, asserting no negative balances, at most one

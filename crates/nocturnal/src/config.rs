@@ -21,7 +21,32 @@ pub struct Config {
     #[serde(default)]
     pub archive: ArchiveConfig,
     #[serde(default)]
+    pub bell: BellConfig,
+    #[serde(default)]
     pub provision: ProvisionConfig,
+}
+
+/// The auction bell. On by default, because that is how officers know it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BellConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Optional sound file; the binary embeds the legacy bell otherwise.
+    pub path: Option<PathBuf>,
+}
+
+impl Default for BellConfig {
+    fn default() -> Self {
+        BellConfig {
+            enabled: true,
+            path: None,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Off-site archive for compacted Parquet history (Hetzner Object Storage or

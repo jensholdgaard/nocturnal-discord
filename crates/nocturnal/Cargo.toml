@@ -17,6 +17,9 @@ nocturnal-provision = { path = "../nocturnal-provision" }
 nocturnal-migrate = { path = "../nocturnal-migrate" }
 tokio.workspace = true
 poise.workspace = true
+songbird.workspace = true
+audiopus_sys.workspace = true
+symphonia.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 toml.workspace = true

@@ -20,6 +20,7 @@ pub struct Data {
     pub driver: DriverHandle,
     /// Registration guild — the ledger guild for context-free events (DMs).
     pub default_guild: u64,
+    pub bell: crate::config::BellConfig,
     pub auctions: std::sync::Arc<crate::auctions::AuctionUi>,
     /// Test-server mapping: serve this ledger guild for interactions from the
     /// registration guild (see `discord.data_guild_id`).
@@ -547,6 +548,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         ..Default::default()
     };
     let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
+    let bell_cfg = cfg.bell.clone();
     let data_guild = cfg.discord.data_guild_id.map(|to| (guild_id, to));
     if let Some((from, to)) = data_guild {
         tracing::info!(
@@ -586,6 +588,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 Ok(Data {
                     driver,
                     default_guild: guild_id,
+                    bell: bell_cfg,
                     auctions: auction_ui,
                     data_guild,
                     items: std::sync::Arc::new(
@@ -621,6 +624,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 .record(info.timeout.as_secs_f64(), &attrs);
         }));
     }
+    use songbird::serenity::SerenityInit as _;
     let mut client = serenity::ClientBuilder::new_with_http(
         http,
         // Exactly what the bot needs, spelled out: guild/channel data,
@@ -632,6 +636,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
             | serenity::GatewayIntents::DIRECT_MESSAGES,
     )
     .framework(framework)
+    .register_songbird()
     .await
     .context("building Discord client")?;
 

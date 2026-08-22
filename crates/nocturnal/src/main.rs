@@ -4,6 +4,7 @@
 //! See docs/operations.md for the operational contract.
 
 mod auctions;
+mod bell;
 mod config;
 mod discord;
 mod driver;

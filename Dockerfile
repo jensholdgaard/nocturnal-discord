@@ -4,8 +4,10 @@
 FROM rust:1-bookworm AS build
 WORKDIR /src
 RUN rustup target add x86_64-unknown-linux-musl \
- && apt-get update && apt-get install -y --no-install-recommends musl-tools \
+ && apt-get update && apt-get install -y --no-install-recommends musl-tools cmake \
  && rm -rf /var/lib/apt/lists/*
+# libopus is vendored and built from source; its CMakeLists predates CMake 4.
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 # Dependency layer first: source edits don't re-download the world.
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates

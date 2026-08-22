@@ -5,6 +5,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # songbird's vendored libopus ships a CMakeLists older than CMake 4 allows.
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
 jobs:
   rust:
