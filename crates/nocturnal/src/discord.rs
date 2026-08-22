@@ -458,8 +458,28 @@ async fn on_event(
     event: &serenity::FullEvent,
     data: &Data,
 ) -> Result<(), Error> {
+    // A DM to the bot: possibly a bid amount someone owes us.
+    if let serenity::FullEvent::Message { new_message } = event {
+        if new_message.guild_id.is_none() && !new_message.author.bot {
+            tracing::info!(
+                user = new_message.author.id.get(),
+                len = new_message.content.len(),
+                "direct message received"
+            );
+            if let Err(e) = crate::auctions::handle_dm(ctx, new_message, data).await {
+                tracing::warn!(error = format!("{e:#}"), "DM bid handler failed");
+            }
+        }
+    }
     if let serenity::FullEvent::InteractionCreate { interaction } = event {
         if let Some(component) = interaction.as_message_component() {
+            // Diagnostic: proves component clicks reach us at all, and shows
+            // the id we were handed if dispatch ever stops matching.
+            tracing::info!(
+                custom_id = %component.data.custom_id,
+                user = component.user.id.get(),
+                "component interaction received"
+            );
             if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
                 // `{:#}` prints the whole anyhow chain — the outermost context
                 // alone hid the real cause of a failed component reply.

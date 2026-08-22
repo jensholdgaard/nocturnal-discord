@@ -713,5 +713,11 @@ fn auction_loot_is_attributed_to_the_active_raid() {
     bid(&mut l, "b", P2, 10, true);
     finish(&mut l, "b");
     let g = l.state().guild(GUILD).unwrap();
-    assert!(g.players[&P2].log.iter().find(|e| e.dkp == -10).unwrap().raid.is_none());
+    assert!(g.players[&P2]
+        .log
+        .iter()
+        .find(|e| e.dkp == -10)
+        .unwrap()
+        .raid
+        .is_none());
 }

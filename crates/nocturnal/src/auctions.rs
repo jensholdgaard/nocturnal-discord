@@ -9,7 +9,7 @@
 //! The only in-memory state is a message registry (auction → posted embed),
 //! which is presentation, not truth: on boot, open auctions re-post.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -196,14 +196,28 @@ pub fn settled_message(
 // Message registry + rendering side effects
 // ---------------------------------------------------------------------------
 
+/// A DM prompt awaiting the bidder's number.
+#[derive(Debug, Clone)]
+pub struct PendingBid {
+    pub auction_id: String,
+    pub for_main: bool,
+    pub dm_channel: u64,
+    pub expires_ms: i64,
+}
+
 #[derive(Default)]
 pub struct AuctionUi {
     /// auction id → (channel, message) of its posted embed. Presentation
     /// state: lost on restart, rebuilt by re-posting open auctions.
     messages: Mutex<HashMap<String, (u64, u64)>>,
-    /// (user, auction) pairs with a DM prompt already open — stops the
-    /// legacy behaviour of stacking a new collector per click (audit #39).
-    dm_pending: Mutex<HashSet<(u64, String)>>,
+    /// user → the bid prompt they owe an answer to. One per user, so a second
+    /// click cannot stack prompts (audit #39) and an answer can only ever
+    /// apply to the auction it was asked for (audit #50).
+    ///
+    /// Replaces a per-click `MessageCollector`: DM replies are handled by the
+    /// same gateway event path as everything else, which is far easier to
+    /// observe and does not depend on a collector living long enough.
+    pending: Mutex<HashMap<u64, PendingBid>>,
 }
 
 impl AuctionUi {
@@ -223,17 +237,36 @@ impl AuctionUi {
         }
     }
 
-    fn dm_open(&self, user: u64, auction_id: &str) -> bool {
-        self.dm_pending
-            .lock()
-            .map(|mut p| p.insert((user, auction_id.to_owned())))
-            .unwrap_or(false)
+    /// Record that this user owes us a bid amount. Returns false if they
+    /// already have a live prompt.
+    fn arm_prompt(&self, user: u64, pending: PendingBid) -> bool {
+        let Ok(mut p) = self.pending.lock() else {
+            return false;
+        };
+        let now = chrono_now_ms();
+        p.retain(|_, v| v.expires_ms > now); // opportunistic cleanup
+        if p.contains_key(&user) {
+            return false;
+        }
+        p.insert(user, pending);
+        true
     }
 
-    fn dm_done(&self, user: u64, auction_id: &str) {
-        if let Ok(mut p) = self.dm_pending.lock() {
-            p.remove(&(user, auction_id.to_owned()));
+    fn disarm_prompt(&self, user: u64) {
+        if let Ok(mut p) = self.pending.lock() {
+            p.remove(&user);
         }
+    }
+
+    /// Take the prompt this DM answers, if it is still live.
+    fn take_prompt(&self, user: u64, channel: u64) -> Option<PendingBid> {
+        let mut p = self.pending.lock().ok()?;
+        let pending = p.get(&user)?.clone();
+        if pending.dm_channel != channel {
+            return None;
+        }
+        p.remove(&user);
+        (pending.expires_ms > chrono_now_ms()).then_some(pending)
     }
 }
 
@@ -927,46 +960,6 @@ async fn dm_bid_flow(
         })
         .await;
 
-    if !data.auctions.dm_open(player, auction_id) {
-        return reply(
-            ctx,
-            interaction,
-            "You already have a bid prompt open — check your DMs.",
-        )
-        .await;
-    }
-    // From here on every exit path must clear the guard, or the bidder can
-    // never click this auction again.
-    let result = dm_bid_inner(
-        ctx,
-        interaction,
-        data,
-        ledger_guild,
-        auction_id,
-        for_main,
-        user,
-        player,
-        &item_name,
-        deadline_ts_ms,
-    )
-    .await;
-    data.auctions.dm_done(player, auction_id);
-    result
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn dm_bid_inner(
-    ctx: &serenity::Context,
-    interaction: &serenity::ComponentInteraction,
-    data: &Data,
-    ledger_guild: GuildId,
-    auction_id: &str,
-    for_main: bool,
-    user: serenity::UserId,
-    player: PlayerId,
-    item_name: &str,
-    deadline_ts_ms: i64,
-) -> anyhow::Result<()> {
     let dm = match user.create_dm_channel(ctx).await {
         Ok(dm) => dm,
         Err(e) => {
@@ -981,6 +974,28 @@ async fn dm_bid_inner(
             .await;
         }
     };
+
+    // Arm before prompting: the reply can arrive the instant the DM lands.
+    let armed = data.auctions.arm_prompt(
+        player,
+        PendingBid {
+            auction_id: auction_id.to_owned(),
+            for_main,
+            dm_channel: dm.id.get(),
+            // The window is the auction's own life, plus a few seconds so a
+            // reply sent at the bell still reaches the ledger to be judged.
+            expires_ms: deadline_ts_ms + 5_000,
+        },
+    );
+    if !armed {
+        return reply(
+            ctx,
+            interaction,
+            "You already have a bid prompt open — check your DMs.",
+        )
+        .await;
+    }
+
     let prompt = discord_call("dm bid prompt", async {
         dm.say(
             ctx,
@@ -994,6 +1009,7 @@ async fn dm_bid_inner(
     })
     .await;
     if let Err(e) = prompt {
+        data.auctions.disarm_prompt(player);
         tracing::info!(player, error = %e, "DM send failed; ephemeral fallback");
         return reply(
             ctx,
@@ -1002,35 +1018,53 @@ async fn dm_bid_inner(
         )
         .await;
     }
-    reply(ctx, interaction, "Sent — check your DMs. 📨").await?;
     tracing::info!(
         player,
         auction_id,
         for_main,
         "DM bid prompt sent; awaiting reply"
     );
+    reply(ctx, interaction, "Sent — check your DMs. 📨").await
+}
 
-    // Listen exactly as long as the auction lives (a 60-second auction gets a
-    // 60-second window), plus a few seconds so a reply sent right at the bell
-    // still arrives to be judged by the ledger rather than dropped here.
-    let remaining_ms = (deadline_ts_ms - chrono_now_ms()).max(0) + 5_000;
-    let reply_msg = serenity::collector::MessageCollector::new(ctx)
-        .channel_id(dm.id)
-        .author_id(user)
-        .timeout(Duration::from_millis(remaining_ms as u64))
-        .await;
-
-    let Some(reply_msg) = reply_msg else {
-        tracing::info!(player, auction_id, "DM bid prompt timed out");
-        let _ = dm
-            .say(ctx, "Bid timed out — click the button again to retry.")
-            .await;
-        return Ok(());
+/// A direct message to the bot. If the sender owes us a bid amount, this is
+/// it. Handled on the ordinary gateway event path — same road as every other
+/// interaction — rather than a per-click collector.
+pub async fn handle_dm(
+    ctx: &serenity::Context,
+    message: &serenity::Message,
+    data: &Data,
+) -> anyhow::Result<()> {
+    let player = message.author.id.get();
+    let Some(pending) = data.auctions.take_prompt(player, message.channel_id.get()) else {
+        return Ok(()); // not answering a prompt of ours
     };
-    let raw = reply_msg.content.trim().to_owned();
-    tracing::info!(player, auction_id, len = raw.len(), "DM bid reply received");
+    let raw = message.content.trim().to_owned();
+    tracing::info!(
+        player,
+        auction_id = %pending.auction_id,
+        len = raw.len(),
+        "DM bid reply received"
+    );
+
+    let ledger_guild = data.data_guild.map_or_else(
+        || message.guild_id.map(|g| g.get()).unwrap_or_default(),
+        |(_, to)| to,
+    );
+    let aid = pending.auction_id.clone();
+    let item_name = data
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
+        })
+        .await
+        .unwrap_or_else(|| "the item".to_owned());
+
     let Ok(amount) = raw.parse::<i64>() else {
-        let _ = dm
+        let _ = message
+            .channel_id
             .say(
                 ctx,
                 format!("`{raw}` is not a number — click the button again to retry."),
@@ -1041,15 +1075,15 @@ async fn dm_bid_inner(
 
     let cmd = if amount == 0 {
         Command::RetractBid {
-            auction_id: auction_id.to_owned(),
+            auction_id: pending.auction_id.clone(),
             player,
         }
     } else {
         Command::PlaceBid {
-            auction_id: auction_id.to_owned(),
+            auction_id: pending.auction_id.clone(),
             player,
             amount,
-            for_main,
+            for_main: pending.for_main,
         }
     };
     let outcome = data
@@ -1060,18 +1094,18 @@ async fn dm_bid_inner(
         Ok(_) if amount == 0 => "Bid cancelled".to_owned(),
         Ok(_) => format!(
             "Bid placed: **{amount}** DKP as {} on {item_name}",
-            if for_main { "MAIN" } else { "ALT" }
+            if pending.for_main { "MAIN" } else { "ALT" }
         ),
         Err(e) => rejection_text(e),
     };
     tracing::info!(
         player,
-        auction_id,
+        auction_id = %pending.auction_id,
         amount,
         accepted = outcome.is_ok(),
         "DM bid resolved"
     );
-    if let Err(e) = dm.say(ctx, &text).await {
+    if let Err(e) = message.channel_id.say(ctx, &text).await {
         tracing::warn!(player, error = %e, "could not confirm bid in DM");
     }
     if outcome.is_ok() {
@@ -1080,7 +1114,7 @@ async fn dm_bid_inner(
             &data.auctions,
             &data.driver,
             ledger_guild,
-            auction_id,
+            &pending.auction_id,
         )
         .await;
     }
@@ -1241,7 +1275,7 @@ pub async fn handle_component(
 
 #[cfg(test)]
 mod tests {
-    use super::{custom_id, parse_custom_id, Action};
+    use super::{closed_message, custom_id, live_message, parse_custom_id, Action, Flavor};
 
     #[test]
     fn custom_ids_round_trip() {
@@ -1250,6 +1284,109 @@ mod tests {
             assert!(id.len() <= 100, "Discord custom_id limit");
             assert_eq!(parse_custom_id(&id), Some((action, "au-1234abcd")));
         }
+    }
+
+    fn sample_auction(flavor: Flavor) -> nocturnal_core::state::Auction {
+        nocturnal_core::state::Auction {
+            item: nocturnal_core::Item {
+                id: "1".into(),
+                name: "Cloak".into(),
+                url: None,
+                data: None,
+                image: None,
+            },
+            flavor,
+            min_bid: 5,
+            num_items: 1,
+            min_bid_to_lock_for_main: 0,
+            over_bid_to_win_main: 0,
+            deadline_ts_ms: 1_700_000_000_000,
+            status: nocturnal_core::state::AuctionStatus::Open,
+            bids: Vec::new(),
+            winners: Vec::new(),
+        }
+    }
+
+    /// A live short auction MUST carry its three buttons — without them there
+    /// is no way to bid at all.
+    #[test]
+    fn live_short_auction_has_bid_buttons() {
+        let (_, rows) = live_message("au-1", &sample_auction(Flavor::Short));
+        let json = serde_json::to_value(&rows).expect("rows serialize");
+        let ids: Vec<String> = json[0]["components"]
+            .as_array()
+            .expect("button row")
+            .iter()
+            .map(|b| b["custom_id"].as_str().unwrap_or_default().to_owned())
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["nb:bid:au-1", "nb:alt:au-1", "nb:cancel:au-1"],
+            "live short auction must offer bid / alt / cancel"
+        );
+    }
+
+    /// Long auctions bid via /bid, so they only carry Cancel.
+    #[test]
+    fn live_long_auction_has_only_cancel() {
+        let (_, rows) = live_message("au-2", &sample_auction(Flavor::Long));
+        let json = serde_json::to_value(&rows).expect("rows serialize");
+        let ids: Vec<String> = json[0]["components"]
+            .as_array()
+            .expect("button row")
+            .iter()
+            .map(|b| b["custom_id"].as_str().unwrap_or_default().to_owned())
+            .collect();
+        assert_eq!(ids, vec!["nb:cancel:au-2"]);
+    }
+
+    /// A closed auction with proposed winners offers exactly one Confirm.
+    #[test]
+    fn closed_auction_offers_confirm() {
+        let mut auction = sample_auction(Flavor::Short);
+        auction.status = nocturnal_core::state::AuctionStatus::Closed;
+        let winners = vec![nocturnal_core::event::Winner {
+            player: 7,
+            amount: 12,
+            for_main: true,
+        }];
+        let (_, rows) = closed_message("au-3", &auction, &winners);
+        let json = serde_json::to_value(&rows).expect("rows serialize");
+        assert_eq!(json[0]["components"][0]["custom_id"], "nb:confirm:au-3");
+        // …and none when there is nothing to confirm.
+        let (_, rows) = closed_message("au-3", &auction, &[]);
+        assert!(rows.is_empty());
+    }
+
+    /// The prompt registry is what makes a DM answer land on the right
+    /// auction: one live prompt per user, matched by DM channel, expiring
+    /// with the auction.
+    #[test]
+    fn pending_prompts_are_single_and_scoped() {
+        use super::{AuctionUi, PendingBid};
+        let ui = AuctionUi::default();
+        let future = crate::discord::chrono_now_ms() + 60_000;
+        let bid = |auction: &str, expires| PendingBid {
+            auction_id: auction.to_owned(),
+            for_main: true,
+            dm_channel: 99,
+            expires_ms: expires,
+        };
+
+        assert!(ui.arm_prompt(7, bid("au-1", future)));
+        // Second click while one is open does not stack (audit #39).
+        assert!(!ui.arm_prompt(7, bid("au-2", future)));
+        // A reply from the wrong channel is not an answer to this prompt.
+        assert!(ui.take_prompt(7, 12345).is_none());
+        // The right one resolves to the auction it was asked for (audit #50).
+        let taken = ui.take_prompt(7, 99).expect("prompt");
+        assert_eq!(taken.auction_id, "au-1");
+        // …and only once.
+        assert!(ui.take_prompt(7, 99).is_none());
+
+        // An answer after the auction ended is not applied.
+        assert!(ui.arm_prompt(8, bid("au-3", crate::discord::chrono_now_ms() - 1)));
+        assert!(ui.take_prompt(8, 99).is_none());
     }
 
     #[test]
