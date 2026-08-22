@@ -530,6 +530,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         parsedkps(),
         registercharacter(),
         addraideventdkp(),
+        belltest(),
         searchitem(),
         stresstest(),
     ];
@@ -2242,5 +2243,67 @@ pub async fn addraideventdkp(
         }
         Err(e) => ctx.say(format!(":no_entry: {e}")).await?,
     };
+    Ok(())
+}
+
+/// Ring the auction bell now, to check voice permissions after a deploy.
+#[tracing::instrument(name = "command.belltest", skip_all, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, rename = "belltest", check = "officer_check")]
+pub async fn belltest(
+    ctx: Context<'_>,
+    #[description = "Voice channel (defaults to the configured raid channel)"]
+    #[channel_types("Voice")]
+    channel: Option<serenity::GuildChannel>,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    ctx.defer_ephemeral().await?;
+    let configured = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.raid_channel)
+        })
+        .await;
+    let Some(target) = channel.map(|c| c.id.get()).or(configured) else {
+        ctx.say(":no_entry: No voice channel given and no raid channel configured")
+            .await?;
+        return Ok(());
+    };
+    let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
+
+    // Say what the bot may actually do there, since a silent bell is almost
+    // always a missing Connect or Speak.
+    let permissions = ctx
+        .serenity_context()
+        .cache
+        .guild(serenity::GuildId::new(discord_guild))
+        .and_then(|guild| {
+            let me = ctx.serenity_context().cache.current_user().id;
+            let member = guild.members.get(&me)?.clone();
+            let channel = guild
+                .channels
+                .get(&serenity::ChannelId::new(target))?
+                .clone();
+            Some(guild.user_permissions_in(&channel, &member))
+        });
+    let (can_connect, can_speak) = permissions
+        .map(|p| (p.connect(), p.speak()))
+        .unwrap_or((false, false));
+
+    crate::bell::ring(
+        ctx.serenity_context(),
+        discord_guild,
+        vec![target],
+        ctx.data().bell.path.clone(),
+    );
+    ctx.say(format!(
+        "Ringing the bell in <#{target}> — Connect: {}, Speak: {}. \
+         If you hear nothing, the journal says why.",
+        if can_connect { "yes" } else { "**no**" },
+        if can_speak { "yes" } else { "**no**" }
+    ))
+    .await?;
     Ok(())
 }

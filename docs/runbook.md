@@ -101,6 +101,12 @@ impossible.
 **The bot restarted mid-auction.** Nothing to do. Buttons carry their auction
 id, open auctions re-post on boot, and bids already accepted are on disk.
 
+**The bell is silent.** Run `/belltest` — it reports Connect and Speak. If
+permissions are fine, run `nocturnal --bell-test <guild>:<channel>` on the
+host with `NOCTURNAL_LOG=info,songbird=debug`: a `4017 E2EE/DAVE protocol
+required` close means the voice library is behind Discord's protocol. Either
+way the auction is unaffected; the bell cannot touch it.
+
 **Telemetry stopped.** Export is entirely `OTEL_*` environment; check
 `/etc/nocturnal/env` and the gateway collector. The bot runs identically with
 export off — it just logs locally.

@@ -18,6 +18,11 @@ use songbird::input::Input;
 /// The legacy bell, embedded.
 const BELL: &[u8] = include_bytes!("../assets/bell.mp3");
 
+/// The embedded sound, for the `--bell-test` diagnostic.
+pub fn embedded() -> &'static [u8] {
+    BELL
+}
+
 /// A bell must never outlive the auction it announces.
 const PLAY_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -76,24 +81,82 @@ async fn play_in(
     let manager = songbird::get(ctx)
         .await
         .ok_or_else(|| anyhow::anyhow!("voice support not registered"))?;
+
+    // Decode *before* joining: a bad sound then fails loudly here instead of
+    // looking like a bot that sits silently in the channel.
+    let input = sound(path)
+        .make_playable_async(
+            songbird::input::codecs::get_codec_registry(),
+            songbird::input::codecs::get_probe(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("bell audio could not be decoded: {e}"))?;
+
     let call = manager
         .join(
             serenity::GuildId::new(guild_id),
             serenity::ChannelId::new(channel),
         )
         .await?;
-    let mut call = call.lock().await;
-    let track = call.play_input(sound(path));
-    drop(call);
+    let mut locked = call.lock().await;
+    let track = locked.play_input(input);
+    drop(locked);
 
     // Wait for the sound to finish rather than cutting it off on leave.
+    let started = std::time::Instant::now();
     loop {
         match track.get_info().await {
             Ok(info) if info.playing.is_done() => break,
-            Ok(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+            Ok(info) => {
+                if started.elapsed() > Duration::from_secs(8) {
+                    tracing::warn!(
+                        mode = ?info.playing,
+                        position_ms = info.position.as_millis() as u64,
+                        played_ms = info.play_time.as_millis() as u64,
+                        "bell still not finished; leaving anyway"
+                    );
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
             // The track is gone: finished or dropped. Either way we are done.
             Err(_) => break,
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sound, BELL};
+
+    /// The embedded bell must actually decode. Without this, a broken asset
+    /// or a missing codec feature shows up as a bot that joins the voice
+    /// channel and sits there in silence — which is exactly what happened.
+    #[tokio::test]
+    async fn embedded_bell_decodes() {
+        assert!(!BELL.is_empty(), "bell asset is embedded");
+        let playable = sound(None)
+            .make_playable_async(
+                songbird::input::codecs::get_codec_registry(),
+                songbird::input::codecs::get_probe(),
+            )
+            .await
+            .expect("the embedded bell decodes with the codecs we ship");
+        assert!(playable.is_playable());
+    }
+
+    /// An unreadable override falls back to the embedded sound rather than
+    /// failing the auction.
+    #[tokio::test]
+    async fn missing_override_falls_back() {
+        let input = sound(Some(std::path::Path::new("/nonexistent/bell.mp3")));
+        let playable = input
+            .make_playable_async(
+                songbird::input::codecs::get_codec_registry(),
+                songbird::input::codecs::get_probe(),
+            )
+            .await;
+        assert!(playable.is_ok(), "fell back to the embedded bell");
+    }
 }

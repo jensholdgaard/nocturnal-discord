@@ -36,7 +36,7 @@ proptest = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "time"] }
 poise = "0.6"
-songbird = "0.5"
+songbird = "0.6"
 symphonia = { version = "0.5", default-features = false, features = ["mp3"] }
 # Not used directly: enables libopus static linking for songbird's audiopus,
 # so the release binary stays a single static musl artifact.

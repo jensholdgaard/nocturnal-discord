@@ -30,6 +30,12 @@ fn main() -> anyhow::Result<()> {
             "--check" => mode_check = true,
             "--print-config" => mode_print = true,
             "--offline" => offline = true,
+            "--bell-test" => {
+                // Diagnostic: connect, join a voice channel, play the bell,
+                // report, exit. No ledger, no lock — just the voice path.
+                let target = it.next().cloned().unwrap_or_default();
+                return bell_test(&target);
+            }
             "--version" | "-V" => {
                 println!("nocturnal {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
@@ -91,4 +97,85 @@ fn main() -> anyhow::Result<()> {
     }
 
     rt.block_on(discord::run(&cfg, driver, readiness))
+}
+
+/// `nocturnal --bell-test <guild_id>:<voice_channel_id>`
+fn bell_test(target: &str) -> anyhow::Result<()> {
+    use poise::serenity_prelude as serenity;
+
+    let (guild, channel) = target
+        .split_once(':')
+        .context("usage: --bell-test <guild_id>:<voice_channel_id>")?;
+    let guild: u64 = guild.parse().context("guild id")?;
+    let channel: u64 = channel.parse().context("voice channel id")?;
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_env("NOCTURNAL_LOG")
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,songbird=debug")),
+        )
+        .init();
+
+    let token = Config::discord_token()?;
+    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    rt.block_on(async move {
+        let voice = songbird::Songbird::serenity();
+        let mut client = serenity::ClientBuilder::new(
+            &token,
+            serenity::GatewayIntents::GUILDS | serenity::GatewayIntents::GUILD_VOICE_STATES,
+        )
+        .voice_manager_arc(voice.clone())
+        .await
+        .context("building client")?;
+
+        let shard_manager = client.shard_manager.clone();
+        tokio::spawn(async move { client.start().await });
+
+        // Give the gateway a moment to come up and cache the guild.
+        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+
+        tracing::info!(guild, channel, "joining voice channel");
+        let call = voice
+            .join(serenity::GuildId::new(guild), serenity::ChannelId::new(channel))
+            .await
+            .context("join voice channel")?;
+        tracing::info!("joined; playing the bell");
+
+        let input = nocturnal_bell_input()
+            .make_playable_async(
+                songbird::input::codecs::get_codec_registry(),
+                songbird::input::codecs::get_probe(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("decode: {e}"))?;
+        let track = call.lock().await.play_input(input);
+
+        for _ in 0..40 {
+            match track.get_info().await {
+                Ok(info) => {
+                    tracing::info!(
+                        mode = ?info.playing,
+                        position_ms = info.position.as_millis() as u64,
+                        played_ms = info.play_time.as_millis() as u64,
+                        "track state"
+                    );
+                    if info.playing.is_done() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    tracing::info!(error = ?e, "track handle gone");
+                    break;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        let _ = voice.remove(serenity::GuildId::new(guild)).await;
+        shard_manager.shutdown_all().await;
+        Ok::<(), anyhow::Error>(())
+    })
+}
+
+fn nocturnal_bell_input() -> songbird::input::Input {
+    songbird::input::Input::from(bell::embedded())
 }

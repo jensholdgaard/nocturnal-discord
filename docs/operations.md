@@ -151,6 +151,17 @@ exactly that). Two build-time notes: `LIBOPUS_STATIC` is set by the
 `audiopus_sys/static` feature, and the vendored libopus ships a CMakeLists too
 old for CMake 4, so builds export `CMAKE_POLICY_VERSION_MINIMUM=3.5`.
 
+Discord now requires **DAVE** (its end-to-end encrypted voice protocol) — a
+voice connection without it is closed with `4017 E2EE/DAVE protocol required`,
+which looks exactly like a bot that joins and says nothing. songbird 0.6
+implements it; do not downgrade.
+
+Two ways to test voice without running an auction: `/belltest` in Discord
+(also reports whether the bot has Connect and Speak), or from a shell on the
+host, `nocturnal --bell-test <guild_id>:<voice_channel_id>` — it connects,
+joins, plays, logs each track state, and exits, touching neither the ledger
+nor the instance lock.
+
 Discord permissions: the bot needs **Connect** and **Speak** in the raid voice
 channels. Without them the bell logs "bell skipped" and the auction is
 unaffected — it is decorative by construction: its own task, bounded by a
