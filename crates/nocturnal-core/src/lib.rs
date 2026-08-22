@@ -12,6 +12,7 @@ pub mod decide;
 pub mod event;
 pub mod reject;
 pub mod state;
+pub mod who;
 
 pub use apply::apply;
 pub use command::{Command, Ctx};

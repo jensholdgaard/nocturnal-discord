@@ -8,6 +8,7 @@ mod discord;
 mod driver;
 mod health;
 mod lock;
+mod scheduler;
 
 use anyhow::Context as _;
 use config::Config;

@@ -121,15 +121,26 @@ server; spans visible in Jaeger.
 
 ## M4 — Raids *(~1–2 weeks)*
 
-- [ ] `/startraid`, `/endraid`, tick scheduler (state-derived, B6), catch-up rules.
-- [ ] `/who` log parsing → roster updates + character registration
-      (port `logParser/`, with fixtures from real EQ logs).
-- [ ] `/adddkp`, `/removedkp`, `/parsedkps` with typed bounds.
-- [ ] Kill-and-resume test: crash mid-raid → ticks continue correctly, none
-      doubled, none lost.
+- [x] `/startraid`, `/endraid` (with the aggregated movement-log embeds),
+      `/configure` + `/showconfig`, officer gating (admin-perm bypass +
+      configured role, legacy semantics). Tick scheduler: proposes a tick
+      every 10 s and lets `decide` judge due-ness — `TickTooSoon` is the
+      quiet normal case, so restarts/missed cycles self-correct (B6).
+- [x] `/who` parsing ported to `nocturnal-core::who` (legacy jest fixture
+      verbatim, incl. the timestamp); `/registercharacter` (case-insensitive,
+      E11 fixed).
+- [x] `/adddkp`, `/removedkp` (min 1 — E8 fixed), `/addraiddkp`,
+      `/parsedkps` (per-character errors reported; active raid attached
+      properly — E10 fixed).
+- [x] Kill-and-resume covered by `raid_night.rs` (crash mid-raid + mid-
+      auction, tick_no idempotence); live restart drill happens in the mock
+      raid night below.
+- [ ] RaidHelper event integration (auto-name raids, event DKP awards) —
+      deferred to its own slice; needs the API key + a live event.
 
 **Exit:** a full mock raid night runs in the test server, bot restarted twice
-mid-raid, ledger perfect.
+mid-raid, ledger perfect. *(Code deployed to the VM 2026-08-22; awaiting the
+live mock night.)*
 
 ## M5 — Auctions *(~2 weeks — the crown jewel)*
 

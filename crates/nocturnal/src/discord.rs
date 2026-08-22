@@ -470,7 +470,21 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         .discord
         .guild_id
         .context("discord.guild_id is required — commands register guild-scoped only (test server) while the legacy bot is alive")?;
-    let mut commands = vec![playerdkp(), dkphistory(), listplayersdkps(), searchlogs()];
+    let mut commands = vec![
+        playerdkp(),
+        dkphistory(),
+        listplayersdkps(),
+        searchlogs(),
+        configure(),
+        showconfig(),
+        startraid(),
+        endraid(),
+        adddkp(),
+        removedkp(),
+        addraiddkp(),
+        parsedkps(),
+        registercharacter(),
+    ];
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
     if !cfg.discord.command_prefix.is_empty() {
@@ -503,6 +517,12 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 .await?;
                 tracing::info!(user = %ready.user.name, guild_id, "gateway ready, commands registered");
                 readiness.set_ready();
+                tokio::spawn(crate::scheduler::run(crate::scheduler::Scheduler {
+                    ctx: ctx.clone(),
+                    driver: driver.clone(),
+                    discord_guild: guild_id,
+                    ledger_guild: data_guild.map_or(guild_id, |(_, to)| to),
+                }));
                 Ok(Data { driver, data_guild })
             })
         })
@@ -521,5 +541,734 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     });
 
     client.start().await.context("gateway run")?;
+    Ok(())
+}
+
+// ===========================================================================
+// M4: write commands — raids, DKP admin, characters, config. Every mutation
+// flows through the single writer; embeds and replies happen after the fact
+// is durable, and their failures are never fatal.
+// ===========================================================================
+
+pub const EMBED_BLUE_TICK: u32 = 3447003;
+pub const EMBED_GREEN: u32 = 5763719;
+pub const EMBED_ORANGE: u32 = 15105570;
+pub const EMBED_PINK: u32 = 15277667;
+
+use nocturnal_core::{Actor, Command};
+
+use crate::driver::ExecError;
+
+/// Members currently in a voice channel, from the gateway cache.
+pub fn voice_members(
+    ctx: &serenity::Context,
+    discord_guild: u64,
+    channel: u64,
+) -> Vec<nocturnal_core::PlayerId> {
+    let Some(guild) = ctx.cache.guild(serenity::GuildId::new(discord_guild)) else {
+        return Vec::new();
+    };
+    guild
+        .voice_states
+        .iter()
+        .filter(|(_, vs)| vs.channel_id.map(|c| c.get()) == Some(channel))
+        .map(|(user, _)| user.get())
+        .collect()
+}
+
+/// Legacy `sendRaidEmebed`: Time + DKPs fields, players in inline chunks of 15.
+pub fn raid_embed(
+    color: u32,
+    title: &str,
+    players: &[nocturnal_core::PlayerId],
+    dkps: i64,
+) -> serenity::CreateEmbed {
+    let now = chrono_now_ms() / 1000;
+    let mut names: Vec<String> = players.iter().map(|p| format!("- <@{p}>")).collect();
+    names.sort();
+    let mut embed = serenity::CreateEmbed::new()
+        .color(color)
+        .title(title.to_owned())
+        .field("Time", format!("<t:{now}:t>"), true)
+        .field("DKPs", dkps.to_string(), true)
+        .field("\u{200b}", "\u{200b}", false);
+    if names.is_empty() {
+        embed = embed.field(format!("Players ({})", players.len()), "No players", true);
+    }
+    for (i, chunk) in names.chunks(15).enumerate() {
+        let label = if i == 0 {
+            format!("Players ({})", players.len())
+        } else {
+            "\u{200b}".to_owned()
+        };
+        embed = embed.field(label, chunk.join("\n"), true);
+    }
+    embed
+}
+
+async fn send_log_embed(ctx: &Context<'_>, embed: serenity::CreateEmbed) {
+    let ledger_guild = match require_guild(ctx) {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    let log_channel = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.log_channel)
+        })
+        .await;
+    if let Some(channel) = log_channel {
+        if let Err(e) = serenity::ChannelId::new(channel)
+            .send_message(
+                ctx.serenity_context(),
+                serenity::CreateMessage::new().embed(embed),
+            )
+            .await
+        {
+            tracing::warn!(error = %e, "log channel embed failed");
+        }
+    }
+}
+
+/// Legacy `restricted` gate: guild Administrators bypass; otherwise the
+/// member needs the configured officer role.
+async fn officer_check(ctx: Context<'_>) -> Result<bool, Error> {
+    let Some(member) = ctx.author_member().await else {
+        return Ok(false);
+    };
+    if member.permissions.is_some_and(|p| p.administrator()) {
+        return Ok(true);
+    }
+    let ledger_guild = require_guild(&ctx)?;
+    let admin_role = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.admin_role)
+        })
+        .await;
+    let allowed = admin_role.is_some_and(|r| member.roles.iter().any(|role| role.get() == r));
+    if !allowed {
+        ctx.say("You don't have the permission to use this command")
+            .await?;
+    }
+    Ok(allowed)
+}
+
+async fn execute(
+    ctx: &Context<'_>,
+    cmd: Command,
+) -> Result<Result<Vec<nocturnal_core::Envelope>, ExecError>, Error> {
+    let ledger_guild = require_guild(ctx)?;
+    Ok(ctx
+        .data()
+        .driver
+        .execute(ledger_guild, Actor::User(ctx.author().id.get()), cmd)
+        .await)
+}
+
+fn rejection_text(e: &ExecError) -> String {
+    match e {
+        ExecError::Rejected(r) => match r {
+            nocturnal_core::Rejection::RaidAlreadyActive { name } => {
+                format!(":no_entry: There is already an active raid: {name}")
+            }
+            nocturnal_core::Rejection::NoActiveRaid => {
+                ":no_entry: There is no active raid, use /startraid to start one first".into()
+            }
+            nocturnal_core::Rejection::InsufficientBalance { balance, .. } => {
+                format!(":no_entry: DKP Bot scowls at you. Not enough DKP (current: {balance})")
+            }
+            nocturnal_core::Rejection::CharacterAlreadyRegistered { character } => {
+                format!(":no_entry: Character {character} already registered")
+            }
+            nocturnal_core::Rejection::CharacterNotRegistered { character } => {
+                format!(":no_entry: Character {character} not registered")
+            }
+            nocturnal_core::Rejection::InvalidAmount => {
+                ":no_entry: DKP Bot scowls at you. Invalid amount".into()
+            }
+            other => format!(":no_entry: {other}"),
+        },
+        ExecError::Storage(_) => {
+            ":no_entry: Storage failure — the command was NOT applied. Check the logs.".into()
+        }
+    }
+}
+
+/// Set bot configuration (channels, officer role, raid/bid defaults).
+#[allow(clippy::too_many_arguments)]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "configure",
+    default_member_permissions = "ADMINISTRATOR"
+)]
+pub async fn configure(
+    ctx: Context<'_>,
+    #[description = "Officer role who can handle raids and dkps"] role: serenity::Role,
+    #[description = "The raid voice channel"]
+    #[channel_types("Voice")]
+    raidchannel: serenity::GuildChannel,
+    #[description = "Channel for DKP log movements"]
+    #[channel_types("Text")]
+    logchannel: serenity::GuildChannel,
+    #[description = "Channel for auctions"]
+    #[channel_types("Text")]
+    auctionchannel: serenity::GuildChannel,
+    #[description = "Minutes between ticks (e.g. 6)"] tickduration: Option<f64>,
+    #[description = "Days before raids stop counting for attendance"] raiddeprecationtime: Option<
+        f64,
+    >,
+    #[description = "Short auction duration in seconds (30-1000)"]
+    #[min = 30]
+    #[max = 1000]
+    bidtime: Option<i64>,
+    #[description = "Channel for long auctions"]
+    #[channel_types("Text")]
+    longauctionchannel: Option<serenity::GuildChannel>,
+    #[description = "Second raid voice channel"]
+    #[channel_types("Voice")]
+    secondraidchannel: Option<serenity::GuildChannel>,
+    #[description = "Minimum bid"]
+    #[min = 0]
+    minbid: Option<i64>,
+    #[description = "Minimum bid to lock as MAIN"]
+    #[min = 0]
+    minbidtolockformain: Option<i64>,
+    #[description = "Overbid needed for an ALT to win over MAIN"]
+    #[min = 0]
+    overbidtowinmain: Option<i64>,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    if raidchannel.id == secondraidchannel.as_ref().map(|c| c.id).unwrap_or_default() {
+        ctx.say(":no_entry: Raid channel and second raid channel must be different")
+            .await?;
+        return Ok(());
+    }
+    let patch = nocturnal_core::event::ConfigPatch {
+        admin_role: Some(role.id.get()),
+        raid_channel: Some(raidchannel.id.get()),
+        log_channel: Some(logchannel.id.get()),
+        auction_channel: Some(auctionchannel.id.get()),
+        long_auction_channel: longauctionchannel.map(|c| c.id.get()),
+        second_raid_channel: secondraidchannel.map(|c| c.id.get()),
+        tick_duration_ms: tickduration.map(|m| (m * 60_000.0) as i64),
+        raid_deprecation_ms: raiddeprecationtime
+            .map(|d| (d * nocturnal_core::state::DAY_MS as f64) as i64),
+        bid_time_s: bidtime,
+        min_bid: minbid,
+        min_bid_to_lock_for_main: minbidtolockformain,
+        over_bid_to_win_main: overbidtowinmain,
+        raidhelper_api_key: None,
+    };
+    match execute(&ctx, Command::UpdateConfig { patch }).await? {
+        Ok(_) => ctx.say("Configuration saved").await?,
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
+    Ok(())
+}
+
+/// Show the current configuration of the bot in this server.
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "showconfig",
+    default_member_permissions = "ADMINISTRATOR"
+)]
+pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    ctx.defer_ephemeral().await?;
+    let cfg = ctx
+        .data()
+        .driver
+        .query(move |l| l.state().guild(ledger_guild).map(|g| g.config.clone()))
+        .await
+        .unwrap_or_default();
+    let role = |v: Option<u64>| v.map_or("Not set".into(), |r| format!("<@&{r}>"));
+    let chan = |v: Option<u64>| v.map_or("Not set".into(), |c| format!("<#{c}>"));
+    let embed = serenity::CreateEmbed::new()
+        .color(EMBED_GREEN)
+        .title("Current configuration")
+        .field("DKP Officer role", role(cfg.admin_role), false)
+        .field(
+            "Raid deprecation time",
+            format!(
+                "{} days",
+                cfg.raid_deprecation_ms / nocturnal_core::state::DAY_MS
+            ),
+            false,
+        )
+        .field("Raid channel", chan(cfg.raid_channel), false)
+        .field("Second raid channel", chan(cfg.second_raid_channel), false)
+        .field("Log channel", chan(cfg.log_channel), false)
+        .field("Auction channel", chan(cfg.auction_channel), false)
+        .field(
+            "Long auction channel",
+            chan(cfg.long_auction_channel),
+            false,
+        )
+        .field("Bid time", format!("{} seconds", cfg.bid_time_s), false)
+        .field(
+            "Tick duration",
+            format!("{} minutes", cfg.tick_duration_ms / 60_000),
+            false,
+        )
+        .field("Minimum bid", format!("{} DKP", cfg.min_bid), false)
+        .field(
+            "Minimum bid to lock for main",
+            format!("{} DKP", cfg.min_bid_to_lock_for_main),
+            false,
+        )
+        .field(
+            "Over bid to win main",
+            format!("{} DKP", cfg.over_bid_to_win_main),
+            false,
+        );
+    ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
+        .await?;
+    Ok(())
+}
+
+/// Create a new raid.
+#[tracing::instrument(name = "command.startraid", skip_all)]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "startraid",
+    check = "officer_check"
+)]
+pub async fn startraid(
+    ctx: Context<'_>,
+    #[description = "Name"] name: Option<String>,
+    #[description = "DKP per tick"]
+    #[min = 0]
+    dkpspertick: Option<i64>,
+    #[description = "Minutes between ticks (0.5 = 30s)"] tickduration: Option<f64>,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
+    ctx.defer_ephemeral().await?;
+    let (raid_channel, second_channel, cfg_tick_ms) = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            let g = l.state().guild(ledger_guild);
+            (
+                g.and_then(|g| g.config.raid_channel),
+                g.and_then(|g| g.config.second_raid_channel),
+                g.map_or(6 * 60_000, |g| g.config.tick_duration_ms),
+            )
+        })
+        .await;
+    let Some(raid_channel) = raid_channel else {
+        ctx.say(":no_entry: Raid channel not set, use /configure to set it")
+            .await?;
+        return Ok(());
+    };
+    let mut players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
+    if let Some(second) = second_channel {
+        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
+    }
+    let dkp_per_tick = dkpspertick.unwrap_or(1);
+    let tick_interval_ms = tickduration.map_or(cfg_tick_ms, |m| (m * 60_000.0) as i64);
+    let name = name.unwrap_or_else(|| format!("<t:{}:D>", chrono_now_ms() / 1000));
+    let raid_id = format!("rd-{:x}", chrono_now_ms());
+    let cmd = Command::StartRaid {
+        raid_id,
+        name: name.clone(),
+        tick_interval_ms,
+        dkp_per_tick,
+        players_present: players.clone(),
+        event_id: None,
+    };
+    match execute(&ctx, cmd).await? {
+        Ok(_) => {
+            ctx.say(format!(
+                "Raid {name} started with {dkp_per_tick} DKP per tick every {} minutes",
+                tick_interval_ms as f64 / 60_000.0
+            ))
+            .await?;
+            send_log_embed(
+                &ctx,
+                raid_embed(
+                    EMBED_GREEN,
+                    &format!("{name} raid Start"),
+                    &players,
+                    dkp_per_tick,
+                ),
+            )
+            .await;
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// End the current raid.
+#[tracing::instrument(name = "command.endraid", skip_all)]
+#[poise::command(slash_command, ephemeral, rename = "endraid", check = "officer_check")]
+pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
+    ctx.defer_ephemeral().await?;
+    let (raid_channel, second_channel) = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            let g = l.state().guild(ledger_guild);
+            (
+                g.and_then(|g| g.config.raid_channel),
+                g.and_then(|g| g.config.second_raid_channel),
+            )
+        })
+        .await;
+    let mut players = Vec::new();
+    if let Some(c) = raid_channel {
+        players = voice_members(ctx.serenity_context(), discord_guild, c);
+    }
+    if let Some(second) = second_channel {
+        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
+    }
+    let envelopes = match execute(
+        &ctx,
+        Command::EndRaid {
+            players_present: players,
+            reason: "officer".into(),
+        },
+    )
+    .await?
+    {
+        Ok(env) => env,
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+            return Ok(());
+        }
+    };
+    let raid_id = envelopes
+        .iter()
+        .find_map(|e| match &e.event {
+            nocturnal_core::Event::RaidEnded { raid_id, .. } => Some(raid_id.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    // Movement log: attendance entries aggregated by consecutive comment,
+    // plus every loot debit tied to this raid (legacy getRaidDKPMovements).
+    let rid = raid_id.clone();
+    let (raid_name, lines) = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            let Some(g) = l.state().guild(ledger_guild) else {
+                return (String::new(), Vec::new());
+            };
+            let Some(raid) = g.raids.get(&rid) else {
+                return (String::new(), Vec::new());
+            };
+            #[derive(Clone)]
+            struct Movement {
+                ts_ms: i64,
+                text: String,
+            }
+            let mut moves: Vec<Movement> = Vec::new();
+            let mut agg: Option<(String, i64, i64)> = None; // comment, dkps, ts
+            for e in &raid.entries {
+                match &mut agg {
+                    Some((comment, dkps, _)) if *comment == e.comment => *dkps += e.amount,
+                    _ => {
+                        if let Some((comment, dkps, ts)) = agg.take() {
+                            moves.push(Movement {
+                                ts_ms: ts,
+                                text: format!("<t:{}:t> *{comment}* ({dkps} dkps)", ts / 1000),
+                            });
+                        }
+                        agg = Some((e.comment.clone(), e.amount, e.ts_ms));
+                    }
+                }
+            }
+            if let Some((comment, dkps, ts)) = agg {
+                moves.push(Movement {
+                    ts_ms: ts,
+                    text: format!("<t:{}:t> *{comment}* ({dkps} dkps)", ts / 1000),
+                });
+            }
+            for (player, p) in &g.players {
+                for e in &p.log {
+                    if e.dkp < 0 && e.raid.as_ref().is_some_and(|r| r.raid_id == rid) {
+                        let what = match &e.item {
+                            Some(item) => match &item.url {
+                                Some(url) => {
+                                    format!("won [{}]({url}) for {} dkps", item.name, -e.dkp)
+                                }
+                                None => format!("won {} for {} dkps", item.name, -e.dkp),
+                            },
+                            None => format!("lost {} dkps *{}*", -e.dkp, e.comment),
+                        };
+                        moves.push(Movement {
+                            ts_ms: e.ts_ms,
+                            text: format!("<t:{}:t> <@{player}> {what}", e.ts_ms / 1000),
+                        });
+                    }
+                }
+            }
+            moves.sort_by_key(|m| m.ts_ms);
+            (
+                raid.name.clone(),
+                moves.into_iter().map(|m| m.text).collect::<Vec<_>>(),
+            )
+        })
+        .await;
+    ctx.say(format!("Raid {raid_name} ended")).await?;
+    let chunks: Vec<&[String]> = lines.chunks(35).collect();
+    let total = chunks.len().max(1);
+    for (i, chunk) in chunks.iter().enumerate() {
+        let embed = serenity::CreateEmbed::new()
+            .color(EMBED_PINK)
+            .title(format!("{raid_name} raid ended - *{} of {total}*", i + 1))
+            .description(chunk.join("\n"))
+            .field(
+                "Date",
+                format!("<t:{0}:d> <t:{0}:t>", chrono_now_ms() / 1000),
+                true,
+            )
+            .field("ID", raid_id.clone(), true);
+        send_log_embed(&ctx, embed).await;
+    }
+    Ok(())
+}
+
+/// Add DKP to a player.
+#[tracing::instrument(name = "command.adddkp", skip_all)]
+#[poise::command(slash_command, rename = "adddkp", check = "officer_check")]
+pub async fn adddkp(
+    ctx: Context<'_>,
+    #[description = "The player"] player: serenity::User,
+    #[description = "The amount of DKP to add"]
+    #[min = 1]
+    dkp: i64,
+    #[description = "Reason"] comment: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let cmd = Command::AdjustDkp {
+        player: player.id.get(),
+        delta: dkp,
+        comment: comment.clone(),
+        item: None,
+    };
+    match execute(&ctx, cmd).await? {
+        Ok(_) => {
+            ctx.say(format!(
+                "Added {dkp} DKPs to <@{}>. {comment}",
+                player.id.get()
+            ))
+            .await?
+        }
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
+    Ok(())
+}
+
+/// Remove DKP from a player.
+#[tracing::instrument(name = "command.removedkp", skip_all)]
+#[poise::command(slash_command, rename = "removedkp", check = "officer_check")]
+pub async fn removedkp(
+    ctx: Context<'_>,
+    #[description = "The player"] player: serenity::User,
+    #[description = "The amount of DKP to remove"]
+    #[min = 1]
+    dkp: i64,
+    #[description = "Reason"] comment: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let cmd = Command::AdjustDkp {
+        player: player.id.get(),
+        delta: -dkp,
+        comment: comment.clone(),
+        item: None,
+    };
+    match execute(&ctx, cmd).await? {
+        Ok(_) => {
+            ctx.say(format!(
+                "Removed {dkp} DKPs from <@{}>. {comment}",
+                player.id.get()
+            ))
+            .await?
+        }
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
+    Ok(())
+}
+
+/// Add DKP to everyone in the raid channel.
+#[tracing::instrument(name = "command.addraiddkp", skip_all)]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "addraiddkp",
+    check = "officer_check"
+)]
+pub async fn addraiddkp(
+    ctx: Context<'_>,
+    #[description = "The amount of DKP to add"]
+    #[min = 0]
+    dkp: i64,
+    #[description = "Reason"] comment: String,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
+    ctx.defer_ephemeral().await?;
+    let raid_channel = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.raid_channel)
+        })
+        .await;
+    let Some(raid_channel) = raid_channel else {
+        ctx.say(":no_entry: Please set the raid channel first with /configure")
+            .await?;
+        return Ok(());
+    };
+    let players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
+    if players.is_empty() {
+        ctx.say(":no_entry: No players in the raid channel").await?;
+        return Ok(());
+    }
+    let (raid_name, dkp_amount) = (comment.clone(), dkp);
+    match execute(
+        &ctx,
+        Command::AwardRaid {
+            players: players.clone(),
+            amount: dkp,
+            comment: comment.clone(),
+        },
+    )
+    .await?
+    {
+        Ok(_) => {
+            ctx.say(format!(
+                "Added {dkp} DKP to all players ({}) in the raid channel",
+                players.len()
+            ))
+            .await?;
+            let title = ctx
+                .data()
+                .driver
+                .query(move |l| {
+                    l.state()
+                        .guild(ledger_guild)
+                        .and_then(|g| {
+                            let id = g.active_raid.as_ref()?;
+                            g.raids.get(id).map(|r| format!("{}: {raid_name}", r.name))
+                        })
+                        .unwrap_or(raid_name)
+                })
+                .await;
+            send_log_embed(&ctx, raid_embed(EMBED_ORANGE, &title, &players, dkp_amount)).await;
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Parse an EQ /who log and award DKP by character.
+#[tracing::instrument(name = "command.parsedkps", skip_all)]
+#[poise::command(slash_command, rename = "parsedkps", check = "officer_check")]
+pub async fn parsedkps(
+    ctx: Context<'_>,
+    #[description = "Comment"] comment: String,
+    #[description = "The amount of dkps"]
+    #[min = 1]
+    dkps: i64,
+    #[description = "Is this a raid?"] raid: bool,
+    #[description = "The /who log to parse"] log: String,
+) -> Result<(), Error> {
+    let _ = raid; // the active raid attaches automatically (fixes audit E10)
+    ctx.defer().await?;
+    let parsed = nocturnal_core::who::parse_who(&log);
+    let mut errors: Vec<String> = Vec::new();
+    for character in &parsed.characters {
+        let cmd = Command::AdjustByCharacter {
+            character: character.clone(),
+            delta: dkps,
+            comment: comment.clone(),
+        };
+        if let Err(e) = execute(&ctx, cmd).await? {
+            errors.push(match e {
+                ExecError::Rejected(nocturnal_core::Rejection::CharacterNotRegistered {
+                    character,
+                }) => {
+                    format!("Character {character} not registered")
+                }
+                other => other.to_string(),
+            });
+        }
+    }
+    let mut characters = parsed.characters.clone();
+    characters.sort();
+    let embed = serenity::CreateEmbed::new()
+        .color(EMBED_BLUE_TICK)
+        .title(comment)
+        .field("DKPS", dkps.to_string(), false)
+        .field(
+            "Characters",
+            if characters.is_empty() {
+                "-".into()
+            } else {
+                characters.join("\n")
+            },
+            false,
+        )
+        .field(
+            "errors",
+            if errors.is_empty() {
+                "-".into()
+            } else {
+                errors.join("\n")
+            },
+            false,
+        );
+    if let Err(e) = ctx
+        .channel_id()
+        .send_message(
+            ctx.serenity_context(),
+            serenity::CreateMessage::new().embed(embed),
+        )
+        .await
+    {
+        tracing::warn!(error = %e, "parsedkps embed failed");
+    }
+    ctx.say(format!("Parsed {} characters", parsed.characters.len()))
+        .await?;
+    Ok(())
+}
+
+/// Register an EQ character to your Discord account.
+#[tracing::instrument(name = "command.registercharacter", skip_all)]
+#[poise::command(slash_command, rename = "registercharacter")]
+pub async fn registercharacter(
+    ctx: Context<'_>,
+    #[description = "The character name"] name: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let cmd = Command::LinkCharacter {
+        player: ctx.author().id.get(),
+        character: name.clone(),
+    };
+    match execute(&ctx, cmd).await? {
+        Ok(_) => ctx.say(format!("Successfully registered {name}!")).await?,
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
     Ok(())
 }
