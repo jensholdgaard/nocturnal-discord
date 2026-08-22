@@ -115,15 +115,40 @@ impl Default for LogConfig {
     }
 }
 
+/// Config files are YAML by default — the format the rest of this guild's
+/// stack already speaks (Perses, the collector, Jaeger, roles.yaml) — with
+/// TOML still accepted so existing deployments keep working. The format is
+/// chosen by extension.
+fn parse_config(path: &str, text: &str) -> anyhow::Result<Config> {
+    let is_toml = std::path::Path::new(path)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("toml"));
+    if is_toml {
+        toml::from_str(text).with_context(|| format!("parsing {path} as TOML"))
+    } else {
+        serde_yaml_ng::from_str(text).with_context(|| format!("parsing {path} as YAML"))
+    }
+}
+
+/// Looked for, in order, when neither `--config` nor `NOCTURNAL_CONFIG` says
+/// otherwise. Absent entirely is fine: every key has a default.
+const DEFAULT_CONFIG_FILES: [&str; 3] = ["nocturnal.yaml", "nocturnal.yml", "nocturnal.toml"];
+
 impl Config {
     pub fn load(path: Option<&str>) -> anyhow::Result<Config> {
         let path = path
             .map(String::from)
-            .or_else(|| std::env::var("NOCTURNAL_CONFIG").ok());
+            .or_else(|| std::env::var("NOCTURNAL_CONFIG").ok())
+            .or_else(|| {
+                DEFAULT_CONFIG_FILES
+                    .iter()
+                    .find(|f| std::path::Path::new(f).is_file())
+                    .map(|f| (*f).to_owned())
+            });
         let mut cfg: Config = match &path {
             Some(p) => {
                 let text = std::fs::read_to_string(p).with_context(|| format!("reading {p}"))?;
-                toml::from_str(&text).with_context(|| format!("parsing {p}"))?
+                parse_config(p, &text)?
             }
             None => Config::default(),
         };
@@ -210,5 +235,71 @@ impl Config {
                 "MISSING"
             }
         )
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)] // tests assert; unwrap is the assertion
+mod tests {
+    use super::{parse_config, Config};
+
+    const YAML: &str = r#"
+data:
+  dir: /var/lib/nocturnal
+log:
+  level: debug
+  format: json
+discord:
+  guild_id: 1540111927995539506
+  command_prefix: "controels-"
+archive:
+  bucket: nocturnal-ledger
+  prefix: prod
+health:
+  bind: 127.0.0.1:8090
+"#;
+
+    const TOML: &str = r#"
+[data]
+dir = "/var/lib/nocturnal"
+[log]
+level = "debug"
+format = "json"
+[discord]
+guild_id = 1540111927995539506
+command_prefix = "controels-"
+[archive]
+bucket = "nocturnal-ledger"
+prefix = "prod"
+[health]
+bind = "127.0.0.1:8090"
+"#;
+
+    /// The same deployment, expressed either way, must resolve identically.
+    #[test]
+    fn yaml_and_toml_agree() {
+        let from_yaml = parse_config("nocturnal.yaml", YAML).expect("yaml parses");
+        let from_toml = parse_config("nocturnal.toml", TOML).expect("toml parses");
+        assert_eq!(format!("{from_yaml:?}"), format!("{from_toml:?}"));
+        assert_eq!(from_yaml.data.dir.to_str(), Some("/var/lib/nocturnal"));
+        assert_eq!(from_yaml.discord.command_prefix, "controels-");
+        assert_eq!(
+            from_yaml.archive.bucket.as_deref(),
+            Some("nocturnal-ledger")
+        );
+    }
+
+    /// An empty file is a valid config: every key has a default.
+    #[test]
+    fn empty_yaml_is_all_defaults() {
+        let cfg = parse_config("nocturnal.yaml", "{}").expect("empty yaml parses");
+        assert_eq!(format!("{cfg:?}"), format!("{:?}", Config::default()));
+    }
+
+    /// A typo must fail loudly rather than be silently ignored.
+    #[test]
+    fn unknown_keys_are_rejected() {
+        let err = parse_config("nocturnal.yaml", "log:\n  levle: info\n").unwrap_err();
+        assert!(format!("{err:#}").contains("levle") || format!("{err:#}").contains("unknown"));
     }
 }

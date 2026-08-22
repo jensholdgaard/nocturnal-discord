@@ -1,0 +1,40 @@
+# Nocturnal configuration. Every key is optional and shown with its default,
+# so an empty file (or none at all) is a valid config.
+#
+# Format: YAML by default; a .toml file is still accepted, chosen by extension.
+# Searched in order when --config / NOCTURNAL_CONFIG is unset:
+#   nocturnal.yaml, nocturnal.yml, nocturnal.toml
+#
+# Env overrides: NOCTURNAL_<SECTION>__<KEY>, e.g. NOCTURNAL_DATA__DIR.
+# Secrets are env-only: DISCORD_TOKEN, or DISCORD_TOKEN_FILE for a secret file.
+
+data:
+  dir: data                  # event log home: wal/ + events/ + LOCK
+
+log:
+  level: info                # or NOCTURNAL_LOG / RUST_LOG for per-module
+  format: text               # "json" in containers
+
+discord:
+  # guild_id: 0              # guild for scoped command registration
+  command_prefix: ""         # e.g. "controels-" for a shared test bot
+  # data_guild_id: 0         # serve another guild's imported ledger
+
+health:
+  bind: ""                   # e.g. 0.0.0.0:8080 → /healthz /readyz
+
+archive:                     # off-site mirror of compacted Parquet history
+  # bucket: nocturnal-ledger # unset = no archive
+  prefix: ""
+  # Credentials and endpoint come from the standard AWS environment:
+  #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3, AWS_REGION
+
+provision:                   # M8 — dpsbot successor; absent = commands off
+  # tokens_path: /etc/eq-otel/tokens.txt
+  # perses_provisioning_dir: /etc/perses/provisioning
+  # roles_map_path: /etc/eq-otel/roles.yaml
+  # dashboard_url: https://dps.nocturnal-guild.de
+
+# Telemetry is configured entirely by the standard OpenTelemetry environment:
+#   OTEL_EXPORTER_OTLP_ENDPOINT / _PROTOCOL / _HEADERS, OTEL_SERVICE_NAME,
+#   OTEL_RESOURCE_ATTRIBUTES, OTEL_SDK_DISABLED. Unset endpoint = no export.

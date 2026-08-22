@@ -10,8 +10,8 @@ services:
     env_file: [./nocturnal.env]
     volumes:
       - nocturnal-data:/data
-      - ./nocturnal.toml:/etc/nocturnal/nocturnal.toml:ro
-    command: ["--config", "/etc/nocturnal/nocturnal.toml"]
+      - ./nocturnal.yaml:/etc/nocturnal/nocturnal.yaml:ro
+    command: ["--config", "/etc/nocturnal/nocturnal.yaml"]
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

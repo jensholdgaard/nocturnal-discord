@@ -53,7 +53,7 @@ Restore:
 2. `rm -rf /var/lib/nocturnal/{events,wal}`
 3. `tar -C /var/lib/nocturnal -xzf <backup>.tar.gz`
 4. `chown -R nocturnal:nocturnal /var/lib/nocturnal`
-5. `sudo -u nocturnal nocturnal --config /etc/nocturnal/nocturnal.toml --check`
+5. `sudo -u nocturnal nocturnal --config /etc/nocturnal/nocturnal.yaml --check`
 6. `systemctl start nocturnal`
 
 **RPO:** one fsynced event. A command is acknowledged only after its events are

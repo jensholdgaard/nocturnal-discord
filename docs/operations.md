@@ -9,11 +9,11 @@ test or a runbook line.
 Three layers, strictly ordered (later wins), all validated at boot with
 fail-fast errors that name the offending key:
 
-1. **Config file** — `nocturnal.toml`, path via `--config` / `NOCTURNAL_CONFIG`.
+1. **Config file** — `nocturnal.yaml` (YAML like the rest of the stack; TOML still accepted, chosen by extension), path via `--config` / `NOCTURNAL_CONFIG`.
    All operational knobs: data dir, WAL segment size, compaction cadence,
    OTLP endpoint/protocol/headers, log format/level, health bind address,
    HTTP timeouts, backup schedule. Ships with a commented example
-   (`nocturnal.example.toml`); every knob has a sane default — an empty file
+   (`nocturnal.example.yaml`); every knob has a sane default — an empty file
    is a valid config.
 2. **Environment** — `NOCTURNAL_*` overrides for every file key (12-factor,
    container-friendly), e.g. `NOCTURNAL_OTLP__ENDPOINT`. 
@@ -127,7 +127,7 @@ standard variable — are ours.
     AWS_ENDPOINT_URL_S3=https://fsn1.your-objectstorage.com   # Hetzner region
     AWS_REGION=fsn1
 
-    # nocturnal.toml
+    # nocturnal.yaml
     [archive]
     bucket = "nocturnal-ledger"
     prefix = "prod"          # optional; keeps test and prod side by side

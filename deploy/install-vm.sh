@@ -25,7 +25,7 @@ set -a; source ./.env; set +a
 
 echo "== copying artifacts =="
 "${SCP[@]}" "$BIN" "root@$VM_IP:/usr/local/bin/nocturnal.new"
-"${SCP[@]}" deploy/nocturnal.toml "root@$VM_IP:/tmp/nocturnal.toml"
+"${SCP[@]}" deploy/nocturnal.yaml "root@$VM_IP:/tmp/nocturnal.yaml"
 "${SCP[@]}" deploy/nocturnal.service "root@$VM_IP:/tmp/nocturnal.service"
 "${SCP[@]}" deploy/perses/30-nocturnal-dashboard.yaml "root@$VM_IP:/tmp/30-nocturnal-dashboard.yaml"
 tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events wal 2>/dev/null || tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events
@@ -62,7 +62,7 @@ fi
 
 # Config + secrets (root-owned; service reads via EnvironmentFile).
 mkdir -p /etc/nocturnal
-install -m 0644 /tmp/nocturnal.toml /etc/nocturnal/nocturnal.toml
+install -m 0644 /tmp/nocturnal.yaml /etc/nocturnal/nocturnal.yaml
 umask 077
 # Telemetry: the standard OpenTelemetry environment, nothing bespoke.
 cat > /etc/nocturnal/env <<EOF
@@ -78,10 +78,10 @@ install -m 0755 /usr/local/bin/nocturnal.new /usr/local/bin/nocturnal
 rm -f /usr/local/bin/nocturnal.new
 install -m 0644 /tmp/nocturnal.service /etc/systemd/system/nocturnal.service
 install -m 0644 /tmp/30-nocturnal-dashboard.yaml /etc/perses/provisioning/30-nocturnal-dashboard.yaml
-rm -f /tmp/nocturnal.toml /tmp/nocturnal.service /tmp/30-nocturnal-dashboard.yaml
+rm -f /tmp/nocturnal.yaml /tmp/nocturnal.service /tmp/30-nocturnal-dashboard.yaml
 
 # Pre-flight, then run.
-sudo -u nocturnal /usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.toml --check
+sudo -u nocturnal /usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.yaml --check
 systemctl daemon-reload
 systemctl enable --now nocturnal
 systemctl restart nocturnal
