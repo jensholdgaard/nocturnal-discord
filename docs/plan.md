@@ -87,7 +87,12 @@ replay, finish — and asserts every balance to the point.
       re-run on a **fresh backup (2026-08-20)** — 281 players, 506 raids, 787
       genesis events, all balances match (worst double-spend casualty: −237);
       deployed to the VM, standard 90-day window.
-- [ ] Backup = tar of data dir; restore test. (Trivial now; lands with M6 ops.)
+- [x] Backup = tar of data dir; restore rehearsed on the real host.
+- [x] Off-site archive: compacted Parquet mirrored to S3-compatible object
+      storage (Hetzner), write-through after local verification and
+      read-through on boot, so a fresh disk rebuilds its history from the
+      bucket. Tested against a local-filesystem object store; an unreachable
+      archive is never load-bearing.
 
 **Exit:** production data migrated on a workstation; verification report at
 100 % (or diffs explained); history queryable via DataFusion CLI for fun.

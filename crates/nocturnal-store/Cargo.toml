@@ -14,8 +14,13 @@ crc32fast.workspace = true
 arrow-array.workspace = true
 arrow-schema.workspace = true
 parquet.workspace = true
+object_store.workspace = true
+tracing.workspace = true
+tokio = { workspace = true }
+futures.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tempfile.workspace = true
 
 [lints]

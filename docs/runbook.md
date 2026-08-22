@@ -61,6 +61,15 @@ on disk, so nothing acknowledged is ever lost; anything in flight during a
 crash simply never happened. (The fsync guarantee of the host volume itself is
 verified per host — hazard B7.)
 
+## Losing the VM
+
+If the archive is configured, the ledger's compacted history is in object
+storage. Rebuilding: install on a fresh host, put the same `[archive]` bucket
+and AWS credentials in place, and start. Boot downloads every partition it is
+missing before replay. What is *not* in the archive is the current WAL tail —
+events since the last compaction — so pair this with the nightly backup
+(which does include the WAL) for a complete recovery.
+
 ## Settling a DKP dispute
 
 The ledger is greppable, which is the point:

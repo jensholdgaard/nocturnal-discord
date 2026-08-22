@@ -102,6 +102,41 @@ Telemetry names are governed, not improvised — same Weaver workflow as Ourios:
 - Generated markdown docs of the registry feed the Perses dashboard work and
   give Ourios stable attribute names to prune on.
 
+### Off-site archive (Hetzner Object Storage / any S3)
+
+Compacted Parquet partitions are immutable, so they mirror cleanly to object
+storage. The WAL stays local — it is the fsync hot path — but everything older
+than the current segment lives in two places, which is what stops the VM's
+disk being a single point of failure for guild history.
+
+* **Write-through**: a partition is uploaded only after it has been written,
+  fsynced *and verified readable* locally.
+* **Read-through on boot**: any partition the archive holds and the local disk
+  lacks is downloaded before replay, so a fresh disk (or an empty container
+  volume) rebuilds its history by itself.
+* **Never load-bearing**: an unreachable archive logs a warning and the bot
+  carries on — local history is authoritative for replay.
+
+Configuration follows the same rule as telemetry: credentials and endpoint use
+the conventional AWS variables, and only the bucket and prefix — which have no
+standard variable — are ours.
+
+    # /etc/nocturnal/env
+    AWS_ACCESS_KEY_ID=...
+    AWS_SECRET_ACCESS_KEY=...
+    AWS_ENDPOINT_URL_S3=https://fsn1.your-objectstorage.com   # Hetzner region
+    AWS_REGION=fsn1
+
+    # nocturnal.toml
+    [archive]
+    bucket = "nocturnal-ledger"
+    prefix = "prod"          # optional; keeps test and prod side by side
+
+Setting it up on Hetzner: create a bucket in the Cloud Console (Object
+Storage), generate S3 credentials, and point `AWS_ENDPOINT_URL_S3` at that
+bucket's region endpoint. Nothing else changes — with no `bucket` set the
+archive is simply off.
+
 ## Container & deployment
 
 - **Image** — multi-stage build: `rust:1.x` builder → `gcr.io/distroless/cc`

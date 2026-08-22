@@ -119,3 +119,51 @@ fn mismatched_wal_start_is_refused() {
     drop(wal);
     assert!(Store::open(dir.path()).is_err());
 }
+
+/// The archive is exercised through a local-filesystem object store: the
+/// trait is the same one the S3 client implements, so this covers the
+/// write-through and the boot-time restore without touching a network.
+#[tokio::test]
+async fn partitions_are_archived_and_restored_on_a_fresh_disk() {
+    use nocturnal_store::Archive;
+    use std::sync::Arc;
+
+    let bucket = tempfile::tempdir().unwrap();
+    let store =
+        Arc::new(object_store::local::LocalFileSystem::new_with_prefix(bucket.path()).unwrap());
+    let archive = Archive::with_store(store, "nocturnal");
+
+    // A ledger that compacts with the archive attached.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _) = Store::open_with_archive(dir.path(), Some(archive.clone())).unwrap();
+    let batch: Vec<Envelope> = (0..12).map(|i| env(i, AUG_2026)).collect();
+    s.append(&batch).unwrap();
+    s.wal().seal().unwrap();
+    let report = s.compact().unwrap();
+    assert_eq!(report.partitions_written, vec!["2026-08.parquet"]);
+    drop(s);
+
+    // It reached the archive.
+    assert_eq!(
+        archive.list_partitions().await.unwrap(),
+        vec!["2026-08.parquet"]
+    );
+
+    // A brand-new disk rebuilds its history from the archive alone.
+    let fresh = tempfile::tempdir().unwrap();
+    let (_, replayed) = Store::open_with_archive(fresh.path(), Some(archive.clone())).unwrap();
+    assert_eq!(replayed, batch, "history restored from object storage");
+
+    // An unreachable archive must never stop a boot: local history stands.
+    let broken = Archive::with_store(
+        Arc::new(
+            object_store::local::LocalFileSystem::new_with_prefix(
+                tempfile::tempdir().unwrap().path(),
+            )
+            .unwrap(),
+        ),
+        "nocturnal",
+    );
+    let (_, replayed) = Store::open_with_archive(dir.path(), Some(broken)).unwrap();
+    assert_eq!(replayed, batch);
+}

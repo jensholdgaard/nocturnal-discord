@@ -7,8 +7,10 @@
 //!
 //! Sealed segments compact into month-partitioned Parquet (`compact::Store`).
 
+pub mod archive;
 pub mod compact;
 pub mod wal;
 
+pub use archive::Archive;
 pub use compact::{CompactionReport, Store};
 pub use wal::{Wal, WalError};

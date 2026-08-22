@@ -16,6 +16,12 @@
 # http/protobuf), OTEL_EXPORTER_OTLP_HEADERS, OTEL_SERVICE_NAME,
 # OTEL_RESOURCE_ATTRIBUTES, OTEL_SDK_DISABLED. Unset endpoint = no export.
 
+[archive]                      # off-site mirror of compacted Parquet history
+# bucket = "nocturnal-ledger"  # unset = no archive
+# prefix = "prod"
+# Credentials/endpoint come from the standard AWS environment:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3, AWS_REGION
+
 [health]
 # bind = ""                    # e.g. "0.0.0.0:8080" → /healthz /readyz /metrics
 

@@ -101,9 +101,21 @@ fn now_ms() -> i64 {
 
 /// Boot: lock is already held; open the store, replay, start the writer
 /// thread. Returns the handle and the replayed event count.
+/// Boot without an archive (tests, and any deployment that keeps history
+/// only on local disk).
+#[cfg(test)]
 pub fn start(data_dir: &std::path::Path) -> anyhow::Result<(DriverHandle, usize)> {
+    start_with_archive(data_dir, None)
+}
+
+/// Boot with an off-site archive: Parquet partitions the local disk lacks are
+/// restored from object storage before replay.
+pub fn start_with_archive(
+    data_dir: &std::path::Path,
+    archive: Option<nocturnal_store::Archive>,
+) -> anyhow::Result<(DriverHandle, usize)> {
     let t0 = std::time::Instant::now();
-    let (mut store, envelopes) = Store::open(data_dir)
+    let (mut store, envelopes) = Store::open_with_archive(data_dir, archive)
         .with_context(|| format!("opening store in {}", data_dir.display()))?;
     let mut ledger = Ledger::new();
     for env in &envelopes {

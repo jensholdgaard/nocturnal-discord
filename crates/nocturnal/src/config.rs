@@ -19,7 +19,23 @@ pub struct Config {
     #[serde(default)]
     pub health: HealthConfig,
     #[serde(default)]
+    pub archive: ArchiveConfig,
+    #[serde(default)]
     pub provision: ProvisionConfig,
+}
+
+/// Off-site archive for compacted Parquet history (Hetzner Object Storage or
+/// any S3-compatible endpoint). Credentials and endpoint come from the
+/// standard AWS environment — `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+/// `AWS_ENDPOINT_URL_S3`, `AWS_REGION` — because those are the conventional
+/// names; only the bucket and prefix, which have no standard variable, live
+/// here. No bucket = no archive.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ArchiveConfig {
+    pub bucket: Option<String>,
+    #[serde(default)]
+    pub prefix: String,
 }
 
 /// dpsbot successor (M8); absent = /dpstoken and /dpsrevoke disabled.
@@ -127,6 +143,12 @@ impl Config {
         if let Ok(v) = std::env::var("NOCTURNAL_HEALTH__BIND") {
             cfg.health.bind = Some(v);
         }
+        if let Ok(v) = std::env::var("NOCTURNAL_ARCHIVE__BUCKET") {
+            cfg.archive.bucket = Some(v);
+        }
+        if let Ok(v) = std::env::var("NOCTURNAL_ARCHIVE__PREFIX") {
+            cfg.archive.prefix = v;
+        }
         if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__COMMAND_PREFIX") {
             cfg.discord.command_prefix = v;
         }
@@ -165,7 +187,7 @@ impl Config {
     /// Redacted, resolved view for `--print-config`.
     pub fn printable(&self) -> String {
         format!(
-            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\notlp = standard OTEL_* environment (endpoint: {:?}, protocol: {:?})\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
+            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\narchive.bucket = {:?} prefix = {:?}\notlp = standard OTEL_* environment (endpoint: {:?}, protocol: {:?})\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
             self.data.dir,
             self.log.level,
             self.log.format,
@@ -173,6 +195,8 @@ impl Config {
             self.discord.data_guild_id,
             self.discord.command_prefix,
             self.health.bind,
+            self.archive.bucket,
+            self.archive.prefix,
             std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok(),
             std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").ok(),
             self.provision.tokens_path,

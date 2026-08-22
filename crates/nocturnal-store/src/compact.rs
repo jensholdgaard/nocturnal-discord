@@ -52,6 +52,8 @@ pub struct CompactionReport {
 pub struct Store {
     wal: Wal,
     events_dir: PathBuf,
+    /// Optional off-site mirror of compacted partitions.
+    archive: Option<crate::Archive>,
 }
 
 impl Store {
@@ -59,9 +61,33 @@ impl Store {
     /// tail. Returns every stored envelope in sequence order and refuses any
     /// gap or overlap mismatch between the two.
     pub fn open(data_dir: impl Into<PathBuf>) -> Result<(Store, Vec<Envelope>), WalError> {
+        Self::open_with_archive(data_dir, None)
+    }
+
+    /// Open with an archive: any partition the archive holds but the local
+    /// disk lacks is restored *before* replay, so a fresh disk rebuilds
+    /// itself from object storage.
+    pub fn open_with_archive(
+        data_dir: impl Into<PathBuf>,
+        archive: Option<crate::Archive>,
+    ) -> Result<(Store, Vec<Envelope>), WalError> {
         let data_dir = data_dir.into();
         let events_dir = data_dir.join("events");
         fs::create_dir_all(&events_dir)?;
+
+        if let Some(archive) = &archive {
+            match futures::executor::block_on(archive.restore_missing(&events_dir)) {
+                Ok(names) if !names.is_empty() => {
+                    tracing::info!(count = names.len(), "restored partitions from the archive");
+                }
+                Ok(_) => {}
+                // A cold archive must never stop the bot: local history is
+                // authoritative for replay, the archive is the safety net.
+                Err(e) => {
+                    tracing::warn!(error = %e, "archive unreachable; continuing with local history")
+                }
+            }
+        }
 
         let mut envelopes = read_all_parquet(&events_dir)?;
         envelopes.sort_by_key(|e| e.seq);
@@ -88,7 +114,14 @@ impl Store {
         }
         envelopes.extend(tail);
 
-        Ok((Store { wal, events_dir }, envelopes))
+        Ok((
+            Store {
+                wal,
+                events_dir,
+                archive,
+            },
+            envelopes,
+        ))
     }
 
     pub fn wal(&mut self) -> &mut Wal {
@@ -146,6 +179,18 @@ impl Store {
                     line: 0,
                     reason: format!("read-back rows {} != written {expected_rows}", back.len()),
                 });
+            }
+            // Write-through: only a partition that verified locally is
+            // mirrored off-site.
+            if let Some(archive) = &self.archive {
+                match futures::executor::block_on(archive.put_partition(&target)) {
+                    Ok(()) => tracing::info!(partition = %name, "partition archived"),
+                    Err(e) => {
+                        // Local history is intact; the WAL segments are still
+                        // deleted because the partition is durable on disk.
+                        tracing::warn!(partition = %name, error = %e, "archive upload failed");
+                    }
+                }
             }
             report.partitions_written.push(name);
         }

@@ -57,7 +57,16 @@ fn main() -> anyhow::Result<()> {
     // One writer, ever (hazard B2). Held until exit.
     let _lock = lock::acquire(&cfg.data.dir)?;
 
-    let (driver, replayed) = driver::start(&cfg.data.dir)?;
+    let archive = match &cfg.archive.bucket {
+        Some(bucket) => {
+            let archive = nocturnal_store::Archive::s3(bucket, &cfg.archive.prefix)
+                .with_context(|| format!("configuring archive bucket {bucket}"))?;
+            tracing::info!(bucket, prefix = %cfg.archive.prefix, "compacted history is archived off-site");
+            Some(archive)
+        }
+        None => None,
+    };
+    let (driver, replayed) = driver::start_with_archive(&cfg.data.dir, archive)?;
     if mode_check {
         println!("config ok; ledger ok ({replayed} events)");
         return Ok(());
