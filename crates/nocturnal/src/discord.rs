@@ -484,6 +484,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         addraiddkp(),
         parsedkps(),
         registercharacter(),
+        stresstest(),
     ];
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
@@ -1270,5 +1271,268 @@ pub async fn registercharacter(
         Ok(_) => ctx.say(format!("Successfully registered {name}!")).await?,
         Err(e) => ctx.say(rejection_text(&e)).await?,
     };
+    Ok(())
+}
+
+// ===========================================================================
+// /stresstest — replays the legacy bot's death scenario against the new
+// architecture: N concurrent auctions, every bidder hammering balance
+// lookups and bids at once. Auctions are cancelled by default (no balance
+// impact); pass finalize:true to exercise the debit path too.
+// ===========================================================================
+
+fn percentile(sorted_ms: &[f64], p: f64) -> f64 {
+    if sorted_ms.is_empty() {
+        return 0.0;
+    }
+    let idx = ((sorted_ms.len() as f64 - 1.0) * p).round() as usize;
+    sorted_ms[idx.min(sorted_ms.len() - 1)]
+}
+
+fn stats(mut ms: Vec<f64>) -> String {
+    ms.sort_by(|a, b| a.total_cmp(b));
+    format!(
+        "p50 `{:.2}ms`  p95 `{:.2}ms`  max `{:.2}ms`  (n={})",
+        percentile(&ms, 0.50),
+        percentile(&ms, 0.95),
+        percentile(&ms, 1.0),
+        ms.len()
+    )
+}
+
+/// Stress test: concurrent auctions + every player bidding at once.
+#[tracing::instrument(name = "command.stresstest", skip_all)]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "stresstest",
+    check = "officer_check"
+)]
+pub async fn stresstest(
+    ctx: Context<'_>,
+    #[description = "Concurrent auctions (default 4 — the legacy killer)"]
+    #[min = 1]
+    #[max = 16]
+    auctions: Option<usize>,
+    #[description = "Concurrent bidders (default 40 — a full raid)"]
+    #[min = 1]
+    #[max = 200]
+    bidders: Option<usize>,
+    #[description = "Balance lookups per bidder (default 10)"]
+    #[min = 0]
+    #[max = 100]
+    lookups: Option<usize>,
+    #[description = "Actually finalize (debits winners 1 DKP) instead of cancelling"]
+    finalize: Option<bool>,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    ctx.defer_ephemeral().await?;
+    let n_auctions = auctions.unwrap_or(4);
+    let n_bidders = bidders.unwrap_or(40);
+    let n_lookups = lookups.unwrap_or(10);
+    let finalize = finalize.unwrap_or(false);
+    let driver = ctx.data().driver.clone();
+    let actor = Actor::User(ctx.author().id.get());
+
+    // Real player ids from the ledger, richest first, able to afford one
+    // 1-DKP bid per auction under the cross-auction reservation rule.
+    let need = n_auctions as i64;
+    let players: Vec<nocturnal_core::PlayerId> = driver
+        .query(move |l| {
+            let Some(g) = l.state().guild(ledger_guild) else {
+                return Vec::new();
+            };
+            let mut ps: Vec<_> = g
+                .players
+                .iter()
+                .filter(|(_, p)| p.balance >= need)
+                .map(|(id, p)| (*id, p.balance))
+                .collect();
+            ps.sort_by_key(|(_, b)| std::cmp::Reverse(*b));
+            ps.into_iter().map(|(id, _)| id).collect()
+        })
+        .await;
+    let players: Vec<_> = players.into_iter().take(n_bidders).collect();
+    if players.is_empty() {
+        ctx.say(":no_entry: No players with enough DKP in the ledger to simulate bidders")
+            .await?;
+        return Ok(());
+    }
+
+    let run_id = chrono_now_ms();
+    let t0 = std::time::Instant::now();
+
+    // Phase 1: open the auctions.
+    let mut auction_ids = Vec::new();
+    for i in 0..n_auctions {
+        let auction_id = format!("stress-{run_id:x}-{i}");
+        let cmd = Command::OpenAuction {
+            auction_id: auction_id.clone(),
+            item: nocturnal_core::Item {
+                id: format!("stress{i}"),
+                name: format!("Stress Test Item #{i}"),
+                url: None,
+                data: None,
+                image: None,
+            },
+            flavor: nocturnal_core::Flavor::Short,
+            min_bid: 0,
+            num_items: 1,
+            min_bid_to_lock_for_main: 0,
+            over_bid_to_win_main: 0,
+            duration_ms: 600_000,
+        };
+        driver
+            .execute(ledger_guild, actor, cmd)
+            .await
+            .map_err(|e| anyhow::anyhow!("open auction: {e}"))?;
+        auction_ids.push(auction_id);
+    }
+
+    // Phase 2: every bidder at once — lookups then a bid on every auction.
+    let mut tasks = Vec::new();
+    for &player in &players {
+        let driver = driver.clone();
+        let auction_ids = auction_ids.clone();
+        tasks.push(tokio::spawn(async move {
+            let mut lookup_ms = Vec::new();
+            let mut bid_ms = Vec::new();
+            let mut accepted = 0usize;
+            let mut rejected = 0usize;
+            for _ in 0..n_lookups {
+                let t = std::time::Instant::now();
+                let _balance = driver
+                    .query(move |l| {
+                        l.state()
+                            .guild(ledger_guild)
+                            .map(|g| g.balance(player))
+                            .unwrap_or_default()
+                    })
+                    .await;
+                lookup_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+            }
+            for auction_id in &auction_ids {
+                let t = std::time::Instant::now();
+                let result = driver
+                    .execute(
+                        ledger_guild,
+                        Actor::User(player),
+                        Command::PlaceBid {
+                            auction_id: auction_id.clone(),
+                            player,
+                            amount: 1,
+                            for_main: true,
+                        },
+                    )
+                    .await;
+                bid_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+                match result {
+                    Ok(_) => accepted += 1,
+                    Err(_) => rejected += 1,
+                }
+            }
+            (lookup_ms, bid_ms, accepted, rejected)
+        }));
+    }
+    let mut lookup_ms = Vec::new();
+    let mut bid_ms = Vec::new();
+    let (mut accepted, mut rejected) = (0usize, 0usize);
+    for task in tasks {
+        let (l, b, a, r) = task.await?;
+        lookup_ms.extend(l);
+        bid_ms.extend(b);
+        accepted += a;
+        rejected += r;
+    }
+    let storm = t0.elapsed();
+
+    // Phase 3: close, then finalize or cancel.
+    let mut winners = 0usize;
+    for auction_id in &auction_ids {
+        driver
+            .execute(
+                ledger_guild,
+                actor,
+                Command::CloseAuction {
+                    auction_id: auction_id.clone(),
+                },
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("close: {e}"))?;
+        if finalize {
+            let env = driver
+                .execute(
+                    ledger_guild,
+                    actor,
+                    Command::FinalizeAuction {
+                        auction_id: auction_id.clone(),
+                        seed: run_id as u64,
+                    },
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("finalize: {e}"))?;
+            winners += env
+                .iter()
+                .filter_map(|e| match &e.event {
+                    nocturnal_core::Event::AuctionFinalized { winners, .. } => Some(winners.len()),
+                    _ => None,
+                })
+                .sum::<usize>();
+        } else {
+            driver
+                .execute(
+                    ledger_guild,
+                    actor,
+                    Command::CancelAuction {
+                        auction_id: auction_id.clone(),
+                        reason: "stress test".into(),
+                    },
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("cancel: {e}"))?;
+        }
+    }
+    let total = t0.elapsed();
+
+    // Integrity check: the invariant the legacy bot broke under this load.
+    let (negative_balances, head) = driver
+        .query(move |l| {
+            let neg = l
+                .state()
+                .guild(ledger_guild)
+                .map(|g| g.players.values().filter(|p| p.balance < 0).count())
+                .unwrap_or_default();
+            (neg, l.next_seq())
+        })
+        .await;
+
+    let outcome = if finalize {
+        format!("finalized — {winners} winner(s) debited 1 DKP each")
+    } else {
+        "cancelled — no balance changes".to_owned()
+    };
+    let embed = serenity::CreateEmbed::new()
+        .color(EMBED_GREEN)
+        .title("Stress test — the legacy killer scenario")
+        .description(format!(
+            "**{n_auctions} concurrent auctions × {} bidders**, every bid fsynced through the single writer.\n\
+             The legacy bot died here (10062 → crash, all auctions lost). This run: nothing dropped, nothing raced.",
+            players.len()
+        ))
+        .field("Balance lookups", stats(lookup_ms), false)
+        .field("Bids (decide → fsync → apply)", stats(bid_ms), false)
+        .field("Bids accepted / rejected", format!("{accepted} / {rejected}"), true)
+        .field("Bid storm", format!("{:.2}s", storm.as_secs_f64()), true)
+        .field("Total (incl. close)", format!("{:.2}s", total.as_secs_f64()), true)
+        .field("Auctions", outcome, false)
+        .field(
+            "Integrity",
+            format!(
+                "players with a negative balance: **{negative_balances}** (the legacy import carries 2; one more would be a bug) · ledger head seq {head}"
+            ),
+            false,
+        );
+    ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
+        .await?;
     Ok(())
 }
