@@ -27,6 +27,7 @@ use crate::discord::{
 use crate::driver::DriverHandle;
 
 const EMBED_RED: u32 = 15_158_332;
+const EMBED_BLUE: u32 = 3_447_003;
 /// Legacy grace period: long auctions finalize 20 minutes after their deadline.
 pub const LONG_AUCTION_GRACE_MS: i64 = 20 * 60 * 1000;
 
@@ -108,49 +109,75 @@ fn bids_text(auction: &Auction) -> String {
         .join("\n")
 }
 
-/// The live (bidding) embed plus its buttons.
+/// The live (bidding) message — legacy `sendAuctionStartEmbed` /
+/// `sendLongAuctionEmbed`: short auctions are orange with a single "Auction
+/// ends" field and the three bid buttons; long auctions are blue, carry the
+/// auction id to bid against, and have no buttons at all.
 pub fn live_message(
     auction_id: &str,
     auction: &Auction,
-) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
-    let embed = item_embed(&auction.item, EMBED_ORANGE).fields([
-        (
-            "Auction ends",
-            format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
-            true,
-        ),
-        ("Minimum bid", format!("{} DKP", auction.min_bid), true),
-        ("Auction ID", format!("```{auction_id}```"), false),
-    ]);
-    let embed = if auction.num_items > 1 {
-        embed.description(format!("Top **{}** bids win.", auction.num_items))
-    } else {
-        embed
-    };
-    let row = match auction.flavor {
-        // Short auctions bid via buttons + DM (legacy UX, kept).
-        Flavor::Short => serenity::CreateActionRow::Buttons(vec![
-            serenity::CreateButton::new(custom_id(Action::Bid, auction_id))
-                .label("I want to bid")
-                .style(serenity::ButtonStyle::Primary),
-            serenity::CreateButton::new(custom_id(Action::BidAlt, auction_id))
-                .label("Bid for Alter")
-                .style(serenity::ButtonStyle::Secondary),
-            serenity::CreateButton::new(custom_id(Action::Cancel, auction_id))
-                .label("Cancel")
-                .style(serenity::ButtonStyle::Danger),
-        ]),
-        // Long auctions bid with /bid <auction id>.
-        Flavor::Long => serenity::CreateActionRow::Buttons(vec![serenity::CreateButton::new(
-            custom_id(Action::Cancel, auction_id),
-        )
-        .label("Cancel")
-        .style(serenity::ButtonStyle::Danger)]),
-    };
-    (embed, vec![row])
+) -> (
+    String,
+    serenity::CreateEmbed,
+    Vec<serenity::CreateActionRow>,
+) {
+    match auction.flavor {
+        Flavor::Short => {
+            let content = format!(
+                "Bid started - **{} DKP** minimum bid.{}",
+                auction.min_bid,
+                if auction.num_items > 1 {
+                    format!(" Top **{}** bids win", auction.num_items)
+                } else {
+                    String::new()
+                }
+            );
+            let embed = item_embed(&auction.item, EMBED_ORANGE).field(
+                "Auction ends",
+                format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
+                true,
+            );
+            let row = serenity::CreateActionRow::Buttons(vec![
+                serenity::CreateButton::new(custom_id(Action::Bid, auction_id))
+                    .label("I want to bid")
+                    .style(serenity::ButtonStyle::Primary),
+                serenity::CreateButton::new(custom_id(Action::BidAlt, auction_id))
+                    .label("Bid for Alter")
+                    .style(serenity::ButtonStyle::Secondary),
+                serenity::CreateButton::new(custom_id(Action::Cancel, auction_id))
+                    .label("Cancel")
+                    .style(serenity::ButtonStyle::Danger),
+            ]);
+            (content, embed, vec![row])
+        }
+        Flavor::Long => {
+            let content = format!(
+                "Bid started - **{} DKP** minimum bid.{}",
+                auction.min_bid,
+                if auction.num_items > 1 {
+                    format!(
+                        " Top **{}** bids win. Should end at <t:{}:f>",
+                        auction.num_items,
+                        ts_sec(auction.deadline_ts_ms)
+                    )
+                } else {
+                    String::new()
+                }
+            );
+            let embed = item_embed(&auction.item, EMBED_BLUE)
+                .field("Auction ID", format!("```{auction_id}```"), true)
+                .field(
+                    "Auction ends",
+                    format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
+                    true,
+                );
+            (content, embed, Vec::new())
+        }
+    }
 }
 
-/// Closed short auction: winners proposed, awaiting the officer's confirm.
+/// Closed short auction: winners proposed, awaiting the officer's confirm
+/// (legacy `callback` in startbid.js — bids shown anonymised).
 pub fn closed_message(
     auction_id: &str,
     auction: &Auction,
@@ -173,23 +200,55 @@ pub fn closed_message(
     (embed, rows)
 }
 
-/// Terminal states: finalized (charged) or cancelled.
+/// Terminal states. Legacy keeps the button as the status indicator: a
+/// disabled green "Winner/s Confirmed", or a disabled red "Auction Cancelled".
 pub fn settled_message(
     auction_id: &str,
     auction: &Auction,
 ) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
-    let (color, status) = match auction.status {
-        AuctionStatus::Finalized => (EMBED_GREEN, "Winner/s confirmed — DKP charged"),
-        AuctionStatus::Cancelled => (EMBED_RED, "Auction cancelled"),
-        _ => (EMBED_ORANGE, "…"),
-    };
-    let embed = item_embed(&auction.item, color).fields([
-        ("Winner/s", winners_text(&auction.winners), false),
-        ("Bids", bids_text(auction), false),
-        ("Status", status.to_owned(), true),
-        ("Auction ID", format!("```{auction_id}```"), false),
-    ]);
-    (embed, Vec::new())
+    match auction.status {
+        AuctionStatus::Cancelled => {
+            let embed = item_embed(&auction.item, EMBED_RED).field(
+                "Auction ID",
+                format!("```{auction_id}```"),
+                false,
+            );
+            let row = serenity::CreateActionRow::Buttons(vec![serenity::CreateButton::new(
+                custom_id(Action::Cancel, auction_id),
+            )
+            .label("Auction Cancelled")
+            .style(serenity::ButtonStyle::Danger)
+            .disabled(true)]);
+            (embed, vec![row])
+        }
+        _ => {
+            let mut embed = item_embed(&auction.item, EMBED_GREEN);
+            if auction.flavor == Flavor::Long {
+                embed = embed
+                    .field("Auction ID", format!("```{auction_id}```"), true)
+                    .field(
+                        "Auction ends",
+                        format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
+                        true,
+                    )
+                    .field("Winner/s", winners_text(&auction.winners), false)
+                    .field("Bids", bids_text(auction), false);
+                return (embed, Vec::new());
+            }
+            embed = embed.fields([
+                ("Winner/s", winners_text(&auction.winners), false),
+                ("Bids", bids_text(auction), false),
+                ("Auction ID", format!("```{auction_id}```"), false),
+            ]);
+            let row = serenity::CreateActionRow::Buttons(vec![serenity::CreateButton::new(
+                custom_id(Action::Confirm, auction_id),
+            )
+            .label("Winner/s Confirmed")
+            .style(serenity::ButtonStyle::Success)
+            .disabled(true)]);
+            (embed, vec![row])
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -258,15 +317,16 @@ impl AuctionUi {
         }
     }
 
-    /// Take the prompt this DM answers, if it is still live.
-    fn take_prompt(&self, user: u64, channel: u64) -> Option<PendingBid> {
-        let mut p = self.pending.lock().ok()?;
+    /// The prompt this DM answers, if it is still live. Left armed: the
+    /// caller disarms once a bid actually lands (legacy lets you retype after
+    /// a refusal instead of making you click the button again).
+    fn peek_prompt(&self, user: u64, channel: u64) -> Option<PendingBid> {
+        let p = self.pending.lock().ok()?;
         let pending = p.get(&user)?.clone();
-        if pending.dm_channel != channel {
+        if pending.dm_channel != channel || pending.expires_ms <= chrono_now_ms() {
             return None;
         }
-        p.remove(&user);
-        (pending.expires_ms > chrono_now_ms()).then_some(pending)
+        Some(pending)
     }
 }
 
@@ -293,7 +353,10 @@ pub async fn refresh(
         return;
     };
     let (embed, rows) = match auction.status {
-        AuctionStatus::Open => live_message(auction_id, &auction),
+        AuctionStatus::Open => {
+            let (_, embed, rows) = live_message(auction_id, &auction);
+            (embed, rows)
+        }
         AuctionStatus::Closed => {
             let aid = auction_id.to_owned();
             let proposed = driver
@@ -334,15 +397,7 @@ pub async fn post(
     auction_id: &str,
     auction: &Auction,
 ) -> anyhow::Result<()> {
-    let (embed, rows) = live_message(auction_id, auction);
-    let content = format!(
-        "Bid started - **{} DKP** minimum bid.{}",
-        auction.min_bid,
-        match auction.flavor {
-            Flavor::Long => format!("  Bid with `/bid auctionid:{auction_id}`"),
-            Flavor::Short => String::new(),
-        }
-    );
+    let (content, embed, rows) = live_message(auction_id, auction);
     let msg = discord_call("post auction embed", async {
         serenity::ChannelId::new(channel)
             .send_message(
@@ -907,9 +962,10 @@ async fn ack(
     interaction
         .create_response(
             ctx,
-            serenity::CreateInteractionResponse::Defer(
-                serenity::CreateInteractionResponseMessage::new().ephemeral(true),
-            ),
+            // Legacy `i.deferUpdate()`: acknowledge without showing anything.
+            // Ephemeral follow-ups are sent only when there is something to
+            // say (a refusal, a DM failure).
+            serenity::CreateInteractionResponse::Acknowledge,
         )
         .await
         .context("deferring component interaction")
@@ -949,14 +1005,13 @@ async fn dm_bid_flow(
     let user = interaction.user.id;
     let player: PlayerId = user.get();
     let aid = auction_id.to_owned();
-    let (item_name, deadline_ts_ms) = data
+    let item_name = data
         .driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
-                .and_then(|g| g.auctions.get(&aid))
-                .map(|a| (a.item.name.clone(), a.deadline_ts_ms))
-                .unwrap_or_else(|| ("the item".to_owned(), 0))
+                .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
+                .unwrap_or_else(|| "the item".to_owned())
         })
         .await;
 
@@ -982,9 +1037,10 @@ async fn dm_bid_flow(
             auction_id: auction_id.to_owned(),
             for_main,
             dm_channel: dm.id.get(),
-            // The window is the auction's own life, plus a few seconds so a
-            // reply sent at the bell still reaches the ledger to be judged.
-            expires_ms: deadline_ts_ms + 5_000,
+            // Legacy: a fixed 60-second DM collector from the click. A reply
+            // after the auction closed is refused by the ledger with a clear
+            // message, which is more useful than silence.
+            expires_ms: chrono_now_ms() + 60_000,
         },
     );
     if !armed {
@@ -1000,9 +1056,8 @@ async fn dm_bid_flow(
         dm.say(
             ctx,
             format!(
-                "How much do you want to `{}` bid on **{item_name}**? Reply with a number (0 to cancel).\nBidding closes <t:{}:R>.",
-                if for_main { "MAIN" } else { "ALT" },
-                ts_sec(deadline_ts_ms)
+                "How much do you want to `{}` bid on {item_name}?, 0 to cancel",
+                if for_main { "MAIN" } else { "ALT" }
             ),
         )
         .await
@@ -1068,7 +1123,7 @@ pub async fn resolve_dm_bid(
     channel: u64,
     content: &str,
 ) -> Option<(String, Option<String>)> {
-    let pending = data.auctions.take_prompt(player, channel)?;
+    let pending = data.auctions.peek_prompt(player, channel)?;
     let raw = content.trim().to_owned();
     tracing::info!(
         player,
@@ -1079,17 +1134,6 @@ pub async fn resolve_dm_bid(
 
     // A DM has no guild, so the ledger guild is the configured one.
     let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
-    let aid = pending.auction_id.clone();
-    let item_name = data
-        .driver
-        .query(move |l| {
-            l.state()
-                .guild(ledger_guild)
-                .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
-        })
-        .await
-        .unwrap_or_else(|| "the item".to_owned());
-
     let Ok(amount) = raw.parse::<i64>() else {
         return Some((
             format!("`{raw}` is not a number — click the button again to retry."),
@@ -1116,10 +1160,7 @@ pub async fn resolve_dm_bid(
         .await;
     let text = match &outcome {
         Ok(_) if amount == 0 => "Bid cancelled".to_owned(),
-        Ok(_) => format!(
-            "Bid placed: **{amount}** DKP as {} on {item_name}",
-            if pending.for_main { "MAIN" } else { "ALT" }
-        ),
+        Ok(_) => "Bid placed".to_owned(),
         Err(e) => rejection_text(e),
     };
     tracing::info!(
@@ -1129,6 +1170,11 @@ pub async fn resolve_dm_bid(
         accepted = outcome.is_ok(),
         "DM bid resolved"
     );
+    // Legacy keeps the DM collector open until a bid lands or is cancelled,
+    // so a typo or a refusal just means "type another number".
+    if outcome.is_ok() {
+        data.auctions.disarm_prompt(player);
+    }
     let refresh_id = outcome.is_ok().then(|| pending.auction_id.clone());
     Some((text, refresh_id))
 }
@@ -1323,7 +1369,8 @@ mod tests {
     /// is no way to bid at all.
     #[test]
     fn live_short_auction_has_bid_buttons() {
-        let (_, rows) = live_message("au-1", &sample_auction(Flavor::Short));
+        let (content, _, rows) = live_message("au-1", &sample_auction(Flavor::Short));
+        assert!(content.contains("**5 DKP** minimum bid"), "{content}");
         let json = serde_json::to_value(&rows).expect("rows serialize");
         let ids: Vec<String> = json[0]["components"]
             .as_array()
@@ -1338,18 +1385,14 @@ mod tests {
         );
     }
 
-    /// Long auctions bid via /bid, so they only carry Cancel.
+    /// Long auctions are bid on with /bid and carry no buttons at all.
     #[test]
-    fn live_long_auction_has_only_cancel() {
-        let (_, rows) = live_message("au-2", &sample_auction(Flavor::Long));
-        let json = serde_json::to_value(&rows).expect("rows serialize");
-        let ids: Vec<String> = json[0]["components"]
-            .as_array()
-            .expect("button row")
-            .iter()
-            .map(|b| b["custom_id"].as_str().unwrap_or_default().to_owned())
-            .collect();
-        assert_eq!(ids, vec!["nb:cancel:au-2"]);
+    fn live_long_auction_has_no_buttons() {
+        let (_, _, rows) = live_message("au-2", &sample_auction(Flavor::Long));
+        assert!(
+            rows.is_empty(),
+            "long auctions are bid on with /bid and carry no buttons, like the legacy embed"
+        );
     }
 
     /// A closed auction with proposed winners offers exactly one Confirm.
@@ -1389,16 +1432,19 @@ mod tests {
         // Second click while one is open does not stack (audit #39).
         assert!(!ui.arm_prompt(7, bid("au-2", future)));
         // A reply from the wrong channel is not an answer to this prompt.
-        assert!(ui.take_prompt(7, 12345).is_none());
+        assert!(ui.peek_prompt(7, 12345).is_none());
         // The right one resolves to the auction it was asked for (audit #50).
-        let taken = ui.take_prompt(7, 99).expect("prompt");
-        assert_eq!(taken.auction_id, "au-1");
-        // …and only once.
-        assert!(ui.take_prompt(7, 99).is_none());
+        let seen = ui.peek_prompt(7, 99).expect("prompt");
+        assert_eq!(seen.auction_id, "au-1");
+        // It stays armed so a refused bid can simply be retyped (legacy), and
+        // is gone once the bid lands.
+        assert!(ui.peek_prompt(7, 99).is_some());
+        ui.disarm_prompt(7);
+        assert!(ui.peek_prompt(7, 99).is_none());
 
-        // An answer after the auction ended is not applied.
+        // An answer after the window closed is not applied.
         assert!(ui.arm_prompt(8, bid("au-3", crate::discord::chrono_now_ms() - 1)));
-        assert!(ui.take_prompt(8, 99).is_none());
+        assert!(ui.peek_prompt(8, 99).is_none());
     }
 
     /// End to end over a real ledger and WAL, minus Discord: arm a prompt the
@@ -1483,7 +1529,7 @@ mod tests {
         let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, " 50 ")
             .await
             .expect("prompt answered");
-        assert!(text.contains("Bid placed"), "{text}");
+        assert_eq!(text, "Bid placed");
         assert_eq!(refresh.as_deref(), Some("au-1"));
         let bids = driver
             .query(|l| {
@@ -1496,20 +1542,23 @@ mod tests {
         assert_eq!(bids.len(), 1);
         assert_eq!(bids[0].amount, 50);
 
-        // Overspending explains itself instead of silently failing.
+        // Overspending explains itself, and — as in the legacy collector —
+        // the prompt stays open so the bidder can just type a smaller number.
         assert!(arm("au-1"));
         let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, "500")
             .await
             .expect("answered");
         assert!(text.contains("greater than your current DKP"), "{text}");
         assert!(refresh.is_none());
-
-        // Garbage is answered, not swallowed.
-        assert!(arm("au-1"));
         let (text, _) = resolve_dm_bid(&data, PLAYER, DM, "abc")
             .await
-            .expect("answered");
+            .expect("prompt still armed after a refusal");
         assert!(text.contains("not a number"), "{text}");
+        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, "20")
+            .await
+            .expect("retry lands");
+        assert_eq!(text, "Bid placed");
+        assert_eq!(refresh.as_deref(), Some("au-1"));
 
         // 0 retracts.
         assert!(arm("au-1"));
