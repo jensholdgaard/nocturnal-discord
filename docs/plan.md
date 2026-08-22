@@ -187,7 +187,11 @@ policy-blocked).
 - [x] Docker image (distroless, static musl binary, non-root, read-only
       rootfs, `/data` volume) + compose stack; backup script with verification
       and retention, plus a nightly systemd timer.
-- [ ] fsync behaviour verified on the actual host volume (B7).
+- [x] fsync verified on the actual host volume (B7: ext4, p50 1.54 ms — real
+      flushes) and the **restore rehearsed**: last night's backup extracted to
+      a scratch dir and replayed clean at 3,897 events, live ledger untouched.
+      The attempt also re-demonstrated B2 — the instance lock refused a second
+      writer against the live directory.
 - [x] Item-info lookup (`crates/nocturnal/src/items.rs`): pqdi.cc (Quarm) +
       takproject allaclone (TAKP), 5 s timeouts, URL-encoded queries, status
       checks, null-safe parsing, permanent in-memory cache — audit #42/E12
