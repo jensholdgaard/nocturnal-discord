@@ -161,9 +161,13 @@ live mock night.)*
 - [x] `/auctiondetails` (with the legacy public "peek" callout).
 - [ ] Bell sound at short-auction start — needs the voice stack; deliberately
       deferred as its own slice (decorative, strictly fire-and-forget).
-- [ ] Chaos suite: N overlapping auctions + raid ticks + kill -9 at random
-      points → resume, finish, verify every invariant. (`/stresstest` already
-      drives the load half of this.)
+- [x] Chaos suite (`nocturnal-store/tests/chaos.rs`): 25 seeded scenarios of
+      overlapping auctions + raid ticks with kill -9 at random points,
+      including torn WAL tails, asserting no negative balances, at most one
+      active raid, every reported charge present exactly once (never twice,
+      never missing), no duplicated ticks, and replay determinism. Plus a
+      torn-write test proving an interrupted append is all-or-nothing.
+      (`/stresstest` drives the load half against live Discord.)
 
 **Exit:** the "anatomy of a typical crash" scenario from the audit is replayed
 step by step against the new bot and is boring.
