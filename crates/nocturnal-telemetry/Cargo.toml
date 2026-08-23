@@ -23,3 +23,5 @@ workspace = true
 [dev-dependencies]
 temp-env = "0.3"
 tokio = { workspace = true }
+# InMemoryLogExporter (the log-processor tests) lives behind "testing".
+opentelemetry_sdk = { workspace = true, features = ["testing"] }

@@ -14,7 +14,7 @@ use opentelemetry::metrics::{Counter, Gauge, Histogram};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::logs::{BatchLogProcessor, LogProcessor, SdkLogRecord, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::{BatchSpanProcessor, SdkTracerProvider, SpanData, SpanProcessor};
 use opentelemetry_sdk::Resource;
@@ -159,6 +159,52 @@ impl<P: SpanProcessor> SpanProcessor for RedactSpans<P> {
     }
 }
 
+/// Log processor decorator that gives every record a `Timestamp`.
+///
+/// A `tracing` event carries no timestamp of its own, so the appender fills in
+/// only `ObservedTimestamp` and leaves `Timestamp` unset — which serialises as
+/// 0 on the wire. Backends are entitled to sort by it, and then every line the
+/// bot ever logged sits at the Unix epoch. Stamping the observed time here
+/// (the moment the event was emitted, in-process) is both the closest true
+/// value and the one the OTLP spec nominates as the fallback.
+#[derive(Debug)]
+struct StampLogs<P>(P);
+
+impl<P: LogProcessor> LogProcessor for StampLogs<P> {
+    fn emit(&self, data: &mut SdkLogRecord, instrumentation: &opentelemetry::InstrumentationScope) {
+        if data.timestamp().is_none() {
+            use opentelemetry::logs::LogRecord as _;
+            let observed = data
+                .observed_timestamp()
+                .unwrap_or_else(std::time::SystemTime::now);
+            data.set_timestamp(observed);
+        }
+        self.0.emit(data, instrumentation);
+    }
+
+    fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.force_flush()
+    }
+
+    fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.shutdown()
+    }
+
+    fn shutdown_with_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.shutdown_with_timeout(timeout)
+    }
+
+    /// MUST delegate, for the same reason [`RedactSpans::set_resource`] must:
+    /// this is how the SDK hands the Resource down, and swallowing it ships
+    /// records with no service.name.
+    fn set_resource(&mut self, resource: &Resource) {
+        self.0.set_resource(resource);
+    }
+}
+
 /// Install the global tracing subscriber (fmt + OTLP layers) and the global
 /// meter provider. Call once, early; hold the guard until exit.
 pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
@@ -214,7 +260,7 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
     )
     .context("building OTLP log exporter")?;
     let logger_provider = SdkLoggerProvider::builder()
-        .with_batch_exporter(log_exporter)
+        .with_log_processor(StampLogs(BatchLogProcessor::builder(log_exporter).build()))
         .with_resource(resource.clone())
         .build();
     let otel_log_layer =
@@ -341,8 +387,39 @@ impl Default for Metrics {
 
 #[cfg(test)]
 mod tests {
-    use super::{export_targets, safe_attribute, use_http, RedactSpans};
+    use super::{export_targets, safe_attribute, use_http, RedactSpans, StampLogs};
     use tracing::Level;
+
+    /// A `tracing` event has no timestamp of its own, so records reach the
+    /// exporter with `Timestamp` unset and serialise as 0 — every log line
+    /// lands at the Unix epoch in any backend that sorts by it. Observed in
+    /// production against the log store.
+    #[test]
+    fn stamp_wrapper_fills_in_the_missing_timestamp() {
+        use opentelemetry::logs::{Logger as _, LoggerProvider as _};
+        use opentelemetry_sdk::logs::{InMemoryLogExporter, SdkLoggerProvider, SimpleLogProcessor};
+
+        let exporter = InMemoryLogExporter::default();
+        let provider = SdkLoggerProvider::builder()
+            .with_log_processor(StampLogs(SimpleLogProcessor::new(exporter.clone())))
+            .build();
+
+        let logger = provider.logger("test");
+        // Emitted exactly as the appender does it: observed time only.
+        logger.emit(logger.create_log_record());
+
+        let emitted = exporter.get_emitted_logs().expect("emitted logs");
+        let record = &emitted.first().expect("one record").record;
+        assert!(
+            record.timestamp().is_some(),
+            "record left the processor with no Timestamp; it would export as 0"
+        );
+        assert_eq!(
+            record.timestamp(),
+            record.observed_timestamp(),
+            "the fallback must be the observed time, not a later re-stamp"
+        );
+    }
 
     /// The redaction wrapper must delegate *every* hook — a missed
     /// `set_resource` silently strips service.name from exported spans.

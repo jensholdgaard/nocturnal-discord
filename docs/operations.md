@@ -86,6 +86,35 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
   connected + WAL writable), `/metrics`. Used by Docker `HEALTHCHECK` and any
   future orchestrator.
 
+### The log backend (Ourios)
+
+Logs land in Ourios, queryable from the same Perses project as the metrics and
+traces. The path, and the three things that surprise people about it:
+
+    bot --OTLP/http--> eq-gateway :4319 --otlphttp/ourios--> receiver :4318
+        --publish--> Parquet --> querier :4320 --HTTPProxy--> Perses panel
+
+- **The tenant is named out of band** (RFC 0046, Ourios **0.8.0**). The
+  collector sets `x-ourios-tenant: nocturnal` on the export, and the Perses
+  datasource sends the same name on every query. Resource attributes describe
+  the producer; they never choose the tenant. 0.7.0 derived the tenant from
+  `service.name` instead — that model was wrong, and 0.8.0 is the fix. Keep
+  the header, `OTEL_SERVICE_NAME`, and the datasource's `tenant` in step.
+- **Records are ~5 minutes behind.** A partition flushes when it is big enough
+  or when its oldest buffered record exceeds `SINK_MAX_BUFFER_AGE` (300s),
+  swept every 30s. At the bot's volume it is always the age trigger, so a
+  quiet bot's logs take ~5 minutes to appear. An empty panel right after an
+  incident means *wait*, not *broken* — `journalctl -u nocturnal` is the
+  real-time view.
+- **Upgrading past 0.8.0 needs a drained WAL.** Pre-RFC-0046 WAL frames carry
+  no tenant and 0.8.0 refuses to replay them (loudly, at startup, rather than
+  guessing a tenant). Let the old version publish everything to Parquet first,
+  then start the new one on a fresh `OURIOS_WAL_ROOT`. Published Parquet is
+  unaffected and stays queryable across the upgrade.
+
+The querier binds **4320** here, not the documented 4319 — the eq-gateway
+collector already owns 4319 on this host.
+
 ### Semantic conventions (`semconv/`)
 
 Telemetry names are governed, not improvised — same Weaver workflow as Ourios:
