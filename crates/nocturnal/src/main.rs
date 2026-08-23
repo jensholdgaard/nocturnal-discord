@@ -136,7 +136,10 @@ fn bell_test(target: &str) -> anyhow::Result<()> {
 
         tracing::info!(guild, channel, "joining voice channel");
         let call = voice
-            .join(serenity::GuildId::new(guild), serenity::ChannelId::new(channel))
+            .join(
+                serenity::GuildId::new(guild),
+                serenity::ChannelId::new(channel),
+            )
             .await
             .context("join voice channel")?;
         tracing::info!("joined; playing the bell");

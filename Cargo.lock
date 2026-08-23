@@ -2453,6 +2453,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "temp-env",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",

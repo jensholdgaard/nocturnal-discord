@@ -1,0 +1,35 @@
+# Ourios: the log backend for the bot's OTLP logs. The path is
+#   bot --(OTLP/http, standard OTEL_* env)--> eq-gateway collector
+#        --(otlphttp/ourios)--> ourios receiver :4318
+#        --(compaction, ~30s)--> Parquet --> querier :4320
+#
+# Port 4320, not the documented 4319: 4319 already belongs to the eq-gateway
+# collector on this host.
+#
+# `tenant` becomes the x-ourios-tenant header on every query. The deployed
+# server derives the tenant from the record's service.name, which for this bot
+# is OTEL_SERVICE_NAME=nocturnal — so the two names must stay in step.
+apiVersion: perses.dev/v1alpha1
+kind: Datasource
+metadata:
+  name: ourios
+  project: nocturnal
+spec:
+  display:
+    name: Ourios (logs)
+  default: false
+  plugin:
+    kind: OuriosDatasource
+    spec:
+      tenant: nocturnal
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://127.0.0.1:4320
+          allowedEndpoints:
+            # The DSL query endpoint (RFC 0016) — every panel goes through here.
+            - endpointPattern: /v1/query
+              method: POST
+            # Optional: lights up field/severity suggestions in the query editor.
+            - endpointPattern: /mcp
+              method: POST

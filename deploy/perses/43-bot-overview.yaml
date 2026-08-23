@@ -221,6 +221,29 @@ spec:
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m])))
                 seriesNameFormat: delay p95 (s)
+    logs:
+      kind: Panel
+      spec:
+        display:
+          name: Bot logs
+          description: >-
+            The bot's own OTLP logs, stored in Ourios. Only our crates are
+            exported (the allowlist keeps third-party spans and their
+            credentials out — hazard B13), so this is the bot talking, not
+            serenity. Records become queryable one compaction behind, ~30s.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: severity >= info
     traces:
       kind: Panel
       spec:
@@ -337,3 +360,16 @@ spec:
         height: 10
         content:
           $ref: '#/spec/panels/traces'
+  - kind: Grid
+    spec:
+      display:
+        title: Logs
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 12
+        content:
+          $ref: '#/spec/panels/logs'
