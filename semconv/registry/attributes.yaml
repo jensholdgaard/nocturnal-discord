@@ -152,7 +152,10 @@ groups:
     stability: development
     brief: Upstream OTel process/system attributes the bot reports about itself.
     attributes:
-      - id: process.cpu.state
+      # `cpu.mode`, NOT `process.cpu.state`: upstream unified every
+      # `*.cpu.state` attribute into one shared `cpu.mode`
+      # (semantic-conventions#1139), and `process.cpu.state` is deprecated.
+      - id: cpu.mode
         type:
           members:
             - id: user
@@ -162,7 +165,7 @@ groups:
               value: 'system'
               stability: development
         stability: development
-        brief: Whether CPU time was spent in user or kernel mode.
+        brief: The mode of the CPU. `process.cpu.time` requires this attribute.
       - id: system.filesystem.state
         type:
           members:
@@ -179,3 +182,260 @@ groups:
         stability: development
         brief: Mount point of the filesystem holding the event store.
         examples: ['/var/lib/nocturnal']
+
+  # Log-event attributes. Until now these were bare `tracing` field names —
+  # `guild_id`, `count`, `error` — which broke three rules at once: OTel says
+  # names SHOULD be namespaced with a dot delimiter, SHOULD be precise rather
+  # than ambiguous (`security_rule`, not `rule`), and application-specific
+  # names SHOULD carry the application's own prefix. Bare `guild_id` also
+  # meant the same concept had two names, since the span beside it already
+  # carried `nocturnal.guild.id`, so a query on the registry name silently
+  # missed every log line.
+  - id: registry.nocturnal.log
+    type: attribute_group
+    display_name: Nocturnal Log Attributes
+    stability: development
+    brief: Attributes carried on the bot's log records.
+    attributes:
+      - id: nocturnal.error.message
+        type: string
+        stability: development
+        brief: >
+          Human-readable detail of a failure. Domain-specific by design:
+          upstream `error.message` is deprecated in favour of exactly this
+          pattern, and `error.type` is reserved for a low-cardinality class.
+        examples: ['wal io: No space left on device']
+      - id: nocturnal.player.id
+        type: int
+        stability: development
+        brief: >
+          Discord snowflake of a player. Logs and spans only — the metric
+          cardinality rule keeps player ids off every instrument.
+        examples: [181234567890123456]
+      - id: nocturnal.bid.amount
+        type: int
+        stability: development
+        brief: DKP offered in a bid.
+        examples: [45]
+      - id: nocturnal.bid.for_main
+        type: boolean
+        stability: development
+        brief: Whether the bid was placed for the player's main character.
+      - id: nocturnal.bid.accepted
+        type: boolean
+        stability: development
+        brief: Whether a DM bid was accepted by the ledger.
+      - id: nocturnal.bid.reply.length
+        type: int
+        stability: development
+        brief: Character length of a DM bid reply, logged instead of its content.
+        examples: [3]
+      - id: nocturnal.raid.name
+        type: string
+        stability: development
+        brief: Officer-facing raid name.
+        examples: ['Plane of Time']
+      - id: nocturnal.raid.event_id
+        type: string
+        stability: development
+        brief: RaidHelper event this raid is linked to.
+        examples: ['1387261697530']
+      - id: nocturnal.raid.tick.player.count
+        type: int
+        stability: development
+        brief: Players present in the raid voice channels when a tick was awarded.
+        examples: [42]
+      - id: nocturnal.raid.award.summary
+        type: string
+        stability: development
+        brief: Human-readable summary of a RaidHelper-driven award.
+        examples: ['12 players, 3 DKP each']
+      - id: nocturnal.auction.timer.action
+        type:
+          members:
+            - id: closed
+              value: 'closed'
+              stability: development
+            - id: finalized
+              value: 'finalized'
+              stability: development
+        stability: development
+        brief: What the scheduler's auction timer did when it fired.
+      - id: nocturnal.auction.open.count
+        type: int
+        stability: development
+        brief: Auctions still open in the ledger, re-posted after a restart (hazard B11).
+        examples: [3]
+      - id: nocturnal.discord.user.id
+        type: int
+        stability: development
+        brief: Discord snowflake of the user who caused an interaction.
+        examples: [181234567890123456]
+      - id: nocturnal.discord.user.name
+        type: string
+        stability: development
+        brief: Bot account name reported by the gateway at ready.
+        examples: ['controels-test-bot']
+      - id: nocturnal.discord.channel.id
+        type: int
+        stability: development
+        brief: Discord channel snowflake.
+        examples: [1229365001513467954]
+      - id: nocturnal.discord.custom_id
+        type: string
+        stability: development
+        brief: Component custom id carried by a button or modal interaction.
+        examples: ['1540111927995539506bid']
+      - id: nocturnal.discord.message.length
+        type: int
+        stability: development
+        brief: Character length of a received direct message, logged instead of its content.
+        examples: [12]
+      - id: nocturnal.discord.ratelimit.delay
+        type: double
+        stability: development
+        brief: Seconds the client waited to respect a Discord rate-limit bucket.
+        examples: [0.75]
+      - id: nocturnal.guild.remap.from
+        type: int
+        stability: development
+        brief: Registration guild whose interactions are served from another guild's ledger.
+        examples: [1540111927995539506]
+      - id: nocturnal.guild.remap.to
+        type: int
+        stability: development
+        brief: Ledger guild actually served for a remapped registration guild.
+        examples: [1169758926825324645]
+      - id: nocturnal.replay.event.count
+        type: int
+        stability: development
+        brief: Events replayed from the store at boot.
+        examples: [13686]
+      - id: nocturnal.replay.duration
+        type: string
+        stability: development
+        brief: Wall-clock time the boot replay took.
+        examples: ['1.827698021s']
+      - id: nocturnal.compaction.event.count
+        type: int
+        stability: development
+        brief: Events moved from sealed WAL segments into Parquet by one run.
+        examples: [3248]
+      - id: nocturnal.compaction.partitions
+        type: string[]
+        stability: development
+        brief: Parquet partitions a compaction run wrote. Plural and an array — it is many entities, not a measurement.
+        examples: [['2026-08.parquet']]
+      - id: nocturnal.compaction.segments_deleted
+        type: int
+        stability: development
+        brief: WAL segments deleted after their events were durable in Parquet.
+        examples: [2]
+      - id: nocturnal.compaction.interval
+        type: int
+        stability: development
+        brief: Configured seconds between automatic compaction runs.
+        examples: [86400]
+      - id: nocturnal.archive.bucket
+        type: string
+        stability: development
+        brief: Object-storage bucket mirroring compacted history.
+        examples: ['nocturnal-ledger']
+      - id: nocturnal.archive.prefix
+        type: string
+        stability: development
+        brief: Key prefix within the archive bucket.
+        examples: ['prod']
+      - id: nocturnal.archive.partitions_restored
+        type: int
+        stability: development
+        brief: Partitions pulled back from the archive because local disk lacked them.
+        examples: [4]
+      - id: nocturnal.health.bind
+        type: string
+        stability: development
+        brief: Address the health endpoints listen on.
+        examples: ['127.0.0.1:8090']
+      - id: nocturnal.bell.state
+        type: string
+        stability: development
+        brief: Playback state of the auction bell track.
+        examples: ['Play', 'Stop']
+      - id: nocturnal.bell.position
+        type: double
+        stability: development
+        brief: Seconds into the bell track.
+        examples: [0.5]
+      - id: nocturnal.bell.played
+        type: double
+        stability: development
+        brief: Seconds of the bell track actually played.
+        examples: [1.25]
+      - id: nocturnal.stresstest.auction.count
+        type: int
+        stability: development
+        brief: Concurrent auctions the stress test drives.
+        examples: [16]
+      - id: nocturnal.stresstest.bidder.count
+        type: int
+        stability: development
+        brief: Concurrent bidders the stress test drives.
+        examples: [200]
+      - id: nocturnal.stresstest.lookup.count
+        type: int
+        stability: development
+        brief: Balance lookups per bidder during the stress test.
+        examples: [100]
+      - id: nocturnal.stresstest.accepted.count
+        type: int
+        stability: development
+        brief: Bids the ledger accepted during the storm.
+        examples: [3200]
+      - id: nocturnal.stresstest.rejected.count
+        type: int
+        stability: development
+        brief: Bids the ledger refused during the storm.
+        examples: [0]
+      - id: nocturnal.stresstest.duration
+        type: string
+        stability: development
+        brief: Wall-clock time the bid storm took.
+        examples: ['19.651969534s']
+      - id: nocturnal.telemetry.endpoint
+        type: string
+        stability: development
+        brief: >
+          Resolved OTLP endpoint, echoed once at startup. Named under
+          `nocturnal.*` rather than `otel.*`, which is reserved to the
+          OpenTelemetry specification.
+        examples: ['http://127.0.0.1:4319']
+      - id: nocturnal.telemetry.protocol
+        type: string
+        stability: development
+        brief: Resolved OTLP protocol, echoed once at startup.
+        examples: ['http/protobuf']
+
+  # Upstream conventions reused verbatim rather than reinvented under
+  # `nocturnal.*` — the naming guidance is explicit that existing semantic
+  # conventions should be consulted first.
+  - id: registry.nocturnal.upstream
+    type: attribute_group
+    display_name: Upstream Attributes Reused
+    stability: development
+    brief: Standard OpenTelemetry attributes the bot emits on its own logs.
+    attributes:
+      - id: http.request.method
+        type: string
+        stability: development
+        brief: HTTP method of a Discord REST request the rate limiter delayed.
+        examples: ['POST', 'PATCH']
+      - id: url.path
+        type: string
+        stability: development
+        brief: Route path of a Discord REST request the rate limiter delayed.
+        examples: ['/channels/123/messages']
+      - id: file.path
+        type: string
+        stability: development
+        brief: Filesystem path of an override bell sound that could not be read.
+        examples: ['/etc/nocturnal/bell.mp3']

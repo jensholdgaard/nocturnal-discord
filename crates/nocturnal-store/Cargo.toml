@@ -9,6 +9,10 @@ rust-version.workspace = true
 
 [dependencies]
 nocturnal-core = { path = "../nocturnal-core" }
+# Attribute *names* only. The store still instruments nothing itself — it
+# emits plain `tracing` events — but their field names come from the registry
+# like every other name in this workspace, so a typo is a compile error.
+nocturnal-telemetry = { path = "../nocturnal-telemetry" }
 serde_json.workspace = true
 crc32fast.workspace = true
 arrow-array.workspace = true

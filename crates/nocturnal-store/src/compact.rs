@@ -19,6 +19,7 @@ use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 
 use nocturnal_core::Envelope;
+use nocturnal_telemetry::attr;
 
 use crate::wal::{Wal, WalError};
 
@@ -83,13 +84,19 @@ impl Store {
         if let Some(archive) = &archive {
             match futures::executor::block_on(archive.restore_missing(&events_dir)) {
                 Ok(names) if !names.is_empty() => {
-                    tracing::info!(count = names.len(), "restored partitions from the archive");
+                    tracing::info!(
+                        { attr::NOCTURNAL_ARCHIVE_PARTITIONS_RESTORED } = names.len(),
+                        "restored partitions from the archive"
+                    );
                 }
                 Ok(_) => {}
                 // A cold archive must never stop the bot: local history is
                 // authoritative for replay, the archive is the safety net.
                 Err(e) => {
-                    tracing::warn!(error = %e, "archive unreachable; continuing with local history")
+                    tracing::warn!(
+                        { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                        "archive unreachable; continuing with local history"
+                    )
                 }
             }
         }
@@ -189,7 +196,9 @@ impl Store {
             // mirrored off-site.
             if let Some(archive) = &self.archive {
                 match futures::executor::block_on(archive.put_partition(&target)) {
-                    Ok(()) => tracing::info!(partition = %name, "partition archived"),
+                    Ok(()) => {
+                        tracing::info!({ attr::NOCTURNAL_COMPACTION_PARTITION } = %name, "partition archived")
+                    }
                     Err(e) => {
                         // Local history is intact; the WAL segments are still
                         // deleted because the partition is durable on disk.

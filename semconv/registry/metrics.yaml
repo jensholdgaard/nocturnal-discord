@@ -172,7 +172,7 @@ groups:
     instrument: counter
     unit: s
     attributes:
-      - ref: process.cpu.state
+      - ref: cpu.mode
   - id: metric.process.memory.usage
     type: metric
     metric_name: process.memory.usage

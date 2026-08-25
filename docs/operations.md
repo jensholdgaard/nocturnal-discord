@@ -216,6 +216,51 @@ traces. The path, and the three things that surprise people about it:
 The querier binds **4320** here, not the documented 4319 — the eq-gateway
 collector already owns 4319 on this host.
 
+### Attribute naming
+
+Every attribute name — on metrics, spans **and log records** — is declared in
+`semconv/` and reaches the code as a generated constant, so a typo is a compile
+error rather than an empty panel. Log records were the gap: until 2026-08-25
+they carried bare `tracing` field names (`guild_id`, `count`, `error`,
+`accepted`), which broke three of OpenTelemetry's naming rules at once —
+names SHOULD be namespaced with a dot delimiter, SHOULD be precise rather than
+ambiguous (upstream's own example: `security_rule`, not `rule`), and
+application-specific names SHOULD carry the application's prefix.
+
+It was not only untidy. `ledger.execute` spans already carried
+`nocturnal.guild.id` while the log line beside them said `guild_id`, so the
+same concept had two names and a query on the registry name silently missed
+every log record.
+
+The rules we follow, from [OTel's naming guidance][naming]:
+
+- Ours are prefixed `nocturnal.*` — our application name, which does not
+  collide with an existing semconv namespace. We never prefix our own
+  attributes with someone else's namespace (`otel.*` is reserved outright).
+- Lowercase, dot-delimited namespaces, `snake_case` *within* one component,
+  following `{object}.{property}`.
+- Where upstream already defines the concept we use theirs verbatim rather
+  than reinventing it: `http.request.method`, `url.path`, `file.path`,
+  `cpu.mode`, `system.filesystem.state`, `service.name`.
+- Precise, never ambiguous. `count` became
+  `nocturnal.auction.open.count` and `nocturnal.archive.partitions_restored`;
+  `user` split into `nocturnal.discord.user.id` and `.user.name`; `path`
+  split into `url.path` (a Discord REST route) and `file.path` (a bell
+  sound) — these were genuinely different things sharing a name.
+- Failures use `nocturnal.error.message`, not `error.message`: upstream
+  deprecated the latter in favour of exactly this domain-specific pattern,
+  and reserved `error.type` for a low-cardinality error *class*.
+- Plural plus an array type only when it really is many entities
+  (`nocturnal.compaction.partitions`); counts take a `.count` suffix.
+
+Note `cpu.mode` in that list: `process.cpu.state` is **deprecated** upstream,
+which unified every `*.cpu.state` into one shared `cpu.mode`.
+
+Records written before this change keep their old bare names in Parquet —
+history is not rewritten — so a query spanning the cutover may need both.
+
+[naming]: https://opentelemetry.io/docs/specs/semconv/general/naming/
+
 ### Semantic conventions (`semconv/`)
 
 Telemetry names are governed, not improvised — same Weaver workflow as Ourios:

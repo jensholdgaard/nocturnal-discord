@@ -121,7 +121,9 @@ fn sample_gauges(store: &nocturnal_store::Store, ledger: &Ledger, metrics: &Metr
     match store.wal_bytes() {
         Ok(bytes) => metrics.wal_size.record(bytes, &[]),
         // Never fatal: a stat failure must not take the writer down.
-        Err(e) => tracing::debug!(error = %e, "could not measure the WAL"),
+        Err(e) => {
+            tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "could not measure the WAL")
+        }
     }
     let mut short = 0u64;
     let mut long = 0u64;
@@ -187,7 +189,11 @@ pub fn start_with_archive(
         ledger.replay(env);
     }
     let replayed = envelopes.len();
-    tracing::info!(events = replayed, elapsed = ?t0.elapsed(), "ledger replayed");
+    tracing::info!(
+        { attr::NOCTURNAL_REPLAY_EVENT_COUNT } = replayed,
+        { attr::NOCTURNAL_REPLAY_DURATION } = ?t0.elapsed(),
+        "ledger replayed"
+    );
 
     let (tx, mut rx) = mpsc::channel::<Request>(256);
     std::thread::Builder::new()
@@ -235,9 +241,9 @@ pub fn start_with_archive(
                                     );
                                 }
                                 tracing::info!(
-                                    events = report.events_moved,
-                                    partitions = ?report.partitions_written,
-                                    segments_deleted = report.segments_deleted,
+                                    { attr::NOCTURNAL_COMPACTION_EVENT_COUNT } = report.events_moved,
+                                    { attr::NOCTURNAL_COMPACTION_PARTITIONS } = ?report.partitions_written,
+                                    { attr::NOCTURNAL_COMPACTION_SEGMENTS_DELETED } = report.segments_deleted,
                                     "compacted sealed WAL segments into Parquet"
                                 );
                                 Ok(report)
@@ -252,7 +258,10 @@ pub fn start_with_archive(
                                         "error",
                                     )],
                                 );
-                                tracing::error!(error = %e, "compaction failed; the WAL was not drained");
+                                tracing::error!(
+                                    { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                                    "compaction failed; the WAL was not drained"
+                                );
                                 Err(e.to_string())
                             }
                         };
@@ -339,7 +348,7 @@ pub fn start_with_archive(
                                     Err(e) => {
                                         span.record(attr::NOCTURNAL_DECISION_OUTCOME, "error");
                                         span.record("otel.status_code", "ERROR");
-                                        tracing::error!(error = %e, "WAL append failed; command dropped");
+                                        tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "WAL append failed; command dropped");
                                         metrics.record_command(
                                             command_kind,
                                             "error",

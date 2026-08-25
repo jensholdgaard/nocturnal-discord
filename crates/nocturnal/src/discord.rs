@@ -2,6 +2,7 @@
 //! errors contained, command registration scoped to the test guild.
 //! Embed formats port the legacy bot's output so officers see what they know.
 
+use nocturnal_telemetry::attr;
 use std::time::Duration;
 
 use tracing::Instrument as _;
@@ -535,12 +536,15 @@ async fn on_event(
     if let serenity::FullEvent::Message { new_message } = event {
         if new_message.guild_id.is_none() && !new_message.author.bot {
             tracing::info!(
-                user = new_message.author.id.get(),
-                len = new_message.content.len(),
+                { attr::NOCTURNAL_DISCORD_USER_ID } = new_message.author.id.get(),
+                { attr::NOCTURNAL_DISCORD_MESSAGE_LENGTH } = new_message.content.len(),
                 "direct message received"
             );
             if let Err(e) = crate::auctions::handle_dm(ctx, new_message, data).await {
-                tracing::warn!(error = format!("{e:#}"), "DM bid handler failed");
+                tracing::warn!(
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                    "DM bid handler failed"
+                );
             }
         }
     }
@@ -549,14 +553,17 @@ async fn on_event(
             // Diagnostic: proves component clicks reach us at all, and shows
             // the id we were handed if dispatch ever stops matching.
             tracing::info!(
-                custom_id = %component.data.custom_id,
-                user = component.user.id.get(),
+                { attr::NOCTURNAL_DISCORD_CUSTOM_ID } = %component.data.custom_id,
+                { attr::NOCTURNAL_DISCORD_USER_ID } = component.user.id.get(),
                 "component interaction received"
             );
             if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
                 // `{:#}` prints the whole anyhow chain — the outermost context
                 // alone hid the real cause of a failed component reply.
-                tracing::warn!(error = format!("{e:#}"), "auction component handler failed");
+                tracing::warn!(
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                    "auction component handler failed"
+                );
             }
         }
     }
@@ -566,12 +573,14 @@ async fn on_event(
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
         poise::FrameworkError::Command { error, ctx, .. } => {
-            tracing::warn!(command = ctx.command().name, error = %error, "command error");
+            tracing::warn!({ attr::NOCTURNAL_COMMAND } = ctx.command().name,
+                { attr::NOCTURNAL_ERROR_MESSAGE } = %error,
+                "command error");
             let _ = ctx.say(format!(":no_entry: {error}")).await;
         }
         other => {
             if let Err(e) = poise::builtins::on_error(other).await {
-                tracing::error!(error = %e, "error handler failed");
+                tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "error handler failed");
             }
         }
     }
@@ -623,8 +632,8 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     let data_guild = cfg.discord.data_guild_id.map(|to| (guild_id, to));
     if let Some((from, to)) = data_guild {
         tracing::info!(
-            from,
-            to,
+            { attr::NOCTURNAL_GUILD_REMAP_FROM } = from,
+            { attr::NOCTURNAL_GUILD_REMAP_TO } = to,
             "serving remapped ledger guild for the test server"
         );
     }
@@ -638,7 +647,11 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     serenity::GuildId::new(guild_id),
                 )
                 .await?;
-                tracing::info!(user = %ready.user.name, guild_id, "gateway ready, commands registered");
+                tracing::info!(
+                    { attr::NOCTURNAL_DISCORD_USER_NAME } = %ready.user.name,
+                    { attr::NOCTURNAL_GUILD_ID } = guild_id,
+                    "gateway ready, commands registered"
+                );
                 readiness.set_ready();
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
@@ -679,10 +692,10 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     if let Some(ratelimiter) = http.ratelimiter.as_mut() {
         ratelimiter.set_ratelimit_callback(Box::new(move |info| {
             tracing::warn!(
-                path = ?info.path,
-                method = ?info.method,
-                timeout_ms = info.timeout.as_millis() as u64,
-                global = info.global,
+                { attr::URL_PATH } = ?info.path,
+                { attr::HTTP_REQUEST_METHOD } = ?info.method,
+                { attr::NOCTURNAL_DISCORD_RATELIMIT_DELAY } = info.timeout.as_secs_f64(),
+                { attr::NOCTURNAL_DISCORD_RATELIMIT_GLOBAL } = info.global,
                 "discord request delayed by rate limiter"
             );
             let attrs = [opentelemetry::KeyValue::new(
@@ -843,7 +856,7 @@ async fn send_log_embed(ctx: &Context<'_>, embed: serenity::CreateEmbed) {
         })
         .await
         {
-            tracing::warn!(error = %e, "log channel embed failed");
+            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "log channel embed failed");
         }
     }
 }
@@ -1152,7 +1165,10 @@ pub async fn startraid(
             }
             Ok(None) => {}
             // A RaidHelper hiccup must never stop a raid starting.
-            Err(e) => tracing::warn!(error = %e, "raid-helper lookup failed; starting unlinked"),
+            Err(e) => tracing::warn!(
+                { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                "raid-helper lookup failed; starting unlinked"
+            ),
         }
     }
     let name = name.unwrap_or_else(|| format!("<t:{}:D>", chrono_now_ms() / 1000));
@@ -1319,9 +1335,18 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
         .await;
     if let Some((event_id, dkp)) = linked {
         match award_raidhelper_event(&ctx, &raid_id, &event_id, dkp).await {
-            Ok(summary) => tracing::info!(raid_id, event_id, %summary, "raid event DKP awarded"),
+            Ok(summary) => tracing::info!(
+                { attr::NOCTURNAL_RAID_ID } = raid_id,
+                { attr::NOCTURNAL_RAID_EVENT_ID } = event_id,
+                { attr::NOCTURNAL_RAID_AWARD_SUMMARY } = %summary,
+                "raid event DKP awarded"
+            ),
             Err(e) => {
-                tracing::warn!(raid_id, error = %e, "raid event DKP failed; raid still ended")
+                tracing::warn!(
+                    { attr::NOCTURNAL_RAID_ID } = raid_id,
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                    "raid event DKP failed; raid still ended"
+                )
             }
         }
     }
@@ -1546,7 +1571,7 @@ pub async fn parsedkps(
         )
         .await
     {
-        tracing::warn!(error = %e, "parsedkps embed failed");
+        tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "parsedkps embed failed");
     }
     ctx.say(format!("Parsed {} characters", parsed.characters.len()))
         .await?;
@@ -1690,9 +1715,9 @@ pub async fn stresstest(
 
     let run_id = chrono_now_ms();
     tracing::info!(
-        n_auctions,
-        n_bidders = players.len(),
-        n_lookups,
+        { attr::NOCTURNAL_STRESSTEST_AUCTION_COUNT } = n_auctions,
+        { attr::NOCTURNAL_STRESSTEST_BIDDER_COUNT } = players.len(),
+        { attr::NOCTURNAL_STRESSTEST_LOOKUP_COUNT } = n_lookups,
         "stresstest: starting"
     );
     // Phase 0: real item lookups, exactly like the legacy /startbid hot path
@@ -1825,7 +1850,7 @@ pub async fn stresstest(
                         .await;
                         edit_ms.push(t.elapsed().as_secs_f64() * 1000.0);
                         if let Err(e) = result {
-                            tracing::warn!(error = %e, "stress edit failed");
+                            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "stress edit failed");
                         }
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
@@ -1896,7 +1921,12 @@ pub async fn stresstest(
         rejected += r;
     }
     let storm = t0.elapsed();
-    tracing::info!(accepted, rejected, elapsed = ?storm, "stresstest: bid storm done");
+    tracing::info!(
+        { attr::NOCTURNAL_STRESSTEST_ACCEPTED_COUNT } = accepted,
+        { attr::NOCTURNAL_STRESSTEST_REJECTED_COUNT } = rejected,
+        { attr::NOCTURNAL_STRESSTEST_DURATION } = ?storm,
+        "stresstest: bid storm done"
+    );
     editing.store(false, std::sync::atomic::Ordering::Release);
     let edit_ms = editor.await?;
 
@@ -2066,7 +2096,7 @@ pub async fn searchitem(
     let outcome = match ctx.data().items.search(&search, db).await {
         Ok(o) => o,
         Err(e) => {
-            tracing::warn!(error = %e, "item search failed");
+            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "item search failed");
             ctx.say(format!(":no_entry: Item lookup failed: {e}"))
                 .await?;
             return Ok(());

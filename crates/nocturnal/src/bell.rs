@@ -10,6 +10,7 @@
 //! deploy, no fetch on the hot path, and no failure mode between "auction
 //! starts" and "bell rings". A path in config overrides it.
 
+use nocturnal_telemetry::attr;
 use std::time::Duration;
 
 use poise::serenity_prelude as serenity;
@@ -31,7 +32,8 @@ fn sound(path: Option<&std::path::Path>) -> Input {
         Some(p) => match std::fs::read(p) {
             Ok(bytes) => Input::from(bytes),
             Err(e) => {
-                tracing::warn!(path = %p.display(), error = %e, "bell file unreadable; using the built-in sound");
+                tracing::warn!({ attr::FILE_PATH } = %p.display(),
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = %e, "bell file unreadable; using the built-in sound");
                 Input::from(BELL)
             }
         },
@@ -61,7 +63,9 @@ pub fn ring(
             .await
             {
                 Ok(Ok(())) => tracing::info!("bell rung"),
-                Ok(Err(e)) => tracing::info!(error = %e, "bell skipped"),
+                Ok(Err(e)) => {
+                    tracing::info!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "bell skipped")
+                }
                 Err(_) => tracing::warn!("bell timed out"),
             }
             // Always hand the channel back, however the attempt went.
@@ -110,9 +114,9 @@ async fn play_in(
             Ok(info) => {
                 if started.elapsed() > Duration::from_secs(8) {
                     tracing::warn!(
-                        mode = ?info.playing,
-                        position_ms = info.position.as_millis() as u64,
-                        played_ms = info.play_time.as_millis() as u64,
+                        { attr::NOCTURNAL_BELL_STATE } = ?info.playing,
+                        { attr::NOCTURNAL_BELL_POSITION } = info.position.as_secs_f64(),
+                        { attr::NOCTURNAL_BELL_PLAYED } = info.play_time.as_secs_f64(),
                         "bell still not finished; leaving anyway"
                     );
                     break;

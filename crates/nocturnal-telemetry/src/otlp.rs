@@ -285,8 +285,10 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
         .init();
 
     tracing::info!(
-        endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default(),
-        protocol = std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").unwrap_or_default(),
+        { crate::attr::NOCTURNAL_TELEMETRY_ENDPOINT } =
+            std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default(),
+        { crate::attr::NOCTURNAL_TELEMETRY_PROTOCOL } =
+            std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").unwrap_or_default(),
         "OTLP export enabled (configured by OTEL_* environment)"
     );
 

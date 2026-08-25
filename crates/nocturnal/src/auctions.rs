@@ -9,6 +9,7 @@
 //! The only in-memory state is a message registry (auction → posted embed),
 //! which is presentation, not truth: on boot, open auctions re-post.
 
+use nocturnal_telemetry::attr;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -385,7 +386,11 @@ pub async fn refresh(
     })
     .await;
     if let Err(e) = result {
-        tracing::warn!(auction_id, error = %e, "auction embed refresh failed");
+        tracing::warn!(
+            { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+            { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+            "auction embed refresh failed"
+        );
     }
 }
 
@@ -447,12 +452,16 @@ pub async fn repost_open_auctions(
         return;
     }
     tracing::info!(
-        count = open.len(),
+        { attr::NOCTURNAL_AUCTION_OPEN_COUNT } = open.len(),
         "re-posting auctions that survived the restart"
     );
     for (id, auction, channel) in open {
         if let Err(e) = post(http, ui, channel, &id, &auction).await {
-            tracing::warn!(auction_id = %id, error = %e, "re-post failed");
+            tracing::warn!(
+                { attr::NOCTURNAL_AUCTION_ID } = %id,
+                { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                "re-post failed"
+            );
         }
     }
 }
@@ -475,7 +484,7 @@ async fn pick_item(
     let outcome = match ctx.data().items.search(search, db).await {
         Ok(o) => o,
         Err(e) => {
-            tracing::warn!(error = %e, "item search failed");
+            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "item search failed");
             ctx.say(format!(":no_entry: Item lookup failed: {e}"))
                 .await?;
             return Ok(None);
@@ -676,7 +685,10 @@ async fn open_auction(
                 )
                 .await?;
             }
-            tracing::info!(auction_id, "auction opened");
+            tracing::info!(
+                { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+                "auction opened"
+            );
             // The bell, as officers know it: both raid channels, right after
             // the auction embed goes up. Decorative and never fatal.
             if flavor == Flavor::Short && ctx.data().bell.enabled {
@@ -1044,7 +1056,11 @@ async fn dm_bid_flow(
     let dm = match user.create_dm_channel(ctx).await {
         Ok(dm) => dm,
         Err(e) => {
-            tracing::info!(player, error = %e, "DM channel unavailable; ephemeral fallback");
+            tracing::info!(
+                { attr::NOCTURNAL_PLAYER_ID } = player,
+                { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                "DM channel unavailable; ephemeral fallback"
+            );
             return reply(
                 ctx,
                 interaction,
@@ -1091,7 +1107,11 @@ async fn dm_bid_flow(
     .await;
     if let Err(e) = prompt {
         data.auctions.disarm_prompt(player);
-        tracing::info!(player, error = %e, "DM send failed; ephemeral fallback");
+        tracing::info!(
+            { attr::NOCTURNAL_PLAYER_ID } = player,
+            { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+            "DM send failed; ephemeral fallback"
+        );
         return reply(
             ctx,
             interaction,
@@ -1100,9 +1120,9 @@ async fn dm_bid_flow(
         .await;
     }
     tracing::info!(
-        player,
-        auction_id,
-        for_main,
+        { attr::NOCTURNAL_PLAYER_ID } = player,
+        { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+        { attr::NOCTURNAL_BID_FOR_MAIN } = for_main,
         "DM bid prompt sent; awaiting reply"
     );
     reply(ctx, interaction, "Sent — check your DMs. 📨").await
@@ -1123,7 +1143,11 @@ pub async fn handle_dm(
         return Ok(()); // not answering a prompt of ours
     };
     if let Err(e) = message.channel_id.say(ctx, &text).await {
-        tracing::warn!(player, error = %e, "could not confirm bid in DM");
+        tracing::warn!(
+            { attr::NOCTURNAL_PLAYER_ID } = player,
+            { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+            "could not confirm bid in DM"
+        );
     }
     if let Some(auction_id) = refresh_id {
         let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
@@ -1152,9 +1176,9 @@ pub async fn resolve_dm_bid(
     let pending = data.auctions.peek_prompt(player, channel)?;
     let raw = content.trim().to_owned();
     tracing::info!(
-        player,
-        auction_id = %pending.auction_id,
-        len = raw.len(),
+        { attr::NOCTURNAL_PLAYER_ID } = player,
+        { attr::NOCTURNAL_AUCTION_ID } = %pending.auction_id,
+        { attr::NOCTURNAL_BID_REPLY_LENGTH } = raw.len(),
         "DM bid reply received"
     );
 
@@ -1190,10 +1214,10 @@ pub async fn resolve_dm_bid(
         Err(e) => rejection_text(e),
     };
     tracing::info!(
-        player,
-        auction_id = %pending.auction_id,
-        amount,
-        accepted = outcome.is_ok(),
+        { attr::NOCTURNAL_PLAYER_ID } = player,
+        { attr::NOCTURNAL_AUCTION_ID } = %pending.auction_id,
+        { attr::NOCTURNAL_BID_AMOUNT } = amount,
+        { attr::NOCTURNAL_BID_ACCEPTED } = outcome.is_ok(),
         "DM bid resolved"
     );
     // Legacy keeps the DM collector open until a bid lands or is cancelled,

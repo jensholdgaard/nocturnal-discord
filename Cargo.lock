@@ -2435,6 +2435,7 @@ dependencies = [
  "crc32fast",
  "futures",
  "nocturnal-core",
+ "nocturnal-telemetry",
  "object_store",
  "parquet",
  "serde_json",

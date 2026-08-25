@@ -21,7 +21,10 @@ impl Readiness {
 
 pub fn serve(bind: &str, readiness: Readiness) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind)?;
-    tracing::info!(bind, "health endpoints up");
+    tracing::info!(
+        { nocturnal_telemetry::attr::NOCTURNAL_HEALTH_BIND } = bind,
+        "health endpoints up"
+    );
     std::thread::Builder::new()
         .name("health".into())
         .spawn(move || {

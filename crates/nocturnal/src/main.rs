@@ -16,6 +16,7 @@ mod scheduler;
 
 use anyhow::Context as _;
 use config::Config;
+use nocturnal_telemetry::attr;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -71,7 +72,11 @@ fn main() -> anyhow::Result<()> {
         Some(bucket) => {
             let archive = nocturnal_store::Archive::s3(bucket, &cfg.archive.prefix)
                 .with_context(|| format!("configuring archive bucket {bucket}"))?;
-            tracing::info!(bucket, prefix = %cfg.archive.prefix, "compacted history is archived off-site");
+            tracing::info!(
+                { attr::NOCTURNAL_ARCHIVE_BUCKET } = bucket,
+                { attr::NOCTURNAL_ARCHIVE_PREFIX } = %cfg.archive.prefix,
+                "compacted history is archived off-site"
+            );
             Some(archive)
         }
         None => None,
@@ -86,7 +91,7 @@ fn main() -> anyhow::Result<()> {
         let driver = driver.clone();
         let period = std::time::Duration::from_secs(secs.max(60));
         tracing::info!(
-            interval_secs = period.as_secs(),
+            { attr::NOCTURNAL_COMPACTION_INTERVAL } = period.as_secs(),
             "automatic compaction enabled"
         );
         rt.spawn(async move {
@@ -99,7 +104,7 @@ fn main() -> anyhow::Result<()> {
                 if let Err(e) = driver.compact().await {
                     // Already counted and logged by the writer; a failed run
                     // is never fatal, the next one retries from a clean state.
-                    tracing::warn!(error = %e, "scheduled compaction failed");
+                    tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "scheduled compaction failed");
                 }
             }
         });
@@ -112,7 +117,7 @@ fn main() -> anyhow::Result<()> {
 
     if offline {
         tracing::info!(
-            replayed,
+            { attr::NOCTURNAL_REPLAY_EVENT_COUNT } = replayed,
             "offline mode: ledger up, no gateway; ctrl-c to exit"
         );
         readiness.set_ready();
@@ -160,7 +165,11 @@ fn bell_test(target: &str) -> anyhow::Result<()> {
         // Give the gateway a moment to come up and cache the guild.
         tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 
-        tracing::info!(guild, channel, "joining voice channel");
+        tracing::info!(
+            { attr::NOCTURNAL_GUILD_ID } = guild,
+            { attr::NOCTURNAL_DISCORD_CHANNEL_ID } = channel,
+            "joining voice channel"
+        );
         let call = voice
             .join(
                 serenity::GuildId::new(guild),
@@ -183,9 +192,9 @@ fn bell_test(target: &str) -> anyhow::Result<()> {
             match track.get_info().await {
                 Ok(info) => {
                     tracing::info!(
-                        mode = ?info.playing,
-                        position_ms = info.position.as_millis() as u64,
-                        played_ms = info.play_time.as_millis() as u64,
+                        { attr::NOCTURNAL_BELL_STATE } = ?info.playing,
+                        { attr::NOCTURNAL_BELL_POSITION } = info.position.as_secs_f64(),
+                        { attr::NOCTURNAL_BELL_PLAYED } = info.play_time.as_secs_f64(),
                         "track state"
                     );
                     if info.playing.is_done() {
@@ -193,7 +202,7 @@ fn bell_test(target: &str) -> anyhow::Result<()> {
                     }
                 }
                 Err(e) => {
-                    tracing::info!(error = ?e, "track handle gone");
+                    tracing::info!({ attr::NOCTURNAL_ERROR_MESSAGE } = ?e, "track handle gone");
                     break;
                 }
             }

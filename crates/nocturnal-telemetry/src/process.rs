@@ -44,14 +44,8 @@ impl ProcessMetrics {
             .with_unit("s")
             .with_callback(|observer| {
                 if let Some(stat) = read_stat() {
-                    observer.observe(
-                        stat.utime_s,
-                        &[KeyValue::new(attr::PROCESS_CPU_STATE, "user")],
-                    );
-                    observer.observe(
-                        stat.stime_s,
-                        &[KeyValue::new(attr::PROCESS_CPU_STATE, "system")],
-                    );
+                    observer.observe(stat.utime_s, &[KeyValue::new(attr::CPU_MODE, "user")]);
+                    observer.observe(stat.stime_s, &[KeyValue::new(attr::CPU_MODE, "system")]);
                 }
             })
             .build();

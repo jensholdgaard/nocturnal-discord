@@ -3,6 +3,7 @@
 //! due-ness — a rejected `TickTooSoon` is the normal quiet case, so missed
 //! cycles, restarts, and double-fires are all self-correcting.
 
+use nocturnal_telemetry::attr;
 use std::time::Duration;
 
 use nocturnal_core::event::Flavor;
@@ -67,10 +68,10 @@ pub async fn run(s: Scheduler) {
         heartbeat.add(1, &[]);
         if let Err(e) = cycle(&s).await {
             // Side-effect failures are logged and never fatal (audit #3/#8).
-            tracing::warn!(error = %e, "scheduler cycle error");
+            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "scheduler cycle error");
         }
         if let Err(e) = auction_cycle(&s).await {
-            tracing::warn!(error = %e, "auction cycle error");
+            tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "auction cycle error");
         }
     }
 }
@@ -125,7 +126,9 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
             if let Some(due_ms) = due_ms {
                 record_drift("raid_tick", due_ms);
             }
-            tracing::info!(players = players.len(), raid = %name, "raid tick awarded");
+            tracing::info!({ attr::NOCTURNAL_RAID_TICK_PLAYER_COUNT } = players.len(),
+                { attr::NOCTURNAL_RAID_NAME } = %name,
+                "raid tick awarded");
             if let Some(log_channel) = log_channel {
                 let embed = raid_embed(
                     EMBED_BLUE_TICK,
@@ -139,7 +142,9 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
                         .await
                 })
                 .await
-                .map_err(|e| tracing::warn!(error = %e, "tick embed failed"));
+                .map_err(
+                    |e| tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "tick embed failed"),
+                );
             }
         }
         Err(ExecError::Rejected(_)) => { /* not due yet — the normal case */ }
@@ -202,9 +207,10 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
             Ok(_) => {
                 record_drift("auction", due_ms);
                 tracing::info!(
-                    auction_id,
-                    ?flavor,
-                    action = if finalize { "finalized" } else { "closed" },
+                    { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+                    { attr::NOCTURNAL_AUCTION_FLAVOR } = ?flavor,
+                    { attr::NOCTURNAL_AUCTION_TIMER_ACTION } =
+                        if finalize { "finalized" } else { "closed" },
                     "auction timer fired"
                 );
             }
