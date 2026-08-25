@@ -273,4 +273,21 @@ impl Wal {
     pub fn current_segment(&self) -> &Path {
         &self.path
     }
+
+    /// Total bytes across every segment on disk, sealed and active.
+    ///
+    /// This is what has not yet reached Parquet, so it is both the compaction
+    /// backlog and the disk the WAL is consuming. Reading the directory keeps
+    /// it honest across restarts, where the in-memory `bytes` counter only
+    /// knows about the active segment.
+    pub fn size_bytes(&self) -> Result<u64, WalError> {
+        let mut total = 0;
+        for entry in fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            if entry.path().extension().is_some_and(|e| e == SEGMENT_EXT) {
+                total += entry.metadata()?.len();
+            }
+        }
+        Ok(total)
+    }
 }

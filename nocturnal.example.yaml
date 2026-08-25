@@ -27,6 +27,13 @@ bell:                        # the auction bell, as officers know it
   enabled: true
   # path: /etc/nocturnal/bell.mp3   # optional; the sound is embedded otherwise
 
+compaction:                  # roll sealed WAL segments into Parquet on a timer
+  # interval_secs: 86400     # nightly. Unset (the default) = never: the WAL
+                             # only ever grows, and nocturnal.wal.size is the
+                             # gauge that says how much disk runway is left.
+                             # Runs on the writer thread, so commands queue
+                             # behind one; the interval is floored at 60s.
+
 archive:                     # off-site mirror of compacted Parquet history
   # bucket: nocturnal-ledger # unset = no archive
   prefix: ""

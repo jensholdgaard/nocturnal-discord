@@ -2452,6 +2452,7 @@ dependencies = [
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "rustix",
  "temp-env",
  "tokio",
  "tracing",

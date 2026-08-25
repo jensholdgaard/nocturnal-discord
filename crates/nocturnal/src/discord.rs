@@ -58,7 +58,7 @@ pub async fn playerdkp(
     #[description = "The player"] player: Option<serenity::User>,
 ) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let target: PlayerId = player.map_or(ctx.author().id.get(), |u| u.id.get());
     let balance = ctx
         .data()
@@ -84,7 +84,7 @@ pub async fn dkphistory(
     #[description = "The player"] player: Option<serenity::User>,
 ) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let user = player.unwrap_or_else(|| ctx.author().clone());
     let target = user.id.get();
     let log: Vec<LogEntry> = ctx
@@ -178,7 +178,7 @@ fn history_lines(log: &[LogEntry]) -> Vec<String> {
 #[tracing::instrument(name = "command.listplayersdkps", skip_all, fields(otel.kind = "server"))]
 pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let caller = ctx.author().id.get();
     let now_ms = chrono_now_ms();
 
@@ -317,7 +317,7 @@ pub async fn searchlogs(
     #[description = "Search term"] search: String,
 ) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     if search.to_lowercase().contains("tick") {
         ctx.say("DKP - bot scowls at you. What do you want your tombstone to say?")
             .await?;
@@ -453,6 +453,76 @@ pub fn chrono_now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock after 1970");
     d.as_millis() as i64
+}
+
+/// Discord's epoch, 2015-01-01T00:00:00Z, in milliseconds.
+const DISCORD_EPOCH_MS: i64 = 1_420_070_400_000;
+
+/// The instant Discord *created* an interaction, decoded from its snowflake.
+///
+/// This is the baseline that matters: the three-second acknowledgment
+/// deadline runs from creation, not from the moment the event reaches us, so
+/// timing from a local `Instant` would silently exclude the gateway hop —
+/// exactly the part that goes wrong first under load. Reading the id
+/// arithmetically also keeps this independent of whether serenity was built
+/// against `chrono` or `time`.
+fn snowflake_ms(id: u64) -> i64 {
+    (id >> 22) as i64 + DISCORD_EPOCH_MS
+}
+
+fn record_ack(created_ms: i64, kind: &'static str) {
+    let elapsed = (chrono_now_ms() - created_ms) as f64 / 1000.0;
+    // A clock that stepped backwards would otherwise post a negative sample
+    // and poison the histogram's sum for the whole collection interval.
+    if elapsed < 0.0 {
+        return;
+    }
+    nocturnal_telemetry::metrics().ack_duration.record(
+        elapsed,
+        &[opentelemetry::KeyValue::new(
+            nocturnal_telemetry::attr::NOCTURNAL_INTERACTION_KIND,
+            kind,
+        )],
+    );
+}
+
+/// Acknowledge a slash command, timed against Discord's own clock.
+///
+/// Every command defers before doing work — the legacy bot's habit of
+/// answering inline is what made the 3-second window a recurring outage — so
+/// this is the one place the acknowledgment latency can be measured.
+pub async fn ack(ctx: &Context<'_>) -> Result<(), serenity::Error> {
+    let result = ctx.defer().await;
+    if let poise::Context::Application(app) = ctx {
+        record_ack(snowflake_ms(app.interaction.id.get()), "command");
+    }
+    result
+}
+
+/// As [`ack`], for the ephemeral replies most commands use.
+pub async fn ack_ephemeral(ctx: &Context<'_>) -> Result<(), serenity::Error> {
+    let result = ctx.defer_ephemeral().await;
+    if let poise::Context::Application(app) = ctx {
+        record_ack(snowflake_ms(app.interaction.id.get()), "command");
+    }
+    result
+}
+
+/// Acknowledge a button press. Buttons share the same 3-second deadline and
+/// are the hot path during a bid storm, so they are timed too.
+pub async fn ack_component(
+    ctx: &serenity::Context,
+    press: &serenity::ComponentInteraction,
+) -> Result<(), serenity::Error> {
+    let result = press.defer(ctx).await;
+    record_component_ack(press.id.get());
+    result
+}
+
+/// Time a button acknowledgment that was sent some other way (the auction
+/// embeds answer with `Acknowledge` rather than `defer`).
+pub fn record_component_ack(interaction_id: u64) {
+    record_ack(snowflake_ms(interaction_id), "button");
 }
 
 /// Gateway events we handle outside the command framework: auction buttons.
@@ -925,7 +995,7 @@ pub async fn configure(
     #[min = 0]
     raidhelpereventdkp: Option<i64>,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     if raidchannel.id == secondraidchannel.as_ref().map(|c| c.id).unwrap_or_default() {
         ctx.say(":no_entry: Raid channel and second raid channel must be different")
             .await?;
@@ -964,7 +1034,7 @@ pub async fn configure(
 )]
 pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let cfg = ctx
         .data()
         .driver
@@ -1034,7 +1104,7 @@ pub async fn startraid(
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let (raid_channel, second_channel, cfg_tick_ms) = ctx
         .data()
         .driver
@@ -1126,7 +1196,7 @@ pub async fn startraid(
 pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let (raid_channel, second_channel) = ctx
         .data()
         .driver
@@ -1284,7 +1354,7 @@ pub async fn adddkp(
     dkp: i64,
     #[description = "Reason"] comment: String,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    crate::discord::ack(&ctx).await?;
     let cmd = Command::AdjustDkp {
         player: player.id.get(),
         delta: dkp,
@@ -1315,7 +1385,7 @@ pub async fn removedkp(
     dkp: i64,
     #[description = "Reason"] comment: String,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    crate::discord::ack(&ctx).await?;
     let cmd = Command::AdjustDkp {
         player: player.id.get(),
         delta: -dkp,
@@ -1352,7 +1422,7 @@ pub async fn addraiddkp(
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let raid_channel = ctx
         .data()
         .driver
@@ -1424,7 +1494,7 @@ pub async fn parsedkps(
     #[description = "The /who log to parse"] log: String,
 ) -> Result<(), Error> {
     let _ = raid; // the active raid attaches automatically (fixes audit E10)
-    ctx.defer().await?;
+    crate::discord::ack(&ctx).await?;
     let parsed = nocturnal_core::who::parse_who(&log);
     let mut errors: Vec<String> = Vec::new();
     for character in &parsed.characters {
@@ -1490,7 +1560,7 @@ pub async fn registercharacter(
     ctx: Context<'_>,
     #[description = "The character name"] name: String,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let cmd = Command::LinkCharacter {
         player: ctx.author().id.get(),
         character: name.clone(),
@@ -1571,7 +1641,7 @@ pub async fn stresstest(
     #[description = "Delete the auction messages afterwards"] cleanup: Option<bool>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let n_auctions = auctions.unwrap_or(4);
     let n_bidders = bidders.unwrap_or(40);
     let n_lookups = lookups.unwrap_or(10);
@@ -1987,7 +2057,7 @@ pub async fn searchitem(
     #[description = "Item name or id"] search: String,
     #[description = "quarm | takp (default quarm)"] database: Option<String>,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    crate::discord::ack(&ctx).await?;
     let Some(db) = crate::items::Database::parse(database.as_deref().unwrap_or("quarm")) else {
         ctx.say("Invalid database option. Must be quarm or takp")
             .await?;
@@ -2075,7 +2145,7 @@ pub async fn searchitem(
                 return Ok(());
             };
             let id = press.data.custom_id[format!("{ctx_id}item").len()..].to_owned();
-            press.defer(ctx.serenity_context()).await?;
+            crate::discord::ack_component(ctx.serenity_context(), &press).await?;
             match ctx.data().items.by_id(&id, db).await {
                 Ok(Some(item)) => {
                     msg.edit(
@@ -2235,7 +2305,7 @@ pub async fn addraideventdkp(
     #[description = "Raid ID"] raidid: String,
     #[description = "Event ID"] eventid: String,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     match award_raidhelper_event(&ctx, &raidid, &eventid, dkp).await {
         Ok(summary) => {
             ctx.say(format!("Raid event DKP applied — {summary}"))
@@ -2256,7 +2326,7 @@ pub async fn belltest(
     channel: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let configured = ctx
         .data()
         .driver
@@ -2306,4 +2376,29 @@ pub async fn belltest(
     ))
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod ack_tests {
+    use super::{snowflake_ms, DISCORD_EPOCH_MS};
+
+    /// The acknowledgment histogram is only as good as this arithmetic, and a
+    /// wrong shift or epoch fails silently — it still yields a plausible-looking
+    /// number of seconds, just against the wrong origin.
+    #[test]
+    fn snowflakes_decode_to_their_creation_instant() {
+        // The lowest id whose timestamp field is 1ms past Discord's epoch.
+        assert_eq!(snowflake_ms(1 << 22), DISCORD_EPOCH_MS + 1);
+        // A real id: the test guild, created 2026-08-19.
+        assert_eq!(snowflake_ms(1_540_111_927_995_539_506), 1_787_261_697_530);
+    }
+
+    /// The 22-bit shift discards the worker/process/increment fields, so ids
+    /// minted in the same millisecond must decode identically — otherwise a
+    /// bid storm's clicks would each get a slightly different baseline.
+    #[test]
+    fn the_low_bits_do_not_reach_the_timestamp() {
+        let base = 1_540_111_927_995_539_506u64 & !((1 << 22) - 1);
+        assert_eq!(snowflake_ms(base), snowflake_ms(base | 0x3F_FFFF));
+    }
 }

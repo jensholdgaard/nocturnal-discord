@@ -20,6 +20,8 @@ health:
 # archive:                            # off-site Parquet mirror; unset = off
 #   bucket: nocturnal-ledger
 #   prefix: prod
+# compaction:                         # roll sealed WAL into Parquet on a timer
+#   interval_secs: 86400              # nightly; unset = never, and the WAL only grows
 
 # Telemetry and archive credentials come from the standard environment in
 # /etc/nocturnal/env — OTEL_* for telemetry, AWS_* for object storage — never

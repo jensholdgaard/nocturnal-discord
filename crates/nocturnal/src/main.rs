@@ -60,6 +60,9 @@ fn main() -> anyhow::Result<()> {
         log_filter: cfg.log.level.clone(),
         log_json: cfg.log.format == "json",
     })?;
+    // Saturation for the process itself: nothing else on the box reports it.
+    // Held for the life of the process — dropping it stops the callbacks.
+    let _process_metrics = nocturnal_telemetry::ProcessMetrics::install(&cfg.data.dir);
 
     // One writer, ever (hazard B2). Held until exit.
     let _lock = lock::acquire(&cfg.data.dir)?;
@@ -77,6 +80,29 @@ fn main() -> anyhow::Result<()> {
     if mode_check {
         println!("config ok; ledger ok ({replayed} events)");
         return Ok(());
+    }
+
+    if let Some(secs) = cfg.compaction.interval_secs {
+        let driver = driver.clone();
+        let period = std::time::Duration::from_secs(secs.max(60));
+        tracing::info!(
+            interval_secs = period.as_secs(),
+            "automatic compaction enabled"
+        );
+        rt.spawn(async move {
+            let mut interval = tokio::time::interval(period);
+            // The first tick fires immediately; skip it so a restart loop can
+            // never turn into a compaction loop.
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                if let Err(e) = driver.compact().await {
+                    // Already counted and logged by the writer; a failed run
+                    // is never fatal, the next one retries from a clean state.
+                    tracing::warn!(error = %e, "scheduled compaction failed");
+                }
+            }
+        });
     }
 
     let readiness = health::Readiness::default();

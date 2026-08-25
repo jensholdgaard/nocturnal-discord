@@ -18,7 +18,11 @@ pub mod attr {
     pub const NOCTURNAL_PROVISION_OPERATION: &str = "nocturnal.provision.operation";
     pub const NOCTURNAL_RAID_ID: &str = "nocturnal.raid.id";
     pub const NOCTURNAL_RAID_TICK_NO: &str = "nocturnal.raid.tick_no";
+    pub const NOCTURNAL_SCHEDULER_TIMER: &str = "nocturnal.scheduler.timer";
     pub const NOCTURNAL_WAL_SEGMENT: &str = "nocturnal.wal.segment";
+    pub const PROCESS_CPU_STATE: &str = "process.cpu.state";
+    pub const SYSTEM_FILESYSTEM_MOUNTPOINT: &str = "system.filesystem.mountpoint";
+    pub const SYSTEM_FILESYSTEM_STATE: &str = "system.filesystem.state";
 }
 
 /// Metric names.
@@ -41,4 +45,11 @@ pub mod metric {
     pub const NOCTURNAL_SCHEDULER_HEARTBEAT: &str = "nocturnal.scheduler.heartbeat";
     pub const NOCTURNAL_WAL_FSYNC_DURATION: &str = "nocturnal.wal.fsync.duration";
     pub const NOCTURNAL_WAL_SIZE: &str = "nocturnal.wal.size";
+    pub const PROCESS_CPU_TIME: &str = "process.cpu.time";
+    pub const PROCESS_MEMORY_USAGE: &str = "process.memory.usage";
+    pub const PROCESS_MEMORY_VIRTUAL: &str = "process.memory.virtual";
+    pub const PROCESS_OPEN_FILE_DESCRIPTORS: &str = "process.open_file_descriptors";
+    pub const PROCESS_THREAD_COUNT: &str = "process.thread.count";
+    pub const PROCESS_UPTIME: &str = "process.uptime";
+    pub const SYSTEM_FILESYSTEM_USAGE: &str = "system.filesystem.usage";
 }

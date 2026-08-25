@@ -24,6 +24,23 @@ pub struct Config {
     pub bell: BellConfig,
     #[serde(default)]
     pub provision: ProvisionConfig,
+    #[serde(default)]
+    pub compaction: CompactionConfig,
+}
+
+/// Rolling sealed WAL segments into month-partitioned Parquet.
+///
+/// Off unless an interval is set. Nothing has ever compacted automatically,
+/// so the WAL only grows — `nocturnal.wal.size` is the gauge that says how
+/// much runway is left, and turning this on is what reclaims it. Compaction
+/// is crash-safe and idempotent by construction (temp file, fsync, rename,
+/// read back and count, and only then delete a WAL segment), so a run
+/// interrupted anywhere is simply re-done by the next one.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct CompactionConfig {
+    /// Seconds between runs, e.g. 86400 for nightly. Unset = never.
+    pub interval_secs: Option<u64>,
 }
 
 /// The auction bell. On by default, because that is how officers know it.
@@ -202,6 +219,11 @@ impl Config {
         if let Ok(v) = std::env::var("NOCTURNAL_DISCORD__COMMAND_PREFIX") {
             cfg.discord.command_prefix = v;
         }
+        if let Ok(v) = std::env::var("NOCTURNAL_COMPACTION__INTERVAL_SECS") {
+            cfg.compaction.interval_secs = Some(v.parse().context(
+                "NOCTURNAL_COMPACTION__INTERVAL_SECS must be a whole number of seconds",
+            )?);
+        }
         let prefix = &cfg.discord.command_prefix;
         if !prefix
             .chars()
@@ -237,7 +259,7 @@ impl Config {
     /// Redacted, resolved view for `--print-config`.
     pub fn printable(&self) -> String {
         format!(
-            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\narchive.bucket = {:?} prefix = {:?}\notlp = standard OTEL_* environment (endpoint: {:?}, protocol: {:?})\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
+            "data.dir = {:?}\nlog.level = {:?}\nlog.format = {:?}\ndiscord.guild_id = {:?}\ndiscord.data_guild_id = {:?}\ndiscord.command_prefix = {:?}\nhealth.bind = {:?}\narchive.bucket = {:?} prefix = {:?}\ncompaction.interval_secs = {:?}\notlp = standard OTEL_* environment (endpoint: {:?}, protocol: {:?})\nprovision.tokens_path = {:?}\nprovision.perses_provisioning_dir = {:?}\nprovision.roles_map_path = {:?}\nprovision.dashboard_url = {:?}\n(discord token: from env, {})",
             self.data.dir,
             self.log.level,
             self.log.format,
@@ -247,6 +269,7 @@ impl Config {
             self.health.bind,
             self.archive.bucket,
             self.archive.prefix,
+            self.compaction.interval_secs,
             std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok(),
             std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL").ok(),
             self.provision.tokens_path,

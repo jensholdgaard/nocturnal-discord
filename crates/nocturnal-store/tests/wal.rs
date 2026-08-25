@@ -111,3 +111,41 @@ fn sequence_gap_is_refused_on_append_and_load() {
         other => panic!("expected SequenceGap, got {other:?}"),
     }
 }
+
+/// `nocturnal.wal.size` is the compaction backlog, so it has to count sealed
+/// segments too — reporting only the active one would show a flat line while
+/// the disk filled up.
+#[test]
+fn size_counts_every_segment_not_just_the_active_one() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut wal, _) = Wal::open_with(dir.path(), 256).expect("open");
+
+    for seq in 0..40 {
+        wal.append(&[env(seq)]).expect("append");
+    }
+    let sealed = wal.sealed_segments().expect("sealed segments");
+    assert!(
+        !sealed.is_empty(),
+        "the test needs a rotation to have happened"
+    );
+
+    let reported = wal.size_bytes().expect("size");
+    let on_disk: u64 = std::fs::read_dir(dir.path())
+        .expect("read dir")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
+        .map(|e| e.metadata().expect("metadata").len())
+        .sum();
+    assert_eq!(
+        reported, on_disk,
+        "size_bytes disagreed with the filesystem"
+    );
+
+    let active = std::fs::metadata(wal.current_segment())
+        .expect("active segment")
+        .len();
+    assert!(
+        reported > active,
+        "reported {reported} was no larger than the active segment {active}: sealed segments were missed"
+    );
+}

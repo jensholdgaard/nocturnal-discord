@@ -57,6 +57,11 @@ pub struct Store {
 }
 
 impl Store {
+    /// Bytes of WAL not yet compacted into Parquet — the compaction backlog.
+    pub fn wal_bytes(&self) -> Result<u64, WalError> {
+        self.wal.size_bytes()
+    }
+
     /// Open `<data_dir>/{events,wal}`, replaying Parquet history then the WAL
     /// tail. Returns every stored envelope in sequence order and refuses any
     /// gap or overlap mismatch between the two.

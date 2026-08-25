@@ -19,6 +19,30 @@ fn now_ms() -> i64 {
 
 const CYCLE: Duration = Duration::from_secs(10);
 
+/// How late a derived timer actually fired.
+///
+/// Timers here are state, not callbacks (hazard B6): a cycle notices that
+/// something became due and proposes the command. Drift is therefore the
+/// honest saturation signal for the whole path — a busy writer, a slow Discord
+/// call, or a stalled cycle all show up here before commit latency moves,
+/// because the delay lands *between* cycles rather than inside one.
+///
+/// One `CYCLE` of drift is the floor and entirely normal; sustained drift far
+/// above it means cycles are not keeping up.
+fn record_drift(timer: &'static str, due_ms: i64) {
+    let late = (now_ms() - due_ms) as f64 / 1000.0;
+    if late < 0.0 {
+        return; // clock stepped backwards; not a real sample
+    }
+    nocturnal_telemetry::metrics().scheduler_drift.record(
+        late,
+        &[opentelemetry::KeyValue::new(
+            nocturnal_telemetry::attr::NOCTURNAL_SCHEDULER_TIMER,
+            timer,
+        )],
+    );
+}
+
 pub struct Scheduler {
     pub ctx: serenity::Context,
     pub driver: DriverHandle,
@@ -66,11 +90,14 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
                     g.config.raid_channel,
                     g.config.second_raid_channel,
                     g.config.log_channel,
+                    // When this tick became due, by the same rule `decide`
+                    // applies: one interval after the last attendance entry.
+                    raid.entries.last().map(|e| e.ts_ms + raid.tick_interval_ms),
                 ))
             })
         })
         .await;
-    let Some((name, dkp_per_tick, raid_channel, second_channel, log_channel)) = raid else {
+    let Some((name, dkp_per_tick, raid_channel, second_channel, log_channel, due_ms)) = raid else {
         return Ok(());
     };
     let Some(raid_channel) = raid_channel else {
@@ -95,6 +122,9 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
         .await
     {
         Ok(_) => {
+            if let Some(due_ms) = due_ms {
+                record_drift("raid_tick", due_ms);
+            }
             tracing::info!(players = players.len(), raid = %name, "raid tick awarded");
             if let Some(log_channel) = log_channel {
                 let embed = raid_embed(
@@ -137,13 +167,18 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
                 .iter()
                 .filter_map(|(id, a)| match a.status {
                     AuctionStatus::Open if a.deadline_ts_ms <= now => {
-                        Some((id.clone(), a.flavor, false))
+                        Some((id.clone(), a.flavor, false, a.deadline_ts_ms))
                     }
                     AuctionStatus::Closed
                         if a.flavor == Flavor::Long
                             && a.deadline_ts_ms + crate::auctions::LONG_AUCTION_GRACE_MS <= now =>
                     {
-                        Some((id.clone(), a.flavor, true))
+                        Some((
+                            id.clone(),
+                            a.flavor,
+                            true,
+                            a.deadline_ts_ms + crate::auctions::LONG_AUCTION_GRACE_MS,
+                        ))
                     }
                     _ => None,
                 })
@@ -151,7 +186,7 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
         })
         .await;
 
-    for (auction_id, flavor, finalize) in due {
+    for (auction_id, flavor, finalize, due_ms) in due {
         let cmd = if finalize {
             Command::FinalizeAuction {
                 auction_id: auction_id.clone(),
@@ -164,12 +199,15 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
             }
         };
         match s.driver.execute(ledger_guild, Actor::System, cmd).await {
-            Ok(_) => tracing::info!(
-                auction_id,
-                ?flavor,
-                action = if finalize { "finalized" } else { "closed" },
-                "auction timer fired"
-            ),
+            Ok(_) => {
+                record_drift("auction", due_ms);
+                tracing::info!(
+                    auction_id,
+                    ?flavor,
+                    action = if finalize { "finalized" } else { "closed" },
+                    "auction timer fired"
+                );
+            }
             // Another cycle got there first, or an officer already acted.
             Err(crate::driver::ExecError::Rejected(_)) => continue,
             Err(e) => return Err(anyhow::anyhow!(e.to_string())),

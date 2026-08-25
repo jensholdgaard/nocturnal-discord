@@ -49,7 +49,7 @@ groups:
     metric_name: nocturnal.ledger.seq
     stability: development
     brief: Current head sequence number (progress + replay-lag indicator).
-    instrument: updowncounter
+    instrument: gauge
     unit: "{event}"
   - id: metric.nocturnal.wal.fsync.duration
     type: metric
@@ -62,8 +62,11 @@ groups:
     type: metric
     metric_name: nocturnal.wal.size
     stability: development
-    brief: Bytes in unsealed WAL segments awaiting compaction.
-    instrument: updowncounter
+    brief: >
+      Bytes in unsealed WAL segments awaiting compaction. Nothing compacts on
+      a timer today, so this only ever climbs — it is the number that says how
+      much runway the disk has.
+    instrument: gauge
     unit: By
   - id: metric.nocturnal.compaction.runs
     type: metric
@@ -80,7 +83,7 @@ groups:
     metric_name: nocturnal.auctions.active
     stability: development
     brief: Currently open auctions.
-    instrument: updowncounter
+    instrument: gauge
     unit: "{auction}"
     attributes:
       - ref: nocturnal.auction.flavor
@@ -89,15 +92,20 @@ groups:
     metric_name: nocturnal.raids.active
     stability: development
     brief: Currently active raids (0 or 1 per guild by invariant — >1 is an alarm).
-    instrument: updowncounter
+    instrument: gauge
     unit: "{raid}"
   - id: metric.nocturnal.scheduler.drift
     type: metric
     metric_name: nocturnal.scheduler.drift
     stability: development
-    brief: Lateness of timer firings (auction close, raid tick) vs their due instant.
+    brief: >
+      Lateness of timer firings (auction close, raid tick) vs their due
+      instant. The single writer's saturation signal: when the core is
+      backed up, drift moves before commit latency does.
     instrument: histogram
     unit: s
+    attributes:
+      - ref: nocturnal.scheduler.timer
   - id: metric.nocturnal.scheduler.heartbeat
     type: metric
     metric_name: nocturnal.scheduler.heartbeat
@@ -149,3 +157,66 @@ groups:
     brief: Gateway reconnects.
     instrument: counter
     unit: "{reconnect}"
+
+  # ---------------------------------------------------------------------
+  # Process/host saturation. The VM runs no node_exporter and the collector
+  # only reports on itself, so the bot samples /proc/self and statvfs and
+  # emits these under OpenTelemetry's own names — not ours — so any standard
+  # dashboard reads them without translation.
+  # ---------------------------------------------------------------------
+  - id: metric.process.cpu.time
+    type: metric
+    metric_name: process.cpu.time
+    stability: development
+    brief: CPU time consumed by the bot process, split user/kernel.
+    instrument: counter
+    unit: s
+    attributes:
+      - ref: process.cpu.state
+  - id: metric.process.memory.usage
+    type: metric
+    metric_name: process.memory.usage
+    stability: development
+    brief: Resident set size. The replayed ledger lives here — growth is the leak signal.
+    instrument: gauge
+    unit: By
+  - id: metric.process.memory.virtual
+    type: metric
+    metric_name: process.memory.virtual
+    stability: development
+    brief: Virtual address space size.
+    instrument: gauge
+    unit: By
+  - id: metric.process.open_file_descriptors
+    type: metric
+    metric_name: process.open_file_descriptors
+    stability: development
+    brief: Open descriptors; a climbing count is the classic leak before EMFILE.
+    instrument: gauge
+    unit: "{count}"
+  - id: metric.process.thread.count
+    type: metric
+    metric_name: process.thread.count
+    stability: development
+    brief: OS threads in the process (the tokio pool plus the single writer).
+    instrument: gauge
+    unit: "{thread}"
+  - id: metric.process.uptime
+    type: metric
+    metric_name: process.uptime
+    stability: development
+    brief: Seconds since boot; a reset means the bot restarted.
+    instrument: gauge
+    unit: s
+  - id: metric.system.filesystem.usage
+    type: metric
+    metric_name: system.filesystem.usage
+    stability: development
+    brief: >
+      Bytes used and free on the filesystem holding the event store. The WAL
+      grows until compaction runs; this is what says how long that is safe.
+    instrument: gauge
+    unit: By
+    attributes:
+      - ref: system.filesystem.state
+      - ref: system.filesystem.mountpoint

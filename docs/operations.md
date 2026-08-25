@@ -76,15 +76,88 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
   faults at `warn/error`. Log events ride the OTLP pipe when it's on — the bot
   shows up in the guild's Perses/Jaeger next to Zeal telemetry, and Ourios can
   ingest the same stream for long retention.
-- **Metrics** — OTLP metrics plus an optional Prometheus `/metrics` bind:
-  commands total/errors by kind, interaction→ack and interaction→fsync latency
-  histograms, event log seq (gauge), WAL fsync latency, compaction runs/failures,
-  active auctions/raids, Discord gateway reconnects, timer drift. A `heartbeat`
-  metric ticks every scheduler cycle — its absence is the page.
+- **Metrics** — OTLP metrics plus an optional Prometheus `/metrics` bind. The
+  set is organised around the four golden signals; see below.
 - **Health** — small HTTP server (bind configurable, default off outside
   containers): `/healthz` (process live), `/readyz` (replay done + gateway
   connected + WAL writable), `/metrics`. Used by Docker `HEALTHCHECK` and any
   future orchestrator.
+
+### The four golden signals
+
+Every metric in `semconv/registry/metrics.yaml` is emitted, and the Perses
+`Overview` dashboard has a row per signal. What to look at, and what it means:
+
+**Latency.** `nocturnal.interaction.ack.duration` is the one that matters:
+Discord hangs up on an unacknowledged interaction after three seconds, and
+that deadline killed the legacy bot repeatedly. It is measured from the
+interaction's *snowflake* — the instant Discord created it — so the gateway
+hop we cannot otherwise see is included; timing from a local `Instant` would
+have quietly excluded exactly the part that fails first under load. It is
+split by `nocturnal.interaction.kind`, because buttons (the bid-storm path)
+and commands (the officer path) saturate independently.
+`nocturnal.interaction.commit.duration` then covers receive→fsync, and
+`nocturnal.wal.fsync.duration` the durability step inside it.
+
+**Traffic.** `nocturnal.commands` by command and outcome,
+`nocturnal.ledger.events` by event kind.
+
+**Errors.** `nocturnal.commands{outcome="error"}` is infrastructure failure —
+a *rejection* is a healthy typed refusal and is counted separately.
+`nocturnal.compaction.runs{outcome="error"}` matters more than its rate
+suggests: nothing is watching a compaction that fails on a timer, and the WAL
+it should have drained just keeps growing (hazard B5).
+`nocturnal.discord.reconnects` completes the picture.
+
+**Saturation.** The weakest signal to instrument and the most useful once you
+have it.
+
+- `nocturnal.scheduler.drift` — how late raid ticks and auction closes fired
+  against their due instant. Because timers here are state rather than
+  callbacks (hazard B6), a backed-up writer delays the work *between* cycles,
+  so drift moves before commit latency does. One 10-second cycle of drift is
+  the floor and is entirely normal.
+- `nocturnal.wal.size` and `system.filesystem.usage` — the compaction backlog
+  against the disk it is consuming. Read together; either alone is unreadable.
+- `process.*` — CPU, RSS, virtual size, descriptors, threads, uptime, sampled
+  from `/proc/self`. The bot reports these itself because the VM runs no
+  node_exporter and the collector only reports on itself. RSS holds the entire
+  replayed ledger, so steady growth *between restarts* is a leak rather than
+  load. These use OpenTelemetry's own metric names, not `nocturnal.*`: they
+  describe a process, not this bot, and a standard dashboard should read them
+  without translation.
+- `nocturnal.auctions.active` / `nocturnal.raids.active` — concurrent work in
+  the ledger. More than one active raid per guild violates a core invariant.
+
+`nocturnal.scheduler.heartbeat` sits outside the four: it ticks once per
+10-second cycle, and its *absence* is the liveness page — timers stopping
+while the process stays up is otherwise completely silent.
+
+Note that a metric only appears in Prometheus once it has been recorded at
+least once. A counter at zero on a freshly started bot means "has not happened
+yet", not "not instrumented".
+
+### Compaction
+
+Sealed WAL segments roll into month-partitioned Parquet. **This does not run on
+its own unless you configure it:**
+
+```yaml
+compaction:
+  interval_secs: 86400   # nightly; unset = never
+```
+
+(or `NOCTURNAL_COMPACTION__INTERVAL_SECS`). With it unset — the default, and
+what every deployment did before this option existed — the WAL only ever grows;
+`nocturnal.wal.size` is the gauge that says how much runway is left.
+
+A scheduled run seals the active segment first, so it means "drain the WAL"
+rather than "drain it only once it passed 16 MB". Runs happen on the writer
+thread, which is why the interval is floored at 60 seconds: commands queue
+behind a compaction. It is crash-safe and idempotent by construction (temp
+file, fsync, rename, read back and count, and only then delete a WAL segment),
+so a run interrupted anywhere is simply redone by the next one, and a re-run
+with nothing to move is a successful no-op.
 
 ### The log backend (Ourios)
 

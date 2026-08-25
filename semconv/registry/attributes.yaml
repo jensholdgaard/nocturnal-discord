@@ -131,3 +131,51 @@ groups:
         stability: development
         brief: Target Parquet partition of a compaction run.
         examples: ['2026-08']
+      - id: nocturnal.scheduler.timer
+        type:
+          members:
+            - id: raid_tick
+              value: 'raid_tick'
+              stability: development
+            - id: auction
+              value: 'auction'
+              stability: development
+        stability: development
+        brief: Which derived timer a scheduler cycle drove (hazard B6).
+
+  # Process/host saturation. These are OpenTelemetry's own names, not ours:
+  # the bot self-reports because the VM runs no node_exporter, and using the
+  # upstream conventions means any standard dashboard or receiver reads them.
+  - id: registry.process
+    type: attribute_group
+    display_name: Process Attributes
+    stability: development
+    brief: Upstream OTel process/system attributes the bot reports about itself.
+    attributes:
+      - id: process.cpu.state
+        type:
+          members:
+            - id: user
+              value: 'user'
+              stability: development
+            - id: system
+              value: 'system'
+              stability: development
+        stability: development
+        brief: Whether CPU time was spent in user or kernel mode.
+      - id: system.filesystem.state
+        type:
+          members:
+            - id: used
+              value: 'used'
+              stability: development
+            - id: free
+              value: 'free'
+              stability: development
+        stability: development
+        brief: Whether the reported filesystem bytes are used or free.
+      - id: system.filesystem.mountpoint
+        type: string
+        stability: development
+        brief: Mount point of the filesystem holding the event store.
+        examples: ['/var/lib/nocturnal']

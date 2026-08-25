@@ -221,6 +221,327 @@ spec:
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m])))
                 seriesNameFormat: delay p95 (s)
+    stat_ack_p95:
+      kind: Panel
+      spec:
+        display:
+          name: Ack p95 (5m)
+          description: >-
+            Interaction creation to defer, measured from Discord's own
+            snowflake so the gateway hop is included. Discord hangs up at 3s;
+            the legacy bot died here. Anything approaching 1s is already wrong.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: seconds
+              decimalPlaces: 3
+            thresholds:
+              steps:
+              - value: 0.5
+                color: '#e6a020'
+              - value: 1
+                color: '#d64545'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) or vector(0)
+    ts_ack:
+      kind: Panel
+      spec:
+        display:
+          name: Acknowledgment latency by interaction kind
+          description: >-
+            p95 per kind. Buttons are the bid-storm path and commands the
+            officer path; they saturate independently, so they are split.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m])))
+                seriesNameFormat: 'p95 {{nocturnal_interaction_kind}}'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.99, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m])))
+                seriesNameFormat: 'p99 {{nocturnal_interaction_kind}}'
+    stat_wal_size:
+      kind: Panel
+      spec:
+        display:
+          name: WAL awaiting compaction
+          description: >-
+            Bytes written but not yet rolled into Parquet. Compaction is off by
+            default (compaction.interval_secs), so on most deployments this only
+            ever climbs — read it together with disk free.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: bytes
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(nocturnal_wal_size_bytes) or vector(0)
+    stat_disk_free:
+      kind: Panel
+      spec:
+        display:
+          name: Disk free (event store)
+          description: The filesystem holding the WAL and Parquet partitions.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: bytes
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(system_filesystem_usage_bytes{system_filesystem_state="free"}) or vector(0)
+    ts_storage_saturation:
+      kind: Panel
+      spec:
+        display:
+          name: Storage runway
+          description: >-
+            WAL backlog against free disk. Diverging lines are the signal that
+            compaction needs to be turned on before the disk decides for us.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: bytes
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(nocturnal_wal_size_bytes)
+                seriesNameFormat: WAL awaiting compaction
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(system_filesystem_usage_bytes{system_filesystem_state="free"})
+                seriesNameFormat: disk free
+    ts_drift:
+      kind: Panel
+      spec:
+        display:
+          name: Timer drift (p95)
+          description: >-
+            How late raid ticks and auction closes actually fired against their
+            due instant. The single writer's saturation signal: a backed-up core
+            shows up here before commit latency moves. One 10s cycle is the
+            floor and is normal.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le, nocturnal_scheduler_timer) (rate(nocturnal_scheduler_drift_seconds_bucket[5m])))
+                seriesNameFormat: '{{nocturnal_scheduler_timer}}'
+    ts_process:
+      kind: Panel
+      spec:
+        display:
+          name: Process CPU and memory
+          description: >-
+            Self-reported from /proc — the VM runs no node_exporter. RSS holds
+            the whole replayed ledger, so steady growth between restarts is a
+            leak, not load.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(rate(process_cpu_time_seconds_total[5m]))
+                seriesNameFormat: cpu cores
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(process_memory_usage_bytes) / 1024 / 1024
+                seriesNameFormat: rss (MiB)
+    ts_process_handles:
+      kind: Panel
+      spec:
+        display:
+          name: File descriptors and threads
+          description: A descriptor count that climbs and never falls is the classic leak before EMFILE.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(process_open_file_descriptors)
+                seriesNameFormat: open fds
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(process_thread_count)
+                seriesNameFormat: threads
+    ts_active_work:
+      kind: Panel
+      spec:
+        display:
+          name: Open auctions and raids
+          description: >-
+            Concurrent work in the ledger. More than one active raid violates a
+            core invariant; a long tail of open auctions means timers are not
+            closing them.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_auction_flavor) (nocturnal_auctions_active)
+                seriesNameFormat: '{{nocturnal_auction_flavor}} auctions'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(nocturnal_raids_active)
+                seriesNameFormat: active raids
+    stat_heartbeat:
+      kind: Panel
+      spec:
+        display:
+          name: Scheduler cycles / 5m
+          description: >-
+            The liveness page. The loop runs every 10s, so a healthy bot shows
+            ~30. Zero means timers have stopped even though the process is up —
+            raid ticks and auction closes silently stop happening.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_scheduler_heartbeat_total[5m])) or vector(0)
+    stat_uptime:
+      kind: Panel
+      spec:
+        display:
+          name: Uptime
+          description: Seconds since the process started; a reset means it restarted.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: seconds
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(process_uptime_seconds) or vector(0)
+    ts_failures:
+      kind: Panel
+      spec:
+        display:
+          name: Infrastructure failures
+          description: >-
+            Not domain rejections — these are the things that mean the system
+            itself is broken. A failing compactor is otherwise completely
+            silent while the WAL it should drain keeps growing (hazard B5).
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_commands_total{nocturnal_decision_outcome="error"}[5m])) or vector(0)
+                seriesNameFormat: storage errors
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_compaction_runs_total{nocturnal_decision_outcome="error"}[5m])) or vector(0)
+                seriesNameFormat: compaction failures
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(nocturnal_discord_reconnects_total[5m])) or vector(0)
+                seriesNameFormat: gateway reconnects
     logs:
       kind: Panel
       spec:
@@ -297,6 +618,30 @@ spec:
         height: 4
         content:
           $ref: '#/spec/panels/stat_error_rate'
+      - x: 0
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_ack_p95'
+      - x: 6
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_heartbeat'
+      - x: 12
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_wal_size'
+      - x: 18
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_disk_free'
   - kind: Grid
     spec:
       display:
@@ -328,6 +673,75 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_latency'
+  - kind: Grid
+    spec:
+      display:
+        title: Latency
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_ack'
+  - kind: Grid
+    spec:
+      display:
+        title: Errors
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_failures'
+  - kind: Grid
+    spec:
+      display:
+        title: Saturation
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_storage_saturation'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_drift'
+      - x: 0
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_process'
+      - x: 12
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_process_handles'
+      - x: 0
+        y: 16
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_active_work'
+      - x: 12
+        y: 16
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/stat_uptime'
   - kind: Grid
     spec:
       display:

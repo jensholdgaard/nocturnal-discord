@@ -551,7 +551,7 @@ async fn pick_item(
         .await?;
         return Ok(None);
     };
-    press.defer(ctx.serenity_context()).await?;
+    crate::discord::ack_component(ctx.serenity_context(), &press).await?;
     let id = press.data.custom_id[format!("{ctx_id}item").len()..].to_owned();
     let db = crate::items::Database::parse(database.as_deref().unwrap_or("quarm"))
         .unwrap_or(crate::items::Database::Quarm);
@@ -581,7 +581,7 @@ async fn confirm_start(ctx: &Context<'_>, item: &nocturnal_core::Item) -> Result
         .await;
     match press {
         Some(press) => {
-            press.defer(ctx.serenity_context()).await?;
+            crate::discord::ack_component(ctx.serenity_context(), &press).await?;
             msg.edit(
                 *ctx,
                 poise::CreateReply::default()
@@ -722,7 +722,7 @@ pub async fn startbid(
     #[description = "quarm | takp"] database: Option<String>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let Some(item) = pick_item(&ctx, &search, database).await? else {
         return Ok(());
     };
@@ -771,7 +771,7 @@ pub async fn startlongbid(
     duration: Option<i64>,
     #[description = "quarm | takp"] database: Option<String>,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let Some(item) = pick_item(&ctx, &search, database).await? else {
         return Ok(());
     };
@@ -802,7 +802,7 @@ pub async fn bid(
     #[description = "Bid for main (default true)"] bidformain: Option<bool>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let player = ctx.author().id.get();
     let aid = auctionid.clone();
     let item_name = ctx
@@ -880,7 +880,7 @@ pub async fn auctiondetails(
     #[description = "The auction id"] auctionid: String,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
-    ctx.defer_ephemeral().await?;
+    crate::discord::ack_ephemeral(&ctx).await?;
     let aid = auctionid.clone();
     let found = ctx
         .data()
@@ -981,7 +981,7 @@ async fn ack(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
 ) -> anyhow::Result<()> {
-    interaction
+    let result = interaction
         .create_response(
             ctx,
             // Legacy `i.deferUpdate()`: acknowledge without showing anything.
@@ -990,7 +990,11 @@ async fn ack(
             serenity::CreateInteractionResponse::Acknowledge,
         )
         .await
-        .context("deferring component interaction")
+        .context("deferring component interaction");
+    // The bid-storm hot path: every click on a live auction embed lands here,
+    // and it shares the slash commands' 3-second deadline.
+    crate::discord::record_component_ack(interaction.id.get());
+    result
 }
 
 /// Answer an already-acknowledged click. Never a second `create_response` —

@@ -297,14 +297,33 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
     })
 }
 
+/// The process-wide instruments.
+///
+/// Built on first use, which is always after `init()` has installed the meter
+/// provider: building them earlier would bind them to the no-op meter for the
+/// life of the process, and they would silently record nothing.
+pub fn metrics() -> &'static Metrics {
+    static METRICS: std::sync::OnceLock<Metrics> = std::sync::OnceLock::new();
+    METRICS.get_or_init(Metrics::new)
+}
+
 /// The ledger's metric instruments, names straight from the registry. With no
 /// exporter installed these are no-ops — always safe to record.
 pub struct Metrics {
     pub commands: Counter<u64>,
+    /// Interaction creation to `defer` — the clock Discord actually enforces.
+    pub ack_duration: Histogram<f64>,
     pub commit_duration: Histogram<f64>,
     pub ledger_events: Counter<u64>,
     pub ledger_seq: Gauge<u64>,
     pub wal_fsync_duration: Histogram<f64>,
+    /// Bytes of WAL not yet compacted into Parquet.
+    pub wal_size: Gauge<u64>,
+    pub compaction_runs: Counter<u64>,
+    pub auctions_active: Gauge<u64>,
+    pub raids_active: Gauge<u64>,
+    /// How late a derived timer fired against its due instant.
+    pub scheduler_drift: Histogram<f64>,
     pub discord_reconnects: Counter<u64>,
     /// Requests delayed by the client-side rate limiter — fires BEFORE 429s.
     pub ratelimit_delays: Counter<u64>,
@@ -320,6 +339,10 @@ impl Metrics {
                 .u64_counter(metric::NOCTURNAL_COMMANDS)
                 .with_unit("{interaction}")
                 .build(),
+            ack_duration: meter
+                .f64_histogram(metric::NOCTURNAL_INTERACTION_ACK_DURATION)
+                .with_unit("s")
+                .build(),
             commit_duration: meter
                 .f64_histogram(metric::NOCTURNAL_INTERACTION_COMMIT_DURATION)
                 .with_unit("s")
@@ -334,6 +357,26 @@ impl Metrics {
                 .build(),
             wal_fsync_duration: meter
                 .f64_histogram(metric::NOCTURNAL_WAL_FSYNC_DURATION)
+                .with_unit("s")
+                .build(),
+            wal_size: meter
+                .u64_gauge(metric::NOCTURNAL_WAL_SIZE)
+                .with_unit("By")
+                .build(),
+            compaction_runs: meter
+                .u64_counter(metric::NOCTURNAL_COMPACTION_RUNS)
+                .with_unit("{run}")
+                .build(),
+            auctions_active: meter
+                .u64_gauge(metric::NOCTURNAL_AUCTIONS_ACTIVE)
+                .with_unit("{auction}")
+                .build(),
+            raids_active: meter
+                .u64_gauge(metric::NOCTURNAL_RAIDS_ACTIVE)
+                .with_unit("{raid}")
+                .build(),
+            scheduler_drift: meter
+                .f64_histogram(metric::NOCTURNAL_SCHEDULER_DRIFT)
                 .with_unit("s")
                 .build(),
             discord_reconnects: meter
