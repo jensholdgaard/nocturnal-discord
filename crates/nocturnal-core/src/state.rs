@@ -161,7 +161,9 @@ impl GuildConfig {
 /// A member's telemetry provisioning grant (dpsbot successor, M8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenGrant {
-    pub token: String,
+    /// sha256 of the member's token. The secret is not stored here, and not
+    /// anywhere else in the ledger — see `Event::TelemetryTokenIssued`.
+    pub token_fp: String,
     pub role: String,
 }
 

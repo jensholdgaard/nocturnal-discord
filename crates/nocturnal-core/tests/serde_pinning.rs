@@ -127,7 +127,7 @@ fn samples() -> Vec<Event> {
         },
         Event::TelemetryTokenIssued {
             username: "jens".into(),
-            token: "t".into(),
+            token_fp: "t".into(),
             role: "editor".into(),
         },
         Event::TelemetryAccessUpdated {

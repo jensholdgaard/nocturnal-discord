@@ -307,7 +307,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
 
         Command::IssueToken {
             username,
-            token,
+            token_fp,
             role,
         } => {
             if g.telemetry.contains_key(username) {
@@ -317,7 +317,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }
             Ok(vec![Event::TelemetryTokenIssued {
                 username: username.clone(),
-                token: token.clone(),
+                token_fp: token_fp.clone(),
                 role: role.clone(),
             }])
         }

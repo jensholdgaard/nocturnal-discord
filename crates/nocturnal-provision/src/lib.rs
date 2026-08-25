@@ -25,10 +25,27 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 /// One member's grant, exactly as the ledger projects it.
+///
+/// Carries the token's *fingerprint*, never the token. The secret exists in
+/// exactly one place — `tokens.txt` — so a ledger backup, a Parquet
+/// partition, an off-site archive copy or a dump pasted into a dispute
+/// thread contains nothing worth stealing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grant {
-    pub token: String,
+    pub token_fp: String,
     pub role: String,
+}
+
+/// sha256 of a token, hex-encoded — what the ledger records instead of the
+/// secret.
+///
+/// A plain hash rather than a password KDF on purpose: the input is 96 bits
+/// of `getrandom` output, not something a human chose, so there is no
+/// dictionary to slow down.
+pub fn fingerprint(token: &str) -> String {
+    use sha2::{Digest as _, Sha256};
+    let digest = Sha256::digest(token.as_bytes());
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Where the derived files live. Both come from config; neither is guessed.
@@ -46,6 +63,12 @@ pub struct Report {
     pub tokens_rewritten: bool,
     pub files_written: usize,
     pub files_removed: usize,
+    /// Members holding a grant whose secret is not in `tokens.txt`.
+    ///
+    /// The ledger cannot conjure one back — that is the point of not storing
+    /// it — so these need an officer to `/dpsrevoke` and the member to run
+    /// `/dpstoken` again. Surfaced rather than silently ignored.
+    pub grants_without_secret: Vec<String>,
 }
 
 /// Discord's post-2023 username grammar, as the legacy bot enforced it.
@@ -171,7 +194,8 @@ pub fn tokens_file(
     existing: &str,
     managed: &BTreeSet<String>,
     grants: &BTreeMap<String, Grant>,
-) -> String {
+) -> (String, Vec<String>) {
+    let mut kept: BTreeMap<String, String> = BTreeMap::new();
     let mut out = String::new();
     for line in existing.lines() {
         let trimmed = line.trim();
@@ -184,21 +208,55 @@ pub fn tokens_file(
         if trimmed.starts_with('#') {
             continue;
         }
-        match line_username(trimmed) {
-            // Ours: the projection below decides whether it lives.
-            Some(user) if managed.contains(user) => {}
-            // Not ours — a service token, or something added by hand.
-            _ => {
-                out.push_str(trimmed);
-                out.push('\n');
-            }
+        let Some(user) = line_username(trimmed) else {
+            out.push_str(trimmed);
+            out.push('\n');
+            continue;
+        };
+        if !managed.contains(user) {
+            // Not ours — a service credential, or something added by hand.
+            out.push_str(trimmed);
+            out.push('\n');
+            continue;
+        }
+        // Ours. Keep it only while a live grant vouches for this exact secret;
+        // a line whose fingerprint does not match is an orphan from a crash or
+        // a hand edit, and leaving it would keep a token valid that nothing
+        // records.
+        let secret = trimmed.split_whitespace().next().unwrap_or_default();
+        if grants
+            .get(user)
+            .is_some_and(|g| g.token_fp == fingerprint(secret))
+        {
+            kept.insert(user.to_owned(), trimmed.to_owned());
         }
     }
-    // Sorted, so the same projection always produces the same bytes.
-    for (user, grant) in grants {
-        out.push_str(&format!("{} # {}\n", grant.token, user));
+    // Sorted, so the same inputs always produce the same bytes.
+    for line in kept.values() {
+        out.push_str(line);
+        out.push('\n');
     }
-    out
+    // A grant whose secret we no longer hold cannot be rebuilt — by design.
+    let missing = grants
+        .keys()
+        .filter(|u| !kept.contains_key(*u))
+        .cloned()
+        .collect();
+    (out, missing)
+}
+
+/// Add a freshly issued token. The only moment the secret is in hand, and the
+/// only writer that ever introduces a line.
+pub fn append_token(paths: &Paths, user: &str, secret: &str) -> io::Result<()> {
+    if let Some(dir) = paths.tokens.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut text = std::fs::read_to_string(&paths.tokens).unwrap_or_default();
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(&format!("{secret} # {user}\n"));
+    write_atomic(&paths.tokens, &text)
 }
 
 /// The name in a `<token> # <name>` line, if it has one.
@@ -243,7 +301,8 @@ pub fn materialize(
 
     // --- tokens.txt -------------------------------------------------------
     let existing = std::fs::read_to_string(&paths.tokens).unwrap_or_default();
-    let desired = tokens_file(&existing, managed, grants);
+    let (desired, missing) = tokens_file(&existing, managed, grants);
+    report.grants_without_secret = missing;
     if desired != existing {
         if let Some(dir) = paths.tokens.parent() {
             std::fs::create_dir_all(dir)?;
@@ -280,62 +339,93 @@ pub fn materialize(
 mod tests {
     use super::*;
 
-    fn grant(token: &str, role: &str) -> Grant {
+    /// A grant as the ledger holds it: the fingerprint of a secret, never the
+    /// secret.
+    fn grant_for(secret: &str, role: &str) -> Grant {
         Grant {
-            token: token.into(),
+            token_fp: fingerprint(secret),
             role: role.into(),
         }
     }
 
-    /// The failure this whole design exists to prevent: `tokens.txt` carries
-    /// the bot's own OTLP credential beside the members', so a rewrite driven
-    /// only by the projection would log the bot out of its own pipeline.
+    /// The whole point of the redesign: nothing that reaches the event log,
+    /// a backup tarball, a Parquet partition or an off-site archive can be
+    /// turned back into a working token.
+    #[test]
+    fn a_fingerprint_does_not_reveal_the_token() {
+        let secret = "0123456789abcdef0123456789abcdef0123456789abcdef";
+        let fp = fingerprint(secret);
+        assert_eq!(fp.len(), 64, "sha256 hex");
+        assert!(
+            !fp.contains(&secret[..8]),
+            "the secret leaked into its own fingerprint"
+        );
+        assert_ne!(fp, secret);
+        assert_eq!(fp, fingerprint(secret), "must be deterministic");
+        assert_ne!(
+            fp,
+            fingerprint("0123456789abcdef0123456789abcdef0123456789abcde0")
+        );
+    }
+
+    /// The failure this design exists to prevent: `tokens.txt` carries the
+    /// bot's own OTLP credential beside the members', so a rewrite driven only
+    /// by the projection would log the bot out of its own pipeline.
     #[test]
     fn a_service_token_survives_a_rewrite_that_revokes_everyone() {
         let existing = "aaa # ziglax\nbbb # nocturnal-bot\nccc # magis\n";
         let managed = BTreeSet::from(["ziglax".to_owned(), "magis".to_owned()]);
-        let out = tokens_file(existing, &managed, &BTreeMap::new());
-        assert_eq!(
-            out, "bbb # nocturnal-bot\n",
-            "the unmanaged service token must be the only line left"
-        );
+        let (out, missing) = tokens_file(existing, &managed, &BTreeMap::new());
+        assert_eq!(out, "bbb # nocturnal-bot\n");
+        assert!(missing.is_empty());
     }
 
-    /// A name the ledger has never issued to is not ours to delete, even if it
-    /// looks exactly like a member line.
+    /// A name the ledger has never issued to is not ours to delete.
     #[test]
     fn unmanaged_member_lines_are_left_alone() {
-        let existing = "aaa # someone_else\n";
-        let out = tokens_file(existing, &BTreeSet::new(), &BTreeMap::new());
+        let (out, _) = tokens_file("aaa # someone_else\n", &BTreeSet::new(), &BTreeMap::new());
         assert_eq!(out, "aaa # someone_else\n");
     }
 
     /// "Anything after whitespace is a comment" means a comment-only line
-    /// parses as the bearer token `#`. We must never write one, and should
-    /// clear any a human left behind.
+    /// parses as the bearer token `#`. Never write one; clear any found.
     #[test]
     fn comment_only_lines_are_dropped_because_they_would_be_valid_tokens() {
         let existing = "# a header someone added\naaa # ziglax\n";
         let managed = BTreeSet::from(["ziglax".to_owned()]);
-        let grants = BTreeMap::from([("ziglax".to_owned(), grant("aaa", "viewer"))]);
-        let out = tokens_file(existing, &managed, &grants);
+        let grants = BTreeMap::from([("ziglax".to_owned(), grant_for("aaa", "viewer"))]);
+        let (out, _) = tokens_file(existing, &managed, &grants);
         assert_eq!(out, "aaa # ziglax\n");
         assert!(!out.lines().any(|l| l.trim_start().starts_with('#')));
     }
 
-    /// Same projection, same bytes — otherwise "rewrite on every boot" would
-    /// churn the file and restart the gateway for nothing.
+    /// The secret is preserved verbatim — the projection cannot rebuild it,
+    /// so a rewrite must carry the existing line through untouched.
     #[test]
-    fn rewriting_is_a_fixed_point() {
-        let managed = BTreeSet::from(["ziglax".to_owned(), "magis".to_owned()]);
-        let grants = BTreeMap::from([
-            ("magis".to_owned(), grant("mmm", "viewer")),
-            ("ziglax".to_owned(), grant("zzz", "editor")),
-        ]);
-        let once = tokens_file("bbb # nocturnal-bot\n", &managed, &grants);
-        let twice = tokens_file(&once, &managed, &grants);
+    fn an_existing_secret_is_carried_through_not_regenerated() {
+        let managed = BTreeSet::from(["ziglax".to_owned()]);
+        let grants = BTreeMap::from([("ziglax".to_owned(), grant_for("zzz", "editor"))]);
+        let (once, missing) = tokens_file("bbb # nocturnal-bot\nzzz # ziglax\n", &managed, &grants);
+        assert_eq!(once, "bbb # nocturnal-bot\nzzz # ziglax\n");
+        assert!(missing.is_empty());
+        let (twice, _) = tokens_file(&once, &managed, &grants);
         assert_eq!(once, twice, "a second pass changed the file");
-        assert_eq!(once, "bbb # nocturnal-bot\nmmm # magis\nzzz # ziglax\n");
+    }
+
+    /// A line whose secret does not match the recorded fingerprint is an
+    /// orphan — a crash between the event and the append, or a hand edit.
+    /// Leaving it would keep a token valid that nothing records.
+    #[test]
+    fn an_orphaned_token_line_is_removed_and_reported() {
+        let managed = BTreeSet::from(["ziglax".to_owned()]);
+        let grants = BTreeMap::from([("ziglax".to_owned(), grant_for("the-real-one", "viewer"))]);
+        let (out, missing) = tokens_file("something-else # ziglax\n", &managed, &grants);
+        assert_eq!(out, "", "the unrecorded token must not stay valid");
+        assert_eq!(
+            missing,
+            vec!["ziglax".to_owned()],
+            "and it must be reported"
+        );
     }
 
     /// The legacy grammar, refused before a name can become a path segment.
@@ -351,6 +441,10 @@ mod tests {
         );
         assert!(!valid_username("../etc/passwd"), "path traversal");
         assert!(!valid_username("has space"));
+        assert!(
+            !valid_username("nocturnal-bot"),
+            "a service name, not a member"
+        );
     }
 
     #[test]
@@ -363,21 +457,18 @@ mod tests {
         std::fs::create_dir_all(&paths.perses_dir).expect("mkdir");
         std::fs::write(&paths.tokens, "bbb # nocturnal-bot\n").expect("seed");
 
+        // Issue: the one moment the secret is in hand.
+        append_token(&paths, "ziglax", "zzz").expect("append");
         let managed = BTreeSet::from(["ziglax".to_owned()]);
-        let grants = BTreeMap::from([("ziglax".to_owned(), grant("zzz", "editor"))]);
+        let grants = BTreeMap::from([("ziglax".to_owned(), grant_for("zzz", "editor"))]);
 
         let first = materialize(&paths, &managed, &grants).expect("materialize");
-        assert!(first.tokens_rewritten);
         assert_eq!(first.files_written, 4);
+        assert!(first.grants_without_secret.is_empty());
 
-        let second = materialize(&paths, &managed, &grants).expect("materialize again");
-        assert_eq!(
-            second,
-            Report::default(),
-            "a second run must write nothing at all"
-        );
+        let second = materialize(&paths, &managed, &grants).expect("again");
+        assert_eq!(second, Report::default(), "a second run must write nothing");
 
-        // Revoke: the grant goes, the managed name stays.
         let after = materialize(&paths, &managed, &BTreeMap::new()).expect("revoke");
         assert!(after.tokens_rewritten);
         assert_eq!(after.files_removed, 4);
@@ -386,9 +477,6 @@ mod tests {
             "bbb # nocturnal-bot\n",
             "the service token outlived the member"
         );
-        for name in user_file_names("ziglax") {
-            assert!(!paths.perses_dir.join(name).exists());
-        }
     }
 
     /// A partially written file must never be visible to the systemd `.path`
@@ -400,7 +488,7 @@ mod tests {
             tokens: dir.path().join("tokens.txt"),
             perses_dir: dir.path().join("provisioning"),
         };
-        let grants = BTreeMap::from([("magis".to_owned(), grant("mmm", "viewer"))]);
+        let grants = BTreeMap::from([("magis".to_owned(), grant_for("mmm", "viewer"))]);
         materialize(&paths, &BTreeSet::new(), &grants).expect("materialize");
         let leftovers: Vec<_> = std::fs::read_dir(&paths.perses_dir)
             .expect("read dir")

@@ -252,13 +252,13 @@ pub fn apply(state: &mut State, env: &Envelope) {
 
         Event::TelemetryTokenIssued {
             username,
-            token,
+            token_fp,
             role,
         } => {
             g.telemetry.insert(
                 username.clone(),
                 TokenGrant {
-                    token: token.clone(),
+                    token_fp: token_fp.clone(),
                     role: role.clone(),
                 },
             );

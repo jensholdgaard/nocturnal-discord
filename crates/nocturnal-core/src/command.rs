@@ -93,7 +93,8 @@ pub enum Command {
     // -- telemetry provisioning (M8) --
     IssueToken {
         username: String,
-        token: String,
+        /// sha256 of the issued token — the secret itself never reaches the log.
+        token_fp: String,
         role: String,
     },
     RefreshAccess {

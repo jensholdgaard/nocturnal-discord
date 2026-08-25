@@ -25,10 +25,10 @@ fn exec(ledger: &mut Ledger, cmd: Command) -> Result<(), Rejection> {
     Ok(())
 }
 
-fn issue(user: &str, token: &str, role: &str) -> Command {
+fn issue(user: &str, token_fp: &str, role: &str) -> Command {
     Command::IssueToken {
         username: user.to_owned(),
-        token: token.to_owned(),
+        token_fp: token_fp.to_owned(),
         role: role.to_owned(),
     }
 }
@@ -45,7 +45,7 @@ fn issue_then_refresh_then_revoke_walks_the_whole_lifecycle() {
         .telemetry
         .get("ziglax")
         .cloned();
-    assert_eq!(grant.as_ref().map(|g| g.token.as_str()), Some("zzz"));
+    assert_eq!(grant.as_ref().map(|g| g.token_fp.as_str()), Some("zzz"));
     assert_eq!(grant.as_ref().map(|g| g.role.as_str()), Some("viewer"));
 
     exec(
@@ -59,7 +59,7 @@ fn issue_then_refresh_then_revoke_walks_the_whole_lifecycle() {
     let g = l.state().guild(GUILD).unwrap();
     assert_eq!(g.telemetry["ziglax"].role, "editor");
     assert_eq!(
-        g.telemetry["ziglax"].token, "zzz",
+        g.telemetry["ziglax"].token_fp, "zzz",
         "a role refresh must never rotate the token — the member's client keeps using the old one"
     );
 
@@ -91,7 +91,7 @@ fn a_second_issue_is_refused_rather_than_orphaning_the_first_token() {
         "got {err:?}"
     );
     assert_eq!(
-        l.state().guild(GUILD).unwrap().telemetry["magis"].token,
+        l.state().guild(GUILD).unwrap().telemetry["magis"].token_fp,
         "aaa",
         "the original token survived"
     );
@@ -159,7 +159,7 @@ fn a_member_can_be_reissued_after_a_revoke() {
     exec(&mut l, issue("magis", "ccc", "editor")).unwrap();
 
     let g = l.state().guild(GUILD).unwrap();
-    assert_eq!(g.telemetry["magis"].token, "ccc");
+    assert_eq!(g.telemetry["magis"].token_fp, "ccc");
     assert_eq!(g.telemetry["magis"].role, "editor");
 }
 

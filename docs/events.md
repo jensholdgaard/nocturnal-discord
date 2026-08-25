@@ -67,13 +67,41 @@ Rules:
 ### Telemetry provisioning (dpsbot absorbed)
 | Kind | Payload | Notes |
 |---|---|---|
-| `telemetry.token.issued` | username, token, perses_role | Token value lives in the payload: the ledger sits on the same host, with the same access boundary, as `tokens.txt` — hash-only events (token secret kept outside the log) are a documented option if that ever changes |
+| `telemetry.token.issued` | username, **token_fp**, perses_role | Only the sha256 **fingerprint** — never the token. See below |
 | `telemetry.token.revoked` | username, actor | Removes token + all dashboard access in the fold |
 | `telemetry.access.updated` | username, perses_role | Role refresh on re-run of `/dpstoken` after a rank change |
 
-The projection (`telemetry` map: user → token, role) is materialized to
-`tokens.txt` + the Perses provisioning YAMLs after each event and on boot —
-files are derived, never authoritative.
+The projection (`telemetry` map: user → fingerprint, role) is materialized to
+`tokens.txt` + the Perses provisioning YAMLs after each event and on boot.
+The YAMLs are fully derived; the token *line* is preserved, never regenerated.
+
+#### Why the token secret is not in the log
+
+An earlier draft put the token value in the payload, reasoning that the ledger
+and `tokens.txt` share a host and an access boundary. That reasoning was
+wrong, in three compounding ways:
+
+- **The blast radii are not the same.** `deploy/backup.sh` tars `events` and
+  `wal`; it does not touch `/etc/eq-otel`. So the ledger is copied nightly
+  into `/var/backups` with a retention chain, and `tokens.txt` is not copied
+  at all. The log's reach is *larger* than the file it was compared to.
+- **The log is append-only, so revocation cannot reach backwards.**
+  `/dpsrevoke` removes the line from `tokens.txt`, but the issuing event keeps
+  the secret in the WAL, in every Parquet partition it compacts into, and in
+  every backup taken since — permanently.
+- **It travels.** The off-site archive uploads compacted partitions to object
+  storage, and `docs/runbook.md` resolves disputes by grepping the ledger,
+  which is exactly the kind of output that gets pasted into a thread.
+
+So the log records `sha256(token)` and the secret exists in exactly one place,
+like a password file. A plain hash rather than a password KDF is deliberate:
+the input is 96 bits of `getrandom` output, not something a human chose.
+
+The consequence is intentional. A ledger restored onto a fresh VM rebuilds
+every member's *access* — roles, projects, bindings — but cannot rebuild their
+token, because it never had it. Materialization reports any such grant so an
+officer can `/dpsrevoke` and the member can re-run `/dpstoken`. A secret you
+did not store is a secret that cannot leak from a backup.
 
 ### Config & ops
 | Kind | Payload | Notes |

@@ -206,10 +206,17 @@ pub enum Event {
     // -- config & telemetry provisioning -------------------------------------
     #[serde(rename = "config.updated")]
     ConfigUpdated { patch: ConfigPatch },
+    /// The token's **fingerprint**, never the token.
+    ///
+    /// The secret used to live here. The log is append-only and every nightly
+    /// backup tars it, so a revoked token would stay recoverable from any
+    /// backup forever — while `tokens.txt`, the file it was compared to, is
+    /// not backed up at all. Only sha256 of the token is recorded; the secret
+    /// lives solely in `tokens.txt`, like a password file.
     #[serde(rename = "telemetry.token.issued")]
     TelemetryTokenIssued {
         username: String,
-        token: String,
+        token_fp: String,
         role: String,
     },
     #[serde(rename = "telemetry.access.updated")]

@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context as _;
 use nocturnal_core::{Actor, Command};
-use nocturnal_provision::{materialize, valid_username, Grant, Paths};
+use nocturnal_provision::{append_token, fingerprint, materialize, valid_username, Grant, Paths};
 use nocturnal_telemetry::attr;
 use poise::serenity_prelude as serenity;
 
@@ -111,7 +111,7 @@ pub async fn rematerialize(driver: &DriverHandle, p: &Provisioning, guild: u64) 
                     (
                         user.clone(),
                         Grant {
-                            token: t.token.clone(),
+                            token_fp: t.token_fp.clone(),
                             role: t.role.clone(),
                         },
                     )
@@ -125,6 +125,14 @@ pub async fn rematerialize(driver: &DriverHandle, p: &Provisioning, guild: u64) 
     let done = tokio::task::spawn_blocking(move || materialize(&paths, &managed, &grants)).await;
     match done {
         Ok(Ok(report)) if report != nocturnal_provision::Report::default() => {
+            for user in &report.grants_without_secret {
+                // Not recoverable: the ledger never held the secret. Say so
+                // loudly rather than leaving a member silently unable to send.
+                tracing::warn!(
+                    { attr::NOCTURNAL_DISCORD_USER_NAME } = %user,
+                    "grant has no token line; the member must be revoked and re-issued"
+                );
+            }
             tracing::info!(
                 { attr::NOCTURNAL_PROVISION_FILES_WRITTEN } = report.files_written,
                 { attr::NOCTURNAL_PROVISION_FILES_REMOVED } = report.files_removed,
@@ -243,7 +251,9 @@ pub async fn import_legacy(
                 Actor::System,
                 Command::IssueToken {
                     username: user.to_owned(),
-                    token: token.to_owned(),
+                    // The secret stays exactly where it already is — in
+                    // tokens.txt. Only its fingerprint enters the log.
+                    token_fp: nocturnal_provision::fingerprint(token),
                     role,
                 },
             )
@@ -329,6 +339,10 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     let token = mint_token()?;
+    // The ledger records only the fingerprint. Event first, so the grant is
+    // durable before the secret exists anywhere; a crash between the two
+    // leaves a grant with no token line, which the next materialization
+    // reports rather than papering over.
     if let Err(e) = ctx
         .data()
         .driver
@@ -337,7 +351,7 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
             Actor::User(ctx.author().id.get()),
             Command::IssueToken {
                 username: user.clone(),
-                token: token.clone(),
+                token_fp: fingerprint(&token),
                 role: role.clone(),
             },
         )
@@ -349,7 +363,18 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
             .await?;
         return Ok(());
     }
-    // Files only after the event is durable: a crash here heals on boot.
+    {
+        // The one writer that introduces a secret. Blocking, so off the reactor.
+        let paths = p.paths.clone();
+        let (u, t) = (user.clone(), token.clone());
+        if let Err(e) = tokio::task::spawn_blocking(move || append_token(&paths, &u, &t)).await? {
+            record("issue", "error");
+            tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "writing the token line failed");
+            ctx.say("Issued, but the gateway file couldn't be written — tell an officer.")
+                .await?;
+            return Ok(());
+        }
+    }
     rematerialize(&ctx.data().driver, &p, ledger_guild).await;
     record("issue", "accepted");
 
