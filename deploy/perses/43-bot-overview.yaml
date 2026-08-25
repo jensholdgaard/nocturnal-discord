@@ -77,7 +77,10 @@ spec:
       spec:
         display:
           name: Commit p95 (5m)
-          description: Receive-to-fsynced latency. The legacy bot's 3-second Discord window is the line that must never be approached.
+          description: >-
+            Receive-to-fsynced latency. Blank when no command has run in the
+            last 5 minutes — a quantile over zero observations has no answer,
+            and reporting 0 there would claim a speed nothing achieved.
         plugin:
           kind: StatChart
           spec:
@@ -91,7 +94,7 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) or vector(0)
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_commit_duration_seconds_count[5m])) > 0)
     ts_commands_by_kind:
       kind: Panel
       spec:
@@ -163,21 +166,21 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_commit_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: commit p95
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.5, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.5, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_commit_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: commit p50
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_wal_fsync_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_wal_fsync_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_wal_fsync_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: fsync p95
     ts_gateway_latency:
       kind: Panel
@@ -219,7 +222,7 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_discord_ratelimit_delay_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: delay p95 (s)
     stat_ack_p95:
       kind: Panel
@@ -230,6 +233,7 @@ spec:
             Interaction creation to defer, measured from Discord's own
             snowflake so the gateway hop is included. Discord hangs up at 3s;
             the legacy bot died here. Anything approaching 1s is already wrong.
+            Blank when nothing has been acknowledged in the last 5 minutes.
         plugin:
           kind: StatChart
           spec:
@@ -249,7 +253,7 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) or vector(0)
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_ack_duration_seconds_count[5m])) > 0)
     ts_ack:
       kind: Panel
       spec:
@@ -272,14 +276,14 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.95, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) and on(nocturnal_interaction_kind) (sum by (nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: 'p95 {{nocturnal_interaction_kind}}'
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.99, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m])))
+                query: histogram_quantile(0.99, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) and on(nocturnal_interaction_kind) (sum by (nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: 'p99 {{nocturnal_interaction_kind}}'
     stat_wal_size:
       kind: Panel
@@ -377,7 +381,7 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.95, sum by (le, nocturnal_scheduler_timer) (rate(nocturnal_scheduler_drift_seconds_bucket[5m])))
+                query: histogram_quantile(0.95, sum by (le, nocturnal_scheduler_timer) (rate(nocturnal_scheduler_drift_seconds_bucket[5m]))) and on(nocturnal_scheduler_timer) (sum by (nocturnal_scheduler_timer) (rate(nocturnal_scheduler_drift_seconds_count[5m])) > 0)
                 seriesNameFormat: '{{nocturnal_scheduler_timer}}'
     ts_process:
       kind: Panel

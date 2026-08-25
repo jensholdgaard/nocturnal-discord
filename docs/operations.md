@@ -88,6 +88,24 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
 Every metric in `semconv/registry/metrics.yaml` is emitted, and the Perses
 `Overview` dashboard has a row per signal. What to look at, and what it means:
 
+Every duration histogram declares its own **bucket boundaries in seconds**.
+The SDK's defaults (`0, 5, 10, 25, … 10000`) are milliseconds; recording
+seconds against them put every observation into the first `(0, 5]` bucket, and
+`histogram_quantile` interpolated inside it — a p95 reported as "4.75 s" for
+work that actually took 1.7 ms. A quantile is only as precise as the bucket it
+lands in. `nocturnal.interaction.ack.duration` has an exact edge on 3.0, so
+`..._bucket{le="3"}` answers "how many interactions blew Discord's window?"
+without interpolating.
+
+Dashboard quantile panels are written
+`histogram_quantile(...) and on() (sum(rate(..._count[5m])) > 0)`. Without the
+guard an idle bot renders `NaN`: `rate()` over an untouched histogram is zero
+in every bucket, so `histogram_quantile` returns a series whose *value* is NaN,
+and the usual `or vector(0)` fallback never fires because a series does exist.
+The panels are deliberately blank rather than zero when nothing has happened —
+a p95 over no observations has no answer, and 0 would claim a speed nothing
+achieved.
+
 **Latency.** `nocturnal.interaction.ack.duration` is the one that matters:
 Discord hangs up on an unacknowledged interaction after three seconds, and
 that deadline killed the legacy bot repeatedly. It is measured from the

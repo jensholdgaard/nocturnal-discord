@@ -331,6 +331,37 @@ pub struct Metrics {
     pub gateway_latency: Gauge<f64>,
 }
 
+// Explicit bucket boundaries, in *seconds*.
+//
+// The SDK's defaults are [0, 5, 10, 25, ... 10000], which are meant for
+// milliseconds. Recording seconds against them puts every single observation
+// this bot has ever made into the first (0, 5] bucket, and histogram_quantile
+// then interpolates inside it — reporting a p95 of "4.75 seconds" for work
+// that actually takes 1.7 milliseconds. A quantile is only ever as precise as
+// the bucket it lands in, so every histogram here names its own range.
+
+/// Interaction latency. Dense where the bot actually lives (single-digit ms)
+/// and with a boundary exactly on Discord's 3-second deadline, so
+/// `..._bucket{le="3"}` answers "how many interactions blew the window?"
+/// directly rather than by interpolation.
+const INTERACTION_SECONDS: &[f64] = &[
+    0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0,
+];
+
+/// One fsync on the WAL: sub-millisecond on a healthy disk, and the hazard-B7
+/// watchdog cares about the moment it stops being that.
+const FSYNC_SECONDS: &[f64] = &[
+    0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1.0,
+];
+
+/// Timer lateness. One 10-second scheduler cycle is the floor, so the
+/// interesting range runs from there out to "nobody is minding the timers".
+const DRIFT_SECONDS: &[f64] = &[1.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0];
+
+/// How long a rate-limited request waited. Discord's buckets reset on the
+/// order of seconds, and a global limit can park a request far longer.
+const RATELIMIT_SECONDS: &[f64] = &[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0];
+
 impl Metrics {
     pub fn new() -> Metrics {
         let meter = global::meter("nocturnal");
@@ -342,10 +373,12 @@ impl Metrics {
             ack_duration: meter
                 .f64_histogram(metric::NOCTURNAL_INTERACTION_ACK_DURATION)
                 .with_unit("s")
+                .with_boundaries(INTERACTION_SECONDS.to_vec())
                 .build(),
             commit_duration: meter
                 .f64_histogram(metric::NOCTURNAL_INTERACTION_COMMIT_DURATION)
                 .with_unit("s")
+                .with_boundaries(INTERACTION_SECONDS.to_vec())
                 .build(),
             ledger_events: meter
                 .u64_counter(metric::NOCTURNAL_LEDGER_EVENTS)
@@ -358,6 +391,7 @@ impl Metrics {
             wal_fsync_duration: meter
                 .f64_histogram(metric::NOCTURNAL_WAL_FSYNC_DURATION)
                 .with_unit("s")
+                .with_boundaries(FSYNC_SECONDS.to_vec())
                 .build(),
             wal_size: meter
                 .u64_gauge(metric::NOCTURNAL_WAL_SIZE)
@@ -378,6 +412,7 @@ impl Metrics {
             scheduler_drift: meter
                 .f64_histogram(metric::NOCTURNAL_SCHEDULER_DRIFT)
                 .with_unit("s")
+                .with_boundaries(DRIFT_SECONDS.to_vec())
                 .build(),
             discord_reconnects: meter
                 .u64_counter(metric::NOCTURNAL_DISCORD_RECONNECTS)
@@ -390,6 +425,7 @@ impl Metrics {
             ratelimit_delay_duration: meter
                 .f64_histogram(metric::NOCTURNAL_DISCORD_RATELIMIT_DELAY_DURATION)
                 .with_unit("s")
+                .with_boundaries(RATELIMIT_SECONDS.to_vec())
                 .build(),
             gateway_latency: meter
                 .f64_gauge(metric::NOCTURNAL_DISCORD_GATEWAY_LATENCY)
@@ -430,8 +466,53 @@ impl Default for Metrics {
 
 #[cfg(test)]
 mod tests {
-    use super::{export_targets, safe_attribute, use_http, RedactSpans, StampLogs};
+    use super::{
+        export_targets, safe_attribute, use_http, RedactSpans, StampLogs, DRIFT_SECONDS,
+        FSYNC_SECONDS, INTERACTION_SECONDS, RATELIMIT_SECONDS,
+    };
     use tracing::Level;
+
+    /// Every histogram here records **seconds**, while the SDK's default
+    /// boundaries (`0, 5, 10, ... 10000`) are milliseconds. Falling back to
+    /// those put every observation in the first `(0, 5]` bucket and made
+    /// `histogram_quantile` interpolate a p95 of ~4.75s for work taking 1.7ms
+    /// — a broken latency signal that still looked like a plausible number.
+    /// Boundaries must therefore stay sub-millisecond at the low end.
+    #[test]
+    fn histogram_boundaries_are_scaled_for_seconds_not_milliseconds() {
+        for (name, buckets) in [
+            ("interaction", INTERACTION_SECONDS),
+            ("fsync", FSYNC_SECONDS),
+            ("drift", DRIFT_SECONDS),
+            ("ratelimit", RATELIMIT_SECONDS),
+        ] {
+            assert!(!buckets.is_empty(), "{name} has no boundaries");
+            assert!(
+                buckets.windows(2).all(|w| w[0] < w[1]),
+                "{name} boundaries are not strictly ascending: {buckets:?}"
+            );
+            assert!(
+                buckets[0] > 0.0,
+                "{name} starts at or below zero: {buckets:?}"
+            );
+        }
+        // The latency histograms must resolve milliseconds; the default
+        // boundaries' first step is 5 whole seconds.
+        assert!(
+            INTERACTION_SECONDS[0] <= 0.001,
+            "interaction latency cannot resolve a 1ms command"
+        );
+        assert!(
+            FSYNC_SECONDS[0] <= 0.0005,
+            "fsync latency cannot resolve a sub-millisecond flush"
+        );
+        // Discord's deadline is the number officers care about, so it has to
+        // be an exact boundary rather than something interpolated across.
+        assert!(
+            INTERACTION_SECONDS.contains(&3.0),
+            "no bucket edge on Discord's 3-second deadline: {INTERACTION_SECONDS:?}"
+        );
+    }
 
     /// A `tracing` event has no timestamp of its own, so records reach the
     /// exporter with `Timestamp` unset and serialise as 0 — every log line
@@ -461,6 +542,63 @@ mod tests {
             record.timestamp(),
             record.observed_timestamp(),
             "the fallback must be the observed time, not a later re-stamp"
+        );
+    }
+
+    /// The constants above are only worth anything if `with_boundaries`
+    /// actually reaches the built instrument. This records a realistic 1.7ms
+    /// commit through a real meter provider and reads back the bounds the SDK
+    /// exported, which is the thing Prometheus will see.
+    #[test]
+    fn the_declared_boundaries_reach_the_exported_histogram() {
+        use opentelemetry::global;
+        use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData};
+        use opentelemetry_sdk::metrics::{
+            InMemoryMetricExporter, PeriodicReader, SdkMeterProvider,
+        };
+
+        let exporter = InMemoryMetricExporter::default();
+        let provider = SdkMeterProvider::builder()
+            .with_reader(PeriodicReader::builder(exporter.clone()).build())
+            .build();
+        global::set_meter_provider(provider.clone());
+
+        let metrics = super::Metrics::new();
+        // A commit at the speed the bot actually runs at.
+        metrics.commit_duration.record(0.0017, &[]);
+        provider.force_flush().expect("flush");
+
+        let exported = exporter.get_finished_metrics().expect("metrics");
+        let mut bounds = None;
+        let mut bucket_counts = Vec::new();
+        for rm in &exported {
+            for scope in rm.scope_metrics() {
+                for metric in scope.metrics() {
+                    if metric.name() != super::metric::NOCTURNAL_INTERACTION_COMMIT_DURATION {
+                        continue;
+                    }
+                    if let AggregatedMetrics::F64(MetricData::Histogram(h)) = metric.data() {
+                        for point in h.data_points() {
+                            bounds = Some(point.bounds().collect::<Vec<_>>());
+                            bucket_counts = point.bucket_counts().collect::<Vec<_>>();
+                        }
+                    }
+                }
+            }
+        }
+
+        let bounds = bounds.expect("the commit histogram was exported");
+        assert_eq!(
+            bounds,
+            super::INTERACTION_SECONDS.to_vec(),
+            "the SDK fell back to its own boundaries; quantiles would be meaningless"
+        );
+        // 1.7ms must land in (0.001, 0.0025] — the second bucket — not in a
+        // first bucket five seconds wide.
+        assert_eq!(
+            bucket_counts.get(1).copied(),
+            Some(1),
+            "1.7ms did not land in the millisecond bucket: {bucket_counts:?}"
         );
     }
 
