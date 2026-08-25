@@ -1,11 +1,16 @@
 [package]
 name = "nocturnal-provision"
-description = "placeholder"
+description = "dpsbot successor: materializes telemetry.* projections to tokens.txt and Perses provisioning YAMLs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

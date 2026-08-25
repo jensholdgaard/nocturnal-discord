@@ -27,6 +27,8 @@ pub struct Data {
     /// registration guild (see `discord.data_guild_id`).
     pub data_guild: Option<(u64, u64)>,
     pub items: std::sync::Arc<crate::items::ItemSearch>,
+    /// Telemetry provisioning paths; `None` disables /dpstoken and /dpsrevoke.
+    pub provisioning: Option<crate::provision::Provisioning>,
 }
 
 pub type Error = anyhow::Error;
@@ -614,6 +616,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         stresstest(),
     ];
     commands.extend(crate::auctions::commands());
+    commands.extend(crate::provision::commands());
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
     if !cfg.discord.command_prefix.is_empty() {
@@ -629,6 +632,10 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     };
     let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
     let bell_cfg = cfg.bell.clone();
+    let provisioning = crate::provision::Provisioning::from_config(&cfg.provision);
+    if provisioning.is_none() {
+        tracing::info!("telemetry provisioning not configured; /dpstoken and /dpsrevoke are off");
+    }
     let data_guild = cfg.discord.data_guild_id.map(|to| (guild_id, to));
     if let Some((from, to)) = data_guild {
         tracing::info!(
@@ -653,6 +660,17 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     "gateway ready, commands registered"
                 );
                 readiness.set_ready();
+                // Boot recovery: the provisioning files are derived state, so
+                // re-deriving them here is what heals a half-written file, a
+                // restored VM, or a manual edit gone wrong.
+                if let Some(p) = &provisioning {
+                    crate::provision::rematerialize(
+                        &driver,
+                        p,
+                        data_guild.map_or(guild_id, |(_, to)| to),
+                    )
+                    .await;
+                }
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
                 crate::auctions::repost_open_auctions(
@@ -678,6 +696,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     items: std::sync::Arc::new(
                         crate::items::ItemSearch::new().expect("item search client"),
                     ),
+                    provisioning,
                 })
             })
         })

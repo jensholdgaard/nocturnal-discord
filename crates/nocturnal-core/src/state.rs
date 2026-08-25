@@ -1,7 +1,7 @@
 //! Projections: all mutable state, rebuilt by replaying the log.
 //! Everything here derives `PartialEq` so replay determinism is testable.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::event::{ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef};
 
@@ -176,6 +176,14 @@ pub struct GuildState {
     pub auctions: BTreeMap<String, Auction>,
     pub config: GuildConfig,
     pub telemetry: BTreeMap<String, TokenGrant>,
+    /// Every username the ledger has ever issued a telemetry token to.
+    ///
+    /// Grows only — a revoke drops the grant but keeps the name here, because
+    /// the derived files live in directories the ledger does not own.
+    /// `tokens.txt` also carries service credentials (the bot's own among
+    /// them), so "rewrite from the projection" is only safe when the writer
+    /// can tell *its* lines from everyone else's. This set is that answer.
+    pub telemetry_managed: BTreeSet<String>,
 }
 
 /// The whole projected world.

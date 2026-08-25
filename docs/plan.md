@@ -230,15 +230,20 @@ policy-blocked).
 Independent of the DKP cutover — can land any time after M3's Discord layer
 exists; the Python dpsbot retires when this ships.
 
-- [ ] `telemetry.*` events + projection + property tests (issue/refresh/revoke
-      idempotence; materialization is a pure function of the projection).
-- [ ] File materializers: `tokens.txt` + Perses provisioning YAMLs, atomic
-      write + rename, byte-compatible with the legacy formats; re-materialize
-      on boot; golden-file tests against outputs captured from dpsbot.
-- [ ] `/dpstoken` `/dpsrevoke` with the exact legacy UX (DM template, spoiler
+- [x] `telemetry.*` events + projection + lifecycle tests (issue/refresh/revoke,
+      re-issue after revoke, replay determinism); the `managed` set outlives a
+      grant so the materializer can tell its own lines from service tokens.
+- [x] File materializers (`nocturnal-provision`): `tokens.txt` + Perses
+      provisioning YAMLs, atomic write + rename, byte-compatible with the
+      legacy formats; re-materialized on boot; golden-file tests against
+      output captured from the live VM.
+- [x] `/dpstoken` `/dpsrevoke` with the exact legacy UX (DM template, spoiler
       fallback, role-map refusal); `roles.yaml` mapping re-read per command.
-- [ ] Migration: parse existing `tokens.txt` + provisioning dir → genesis
-      `telemetry.*` events; verify re-materialization is byte-identical.
+- [x] Migration (`--import-provisioning`): parses `tokens.txt` + the
+      provisioning dir into genesis `telemetry.*` events and refuses to report
+      success unless the re-derived file matches. Rehearsed against a copy of
+      the live VM's data: 10 grants imported, the `nocturnal-bot` service token
+      skipped, every token value preserved, 0 provisioning files rewritten.
 - [ ] Deploy the unified bot on the observability VM; retire `dpsbot.py`.
 
 **Exit:** `/dpstoken` on the real VM issues a working token; `kill -9` between

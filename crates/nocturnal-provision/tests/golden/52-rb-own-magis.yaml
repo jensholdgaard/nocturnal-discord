@@ -1,0 +1,10 @@
+apiVersion: perses.dev/v1alpha1
+kind: RoleBinding
+metadata:
+  name: owner-magis
+  project: u-magis
+spec:
+  role: owner
+  subjects:
+    - kind: User
+      name: magis

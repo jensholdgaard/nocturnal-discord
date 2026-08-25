@@ -1,0 +1,10 @@
+apiVersion: perses.dev/v1alpha1
+kind: RoleBinding
+metadata:
+  name: viewer-magis
+  project: everquest
+spec:
+  role: viewer
+  subjects:
+    - kind: User
+      name: magis

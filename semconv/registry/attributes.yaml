@@ -401,6 +401,20 @@ groups:
         stability: development
         brief: Wall-clock time the bid storm took.
         examples: ['19.651969534s']
+      - id: nocturnal.provision.files_written
+        type: int
+        stability: development
+        brief: Provisioning files rewritten because they differed from the projection.
+        examples: [4]
+      - id: nocturnal.provision.files_removed
+        type: int
+        stability: development
+        brief: Provisioning files deleted for a member the ledger no longer grants.
+        examples: [4]
+      - id: nocturnal.provision.tokens_rewritten
+        type: boolean
+        stability: development
+        brief: Whether `tokens.txt` itself changed on this pass.
       - id: nocturnal.telemetry.endpoint
         type: string
         stability: development

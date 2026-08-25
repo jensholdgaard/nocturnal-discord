@@ -11,6 +11,7 @@ mod driver;
 mod health;
 mod items;
 mod lock;
+mod provision;
 mod raidhelper;
 mod scheduler;
 
@@ -24,6 +25,7 @@ fn main() -> anyhow::Result<()> {
     let mut mode_check = false;
     let mut mode_print = false;
     let mut offline = false;
+    let mut import_provisioning = false;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -31,6 +33,7 @@ fn main() -> anyhow::Result<()> {
             "--check" => mode_check = true,
             "--print-config" => mode_print = true,
             "--offline" => offline = true,
+            "--import-provisioning" => import_provisioning = true,
             "--bell-test" => {
                 // Diagnostic: connect, join a voice channel, play the bell,
                 // report, exit. No ledger, no lock — just the voice path.
@@ -42,7 +45,7 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             other => anyhow::bail!(
-                "unknown argument {other:?} (known: --config <path>, --check, --print-config, --offline, --version)"
+                "unknown argument {other:?} (known: --config <path>, --check, --print-config, --offline, --import-provisioning, --version)"
             ),
         }
     }
@@ -106,6 +109,51 @@ fn main() -> anyhow::Result<()> {
                     // is never fatal, the next one retries from a clean state.
                     tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "scheduled compaction failed");
                 }
+            }
+        });
+    }
+
+    // One-time M8 migration: dpsbot's files become telemetry.* events, then
+    // the same files are re-derived and compared byte for byte.
+    if import_provisioning {
+        let Some(p) = provision::Provisioning::from_config(&cfg.provision) else {
+            anyhow::bail!(
+                "--import-provisioning needs provision.tokens_path, \
+                 provision.perses_provisioning_dir, provision.roles_map_path and \
+                 provision.dashboard_url in the config"
+            );
+        };
+        let guild = cfg
+            .discord
+            .data_guild_id
+            .or(cfg.discord.guild_id)
+            .context("--import-provisioning needs discord.guild_id (or data_guild_id)")?;
+        return rt.block_on(async move {
+            let before = std::fs::read_to_string(&p.paths.tokens).unwrap_or_default();
+            let (imported, skipped) = provision::import_legacy(&driver, &p, guild).await?;
+            provision::rematerialize(&driver, &p, guild).await;
+            let after = std::fs::read_to_string(&p.paths.tokens).unwrap_or_default();
+
+            // The migration must be a no-op on disk: every line it imported is
+            // re-derived from the ledger, so the file it wrote back has to be
+            // byte-identical to the one it read. A difference means a token was
+            // dropped, reordered into a different set, or silently rewritten.
+            let same_set = {
+                let mut a: Vec<&str> = before.lines().filter(|l| !l.trim().is_empty()).collect();
+                let mut b: Vec<&str> = after.lines().filter(|l| !l.trim().is_empty()).collect();
+                a.sort_unstable();
+                b.sort_unstable();
+                a == b
+            };
+            println!("imported {imported} grant(s), skipped {skipped} line(s)");
+            if same_set {
+                println!("verified: tokens.txt re-derives to the same set of lines");
+                Ok(())
+            } else {
+                anyhow::bail!(
+                    "re-materialized tokens.txt differs from the original — \
+                     refusing to call this migration verified"
+                )
             }
         });
     }

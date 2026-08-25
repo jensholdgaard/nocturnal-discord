@@ -1,0 +1,7 @@
+apiVersion: perses.dev/v1alpha1
+kind: Project
+metadata:
+  name: u-magis
+spec:
+  display:
+    name: "magis (personal)"

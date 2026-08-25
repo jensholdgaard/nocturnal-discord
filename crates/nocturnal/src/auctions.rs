@@ -1521,6 +1521,7 @@ mod tests {
             data_guild: None,
             auctions: std::sync::Arc::new(AuctionUi::default()),
             items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("items")),
+            provisioning: None,
         };
 
         driver

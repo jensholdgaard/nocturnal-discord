@@ -262,6 +262,9 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     role: role.clone(),
                 },
             );
+            // Never removed on revoke: this is what lets the materializer
+            // delete our line without touching a service token.
+            g.telemetry_managed.insert(username.clone());
         }
 
         Event::TelemetryAccessUpdated { username, role } => {

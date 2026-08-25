@@ -322,6 +322,8 @@ pub struct Metrics {
     /// Bytes of WAL not yet compacted into Parquet.
     pub wal_size: Gauge<u64>,
     pub compaction_runs: Counter<u64>,
+    /// `/dpstoken` and `/dpsrevoke` outcomes (usernames stay on spans, never here).
+    pub provision_operations: Counter<u64>,
     pub auctions_active: Gauge<u64>,
     pub raids_active: Gauge<u64>,
     /// How late a derived timer fired against its due instant.
@@ -402,6 +404,10 @@ impl Metrics {
             compaction_runs: meter
                 .u64_counter(metric::NOCTURNAL_COMPACTION_RUNS)
                 .with_unit("{run}")
+                .build(),
+            provision_operations: meter
+                .u64_counter(metric::NOCTURNAL_PROVISION_OPERATIONS)
+                .with_unit("{operation}")
                 .build(),
             auctions_active: meter
                 .u64_gauge(metric::NOCTURNAL_AUCTIONS_ACTIVE)

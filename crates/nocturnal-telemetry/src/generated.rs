@@ -47,6 +47,9 @@ pub mod attr {
     pub const NOCTURNAL_GUILD_REMAP_TO: &str = "nocturnal.guild.remap.to";
     pub const NOCTURNAL_HEALTH_BIND: &str = "nocturnal.health.bind";
     pub const NOCTURNAL_PLAYER_ID: &str = "nocturnal.player.id";
+    pub const NOCTURNAL_PROVISION_FILES_REMOVED: &str = "nocturnal.provision.files_removed";
+    pub const NOCTURNAL_PROVISION_FILES_WRITTEN: &str = "nocturnal.provision.files_written";
+    pub const NOCTURNAL_PROVISION_TOKENS_REWRITTEN: &str = "nocturnal.provision.tokens_rewritten";
     pub const NOCTURNAL_RAID_AWARD_SUMMARY: &str = "nocturnal.raid.award.summary";
     pub const NOCTURNAL_RAID_EVENT_ID: &str = "nocturnal.raid.event_id";
     pub const NOCTURNAL_RAID_NAME: &str = "nocturnal.raid.name";
