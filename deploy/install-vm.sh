@@ -27,7 +27,7 @@ echo "== copying artifacts =="
 "${SCP[@]}" "$BIN" "root@$VM_IP:/usr/local/bin/nocturnal.new"
 "${SCP[@]}" deploy/nocturnal.yaml "root@$VM_IP:/tmp/nocturnal.yaml"
 "${SCP[@]}" deploy/nocturnal.service "root@$VM_IP:/tmp/nocturnal.service"
-"${SCP[@]}" deploy/perses/30-nocturnal-dashboard.yaml "root@$VM_IP:/tmp/30-nocturnal-dashboard.yaml"
+"${SCP[@]}" deploy/perses/4*.yaml "root@$VM_IP:/tmp/"
 tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events wal 2>/dev/null || tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events
 "${SCP[@]}" /tmp/nocturnal-data.tgz "root@$VM_IP:/tmp/nocturnal-data.tgz"
 rm -f /tmp/nocturnal-data.tgz
@@ -71,14 +71,21 @@ OTEL_SERVICE_NAME=nocturnal
 OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer ${NOC_TOKEN}
+# A bid storm lasts ~20s. At the SDK default of 60s the whole burst lands in a
+# single sample, so rate() sees no increase and every quantile panel reads
+# blank for the one event you most wanted to look at.
+OTEL_METRIC_EXPORT_INTERVAL=15000
 EOF
 chmod 600 /etc/nocturnal/env
 
 install -m 0755 /usr/local/bin/nocturnal.new /usr/local/bin/nocturnal
 rm -f /usr/local/bin/nocturnal.new
 install -m 0644 /tmp/nocturnal.service /etc/systemd/system/nocturnal.service
-install -m 0644 /tmp/30-nocturnal-dashboard.yaml /etc/perses/provisioning/30-nocturnal-dashboard.yaml
-rm -f /tmp/nocturnal.yaml /tmp/nocturnal.service /tmp/30-nocturnal-dashboard.yaml
+for f in /tmp/4*-bot-*.yaml; do
+  [ -e "$f" ] || continue   # unmatched glob under `set -u` would abort the deploy
+  install -m 0644 "$f" "/etc/perses/provisioning/$(basename "$f")"
+done
+rm -f /tmp/nocturnal.yaml /tmp/nocturnal.service /tmp/4*-bot-*.yaml
 
 # Pre-flight, then run.
 sudo -u nocturnal /usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.yaml --check

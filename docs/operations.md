@@ -155,6 +155,16 @@ Note that a metric only appears in Prometheus once it has been recorded at
 least once. A counter at zero on a freshly started bot means "has not happened
 yet", not "not instrumented".
 
+`OTEL_METRIC_EXPORT_INTERVAL=15000` on the VM, against an SDK default of 60s.
+A bid storm lasts about twenty seconds: at the default the entire burst lands
+in a single exported sample, `rate()` has no increase to compute, and every
+quantile panel reads blank for precisely the event you wanted to look at. The
+same effect appears for one interval after any restart, because counters and
+histograms have no series until their first observation — so a burst that is
+also a series' birth is invisible whatever the interval. Gauges
+(`nocturnal.ledger.seq`, `wal.size`, the `process.*` set) are seeded at boot
+and do not have this blind spot.
+
 ### Compaction
 
 Sealed WAL segments roll into month-partitioned Parquet. **This does not run on
