@@ -255,6 +255,19 @@ exists; the Python dpsbot retires when this ships.
       skipped, every token value preserved, 0 provisioning files rewritten.
 - [ ] Deploy the unified bot on the observability VM; retire `dpsbot.py`.
 
+### `/backup` (2026-08-26 — the one legacy command that was still missing)
+
+- [x] `nocturnal-migrate::export`: the projection rendered back into
+      `{guild}_players.json` / `{guild}_raids.json` using **the same structs
+      the importer parses**, so there is one definition of the format.
+- [x] `/backup` (Administrator, ephemeral): both documents zipped — 71 MB of
+      JSON becomes ~5 MB — with a size refusal that names the nightly tarball.
+- [x] Round-trip proof against the real 2026-08-20 snapshot: all 281 players
+      and 506 raids, field by field and log line by log line.
+- [x] `raid.imported` and `player.imported` carry the legacy fields the export
+      has to give back (`tickDuration`, `dkpsPerTick`, `eventId`, the Mongo
+      `_id`). Additive, so existing logs replay unchanged.
+
 **Exit:** `/dpstoken` on the real VM issues a working token; `kill -9` between
 event and file write heals on restart; dpsbot's systemd unit disabled.
 

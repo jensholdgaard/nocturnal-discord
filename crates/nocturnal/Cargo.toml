@@ -31,6 +31,7 @@ rustix.workspace = true
 reqwest.workspace = true
 scraper.workspace = true
 urlencoding.workspace = true
+zip.workspace = true
 
 [lints]
 workspace = true

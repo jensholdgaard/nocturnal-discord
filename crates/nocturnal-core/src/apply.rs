@@ -24,11 +24,13 @@ pub fn apply(state: &mut State, env: &Envelope) {
             characters,
             creation_ts_ms,
             log,
+            legacy_id,
         } => {
             let p = Player {
                 balance: *balance,
                 characters: characters.clone(),
                 creation_ts_ms: *creation_ts_ms,
+                legacy_id: legacy_id.clone(),
                 log: log
                     .iter()
                     .map(|e| LogEntry {
@@ -119,17 +121,20 @@ pub fn apply(state: &mut State, env: &Envelope) {
             name,
             date_ms,
             entries,
+            tick_interval_ms,
+            dkp_per_tick,
+            event_id,
         } => {
             g.raids.insert(
                 raid_id.clone(),
                 Raid {
                     name: name.clone(),
                     date_ms: *date_ms,
-                    tick_interval_ms: 0,
-                    dkp_per_tick: 0,
+                    tick_interval_ms: *tick_interval_ms,
+                    dkp_per_tick: *dkp_per_tick,
                     active: false,
                     tick_no: entries.len() as u32,
-                    event_id: None,
+                    event_id: event_id.clone(),
                     entries: entries
                         .iter()
                         .map(|e| AttendanceEntry {

@@ -354,12 +354,14 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             characters,
             creation_ts_ms,
             log,
+            legacy_id,
         } => Ok(vec![Event::PlayerImported {
             player: *player,
             balance: *balance,
             characters: characters.clone(),
             creation_ts_ms: *creation_ts_ms,
             log: log.clone(),
+            legacy_id: legacy_id.clone(),
         }]),
 
         Command::ImportRaid {
@@ -367,11 +369,17 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             name,
             date_ms,
             entries,
+            tick_interval_ms,
+            dkp_per_tick,
+            event_id,
         } => Ok(vec![Event::RaidImported {
             raid_id: raid_id.clone(),
             name: name.clone(),
             date_ms: *date_ms,
             entries: entries.clone(),
+            tick_interval_ms: *tick_interval_ms,
+            dkp_per_tick: *dkp_per_tick,
+            event_id: event_id.clone(),
         }]),
     }
 }

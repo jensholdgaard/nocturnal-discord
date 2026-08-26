@@ -48,6 +48,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 toml = "0.8"
 serde_yaml_ng = "0.10"
+# `/backup` ships the ledger as the legacy pair of JSON documents; 71 MB of
+# them, so the attachment has to be compressed to fit Discord at all.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 anyhow = "1"
 rustix = { version = "1", features = ["fs", "param", "rand"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }

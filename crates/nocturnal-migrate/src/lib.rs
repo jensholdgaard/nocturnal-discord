@@ -6,66 +6,73 @@
 //! fresh WAL, plus a verification report proving every replayed balance
 //! matches the snapshot to the point (hazard B10).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use nocturnal_core::event::{ImportedAttendance, ImportedLogEntry, Item, RaidRef};
 use nocturnal_core::{Actor, Command, Ctx, Envelope, Ledger};
 
+pub mod export;
+
 // ---- legacy document shapes (as serialized by the Node mongodb driver) -----
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyPlayer {
+    #[serde(rename = "_id", default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub player: String,
     pub guild: String,
     #[serde(default)]
     pub current: i64,
     #[serde(default, rename = "creationDate")]
     pub creation_date: i64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub characters: Vec<String>,
     #[serde(default)]
     pub log: Vec<LegacyLogEntry>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyLogEntry {
     #[serde(default)]
     pub dkp: i64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
     #[serde(default)]
     pub date: i64,
-    #[serde(default)]
-    pub raid: Option<LegacyRaidRef>,
-    #[serde(default)]
+    // `Option<Option<_>>`: the outer level is "was the key there at all",
+    // the inner is `null`. Legacy writes the key on every entry, sometimes
+    // null, and the importer has always accepted both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raid: Option<Option<LegacyRaidRef>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item: Option<LegacyItem>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyRaidRef {
-    #[serde(rename = "_id")]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyItem {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyRaid {
-    #[serde(rename = "_id", default)]
+    #[serde(rename = "_id", default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub guild: String,
     pub name: String,
@@ -73,18 +80,46 @@ pub struct LegacyRaid {
     pub date: i64,
     #[serde(default)]
     pub attendance: Vec<LegacyAttendance>,
+    #[serde(default, rename = "tickDuration", deserialize_with = "lenient_i64")]
+    pub tick_duration: i64,
+    #[serde(default, rename = "dkpsPerTick", deserialize_with = "lenient_i64")]
+    pub dkps_per_tick: i64,
+    #[serde(default, rename = "eventId", skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
+    #[serde(default)]
+    pub active: bool,
+    #[serde(default)]
+    pub deprecated: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LegacyAttendance {
     #[serde(default)]
     pub players: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
     #[serde(default)]
     pub date: i64,
     #[serde(default)]
     pub dkps: i64,
+}
+
+/// Legacy derived `tickDuration` from a float number of minutes, so the real
+/// snapshot contains values like `299879.99999999994` — three of the guild's
+/// 506 raids. These are milliseconds; the ledger holds them as integers and
+/// rounds, which moves a tick boundary by well under a microsecond.
+///
+/// Deliberately *not* used for anything that carries DKP: a fractional balance
+/// is a corruption worth failing on, not rounding away.
+fn lenient_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
+    match serde_json::Value::deserialize(d)? {
+        serde_json::Value::Number(n) => n
+            .as_i64()
+            .or_else(|| n.as_f64().map(|f| f.round() as i64))
+            .ok_or_else(|| serde::de::Error::custom(format!("not a number: {n}"))),
+        serde_json::Value::Null => Ok(0),
+        other => Err(serde::de::Error::custom(format!("not a number: {other}"))),
+    }
 }
 
 // ---- conversion -------------------------------------------------------------
@@ -140,6 +175,9 @@ pub fn genesis_commands(
             raid_id,
             name: r.name.clone(),
             date_ms: r.date,
+            tick_interval_ms: r.tick_duration,
+            dkp_per_tick: r.dkps_per_tick,
+            event_id: r.event_id.clone(),
             entries: r
                 .attendance
                 .iter()
@@ -173,6 +211,7 @@ pub fn genesis_commands(
         }
         commands.push(Command::ImportPlayer {
             player,
+            legacy_id: p.id.clone(),
             balance: p.current,
             characters: p.characters.clone(),
             creation_ts_ms: p.creation_date,
@@ -183,7 +222,7 @@ pub fn genesis_commands(
                     dkp: e.dkp,
                     comment: e.comment.clone().unwrap_or_default(),
                     ts_ms: e.date,
-                    raid: e.raid.as_ref().and_then(|r| {
+                    raid: e.raid.as_ref().and_then(|r| r.as_ref()).and_then(|r| {
                         r.id.as_ref().map(|id| RaidRef {
                             raid_id: id.clone(),
                             name: r.name.clone().unwrap_or_default(),

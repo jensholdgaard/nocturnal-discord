@@ -40,6 +40,7 @@ fn samples() -> Vec<Event> {
                 }),
                 item: None,
             }],
+            legacy_id: None,
         },
         Event::DkpAdjusted {
             player: 1,
@@ -81,6 +82,9 @@ fn samples() -> Vec<Event> {
                 ts_ms: 1,
                 amount: 1,
             }],
+            tick_interval_ms: 360_000,
+            dkp_per_tick: 1,
+            event_id: Some("ev-1".into()),
         },
         Event::AuctionOpened {
             auction_id: "a".into(),
@@ -186,6 +190,54 @@ fn every_event_round_trips_and_kind_is_pinned() {
         assert_eq!(env.event.kind(), *expected_kind, "Event::kind() drifted");
         let back: Envelope = serde_json::from_str(&json).unwrap();
         assert_eq!(back, env, "round-trip changed the event");
+    }
+}
+
+/// The API key is wrapped in `Secret` so it cannot reach a log line through
+/// `Debug`. That wrapper must stay invisible on the wire: a struct-shaped
+/// `{"raidhelper_api_key":{"0":"..."}}` would fail to load every existing
+/// `config.updated` event.
+#[test]
+fn a_wrapped_secret_is_a_plain_string_on_the_wire() {
+    let event = Event::ConfigUpdated {
+        patch: ConfigPatch {
+            raidhelper_api_key: Some(nocturnal_core::Secret::from("rh-key".to_owned())),
+            ..Default::default()
+        },
+    };
+    let value: serde_json::Value =
+        serde_json::from_str(&serde_json::to_string(&event).unwrap()).unwrap();
+    assert_eq!(value["payload"]["patch"]["raidhelper_api_key"], "rh-key");
+
+    let json = r#"{"kind":"config.updated","payload":{"patch":{"raidhelper_api_key":"rh-key"}}}"#;
+    let back: Event = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        back, event,
+        "an event written before the wrapper still loads"
+    );
+}
+
+/// `raid.imported` gained the legacy raid's tick settings and RaidHelper link
+/// on 2026-08-26 so `/backup` can give them back. Additive means additive: an
+/// event written before that must still load, and must still mean what it
+/// meant.
+#[test]
+fn a_raid_imported_without_the_added_fields_still_loads() {
+    let json = r#"{"seq":0,"ts_ms":1,"guild":1,"actor":"system","kind":"raid.imported",
+        "payload":{"raid_id":"r0","name":"Old","date_ms":1,"entries":[]}}"#;
+    let env: Envelope = serde_json::from_str(json).unwrap();
+    match env.event {
+        Event::RaidImported {
+            tick_interval_ms,
+            dkp_per_tick,
+            event_id,
+            ..
+        } => {
+            assert_eq!(tick_interval_ms, 0);
+            assert_eq!(dkp_per_tick, 0);
+            assert_eq!(event_id, None);
+        }
+        other => panic!("{other:?}"),
     }
 }
 

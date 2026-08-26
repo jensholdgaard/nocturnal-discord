@@ -36,7 +36,7 @@ Rules:
 | `player.registered` | discord_id, main_character | Self or officer registration |
 | `player.character_linked` | character, class, level | From registration or `/who` parse |
 | `player.character_unlinked` | character | |
-| `player.imported` | balance, lifetime_earned, lifetime_spent, characters[] | **Genesis only** (migration) |
+| `player.imported` | balance, lifetime_earned, lifetime_spent, characters[], `legacy_id`? | **Genesis only** (migration). `legacy_id` (added 2026-08-26) is the Mongo `_id`, carried so `/backup` can reproduce the document |
 
 ### DKP ledger
 | Kind | Payload | Notes |
@@ -51,7 +51,7 @@ Rules:
 | `raid.roster_updated` | raid_id, joined[], left[] | From `/who` log parsing |
 | `raid.tick` | raid_id, tick_no, awarded[{player, amount}] | One event per tick — the "41 writes per tick" pattern becomes one append; `tick_no` makes double-award unrepresentable |
 | `raid.ended` | raid_id, reason (officer \| catchup) | Transient Discord errors can no longer end a raid — only this event can |
-| `raid.imported` | … | Genesis only |
+| `raid.imported` | …, `tick_interval_ms`, `dkp_per_tick`, `event_id`? | Genesis only. The three trailing fields were added 2026-08-26 (defaulted, so older events replay unchanged) because `/backup` has to give them back |
 
 ### Auctions (one unified model; `flavor: short | long`)
 | Kind | Payload | Notes |

@@ -149,6 +149,11 @@ pub enum Event {
         characters: Vec<String>,
         creation_ts_ms: i64,
         log: Vec<ImportedLogEntry>,
+        /// Additive (2026-08-26): the Mongo `_id` of the legacy document.
+        /// Carried only so `/backup` can hand it back — something downstream
+        /// of that file may key on it, and the ledger cannot invent one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        legacy_id: Option<String>,
     },
 
     // -- DKP ledger ----------------------------------------------------------
@@ -198,6 +203,16 @@ pub enum Event {
         name: String,
         date_ms: i64,
         entries: Vec<ImportedAttendance>,
+        /// Additive (2026-08-26): the legacy raid documents carry these, and
+        /// `/backup` has to give them back — the roster page downstream reads
+        /// the same shape. Defaulted, so every event written before this
+        /// still replays to exactly what it replayed to before.
+        #[serde(default)]
+        tick_interval_ms: i64,
+        #[serde(default)]
+        dkp_per_tick: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        event_id: Option<String>,
     },
 
     // -- auctions ------------------------------------------------------------

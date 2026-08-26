@@ -21,6 +21,10 @@ pub struct Player {
     pub characters: Vec<String>,
     pub creation_ts_ms: i64,
     pub log: Vec<LogEntry>,
+    /// The `_id` of the legacy Mongo document, for players that came from the
+    /// migration. `None` for anyone the rewrite met first — nothing in the
+    /// bot reads it; it exists so `/backup` can reproduce the document.
+    pub legacy_id: Option<String>,
 }
 
 /// One attendance entry (Start / Tick / End / award comment).
@@ -211,7 +215,7 @@ impl GuildState {
 
     /// A raid counts for attendance while younger than the deprecation window
     /// (derived — no deprecation events needed).
-    fn raid_counts(&self, raid: &Raid, now_ms: i64) -> bool {
+    pub fn raid_counts(&self, raid: &Raid, now_ms: i64) -> bool {
         raid.date_ms >= now_ms - self.config.raid_deprecation_ms
     }
 

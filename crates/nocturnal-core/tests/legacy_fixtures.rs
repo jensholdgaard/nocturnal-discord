@@ -211,6 +211,9 @@ fn attendance_matches_legacy_fixture() {
             name: "old".into(),
             date_ms: 400_000,
             entries: vec![e(vec![P1], 400_000)],
+            tick_interval_ms: 0,
+            dkp_per_tick: 0,
+            event_id: None,
         },
     )
     .unwrap();
@@ -227,6 +230,9 @@ fn attendance_matches_legacy_fixture() {
                 e(vec![P1, P2], 1_000_002),
                 e(vec![P1], 1_000_003),
             ],
+            tick_interval_ms: 0,
+            dkp_per_tick: 0,
+            event_id: None,
         },
     )
     .unwrap();
@@ -238,6 +244,9 @@ fn attendance_matches_legacy_fixture() {
             name: "Nagafen".into(),
             date_ms: 1_200_000,
             entries: vec![e(vec![P1, P2, P3], 1_200_000)],
+            tick_interval_ms: 0,
+            dkp_per_tick: 0,
+            event_id: None,
         },
     )
     .unwrap();

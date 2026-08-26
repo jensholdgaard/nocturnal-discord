@@ -617,6 +617,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     ];
     commands.extend(crate::auctions::commands());
     commands.extend(crate::provision::commands());
+    commands.extend(crate::backup::commands());
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
     if !cfg.discord.command_prefix.is_empty() {

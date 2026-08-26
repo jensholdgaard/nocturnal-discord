@@ -111,12 +111,16 @@ pub enum Command {
         characters: Vec<String>,
         creation_ts_ms: i64,
         log: Vec<ImportedLogEntry>,
+        legacy_id: Option<String>,
     },
     ImportRaid {
         raid_id: String,
         name: String,
         date_ms: i64,
         entries: Vec<ImportedAttendance>,
+        tick_interval_ms: i64,
+        dkp_per_tick: i64,
+        event_id: Option<String>,
     },
 }
 

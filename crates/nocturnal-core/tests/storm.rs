@@ -41,6 +41,7 @@ fn bid_storm_is_fast_on_heavy_history() {
                     characters: vec![],
                     creation_ts_ms: 1_000_000,
                     log,
+                    legacy_id: None,
                 },
             )
             .unwrap();
