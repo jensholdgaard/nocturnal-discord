@@ -77,6 +77,8 @@ pub enum Command {
     },
     CloseAuction {
         auction_id: String,
+        /// `Some` only for `/endauction`: close now, before the deadline.
+        ended_ts_ms: Option<i64>,
     },
     /// Debits the winners (short: officer confirm; long: scheduler).
     FinalizeAuction {

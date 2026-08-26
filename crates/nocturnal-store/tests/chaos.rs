@@ -205,6 +205,7 @@ fn run_scenario(seed: u64) {
                     now,
                     &Command::CloseAuction {
                         auction_id: auction_id.clone(),
+                        ended_ts_ms: None,
                     },
                 );
                 if rng.below(5) == 0 {

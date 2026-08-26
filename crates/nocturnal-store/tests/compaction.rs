@@ -20,6 +20,7 @@ fn env(seq: u64, ts_ms: i64) -> Envelope {
         correlation_id: None,
         event: Event::AuctionClosed {
             auction_id: format!("a{seq}"),
+            ended_ts_ms: None,
         },
     }
 }

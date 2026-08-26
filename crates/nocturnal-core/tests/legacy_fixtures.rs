@@ -79,6 +79,7 @@ fn finish(l: &mut Ledger, id: &str) -> Vec<(u64, i64, bool)> {
         &ctx(70_000),
         &Command::CloseAuction {
             auction_id: id.into(),
+            ended_ts_ms: None,
         },
     )
     .unwrap();
@@ -520,6 +521,7 @@ fn stale_winner_dropped_if_balance_no_longer_covers() {
         &ctx(70_000),
         &Command::CloseAuction {
             auction_id: "a".into(),
+            ended_ts_ms: None,
         },
     )
     .unwrap();

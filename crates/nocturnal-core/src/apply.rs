@@ -171,6 +171,8 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     status: AuctionStatus::Open,
                     bids: Vec::new(),
                     winners: Vec::new(),
+                    cancelled_by: None,
+                    cancelled_ts_ms: None,
                 },
             );
         }
@@ -205,9 +207,18 @@ pub fn apply(state: &mut State, env: &Envelope) {
             }
         }
 
-        Event::AuctionClosed { auction_id } => {
+        Event::AuctionClosed {
+            auction_id,
+            ended_ts_ms,
+        } => {
             if let Some(a) = g.auctions.get_mut(auction_id) {
                 a.status = AuctionStatus::Closed;
+                // An officer stopped it early: the deadline *is* that moment,
+                // so every embed and every later read reports when bidding
+                // actually stopped.
+                if let Some(ended) = ended_ts_ms {
+                    a.deadline_ts_ms = *ended;
+                }
             }
         }
 
@@ -248,6 +259,14 @@ pub fn apply(state: &mut State, env: &Envelope) {
         Event::AuctionCancelled { auction_id, .. } => {
             if let Some(a) = g.auctions.get_mut(auction_id) {
                 a.status = AuctionStatus::Cancelled;
+                // Who pulled it, and when. Taken from the envelope rather
+                // than the payload: every event already carries both, and a
+                // cancelled auction is the one an officer gets asked about.
+                a.cancelled_by = match env.actor {
+                    crate::event::Actor::User(id) => Some(id),
+                    crate::event::Actor::System => None,
+                };
+                a.cancelled_ts_ms = Some(ts);
             }
         }
 

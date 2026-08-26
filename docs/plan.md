@@ -186,6 +186,24 @@ live mock night.)*
 **Exit:** the "anatomy of a typical crash" scenario from the audit is replayed
 step by step against the new bot and is boring.
 
+### Ported from upstream (2026-08-26)
+
+The legacy bot gained a run of auction work on 2026-08-24/25, after our audit.
+Taken so far:
+
+- [x] `/auctiondetails` refuses a running auction (officers bid too), and the
+      public peek notice fires only when bids were actually shown. A cancelled
+      auction reads back with who pulled it and when.
+- [x] `/cancelauction` and `/endauction`, both gated on the officer **role**
+      itself rather than Administrator. `/endauction` rewrites the deadline to
+      the moment bidding stopped, then settles down the scheduler's own path.
+
+Not taken — they conflict with the "keep current UX" decision and need officer
+sign-off: modal bid entry replacing DMs (our DM race is already closed by the
+single pending prompt per bidder), long-auction bidding by buttons instead of
+`/bid`, and upstream'"'"'s removal of `/parsedkps`. Still open: per-auction
+`autodebit`/`lockdelay`, and the embed field-limit guard.
+
 ### Deployment kit (pulled forward from M6, 2026-08-21)
 
 `deploy/`: static musl binary via cargo-zigbuild, `nocturnal.toml` for the

@@ -109,6 +109,7 @@ fn samples() -> Vec<Event> {
         },
         Event::AuctionClosed {
             auction_id: "a".into(),
+            ended_ts_ms: None,
         },
         Event::AuctionFinalized {
             auction_id: "a".into(),
@@ -237,6 +238,20 @@ fn a_raid_imported_without_the_added_fields_still_loads() {
             assert_eq!(dkp_per_tick, 0);
             assert_eq!(event_id, None);
         }
+        other => panic!("{other:?}"),
+    }
+}
+
+/// `auction.closed` gained `ended_ts_ms` on 2026-08-26 for `/endauction`.
+/// Every close written before that was a close at the deadline, and must
+/// still replay as one.
+#[test]
+fn an_auction_closed_without_the_added_field_still_loads() {
+    let json = r#"{"seq":0,"ts_ms":1,"guild":1,"actor":"system","kind":"auction.closed",
+        "payload":{"auction_id":"a"}}"#;
+    let env: Envelope = serde_json::from_str(json).unwrap();
+    match env.event {
+        Event::AuctionClosed { ended_ts_ms, .. } => assert_eq!(ended_ts_ms, None),
         other => panic!("{other:?}"),
     }
 }

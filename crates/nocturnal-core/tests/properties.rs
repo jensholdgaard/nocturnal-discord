@@ -74,7 +74,8 @@ fn arb_command() -> impl Strategy<Value = Command> {
             player,
         }),
         auction_id.clone().prop_map(|id| Command::CloseAuction {
-            auction_id: id.into()
+            auction_id: id.into(),
+            ended_ts_ms: None,
         }),
         (auction_id.clone(), any::<u64>()).prop_map(|(id, seed)| Command::FinalizeAuction {
             auction_id: id.into(),

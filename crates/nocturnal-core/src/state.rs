@@ -76,6 +76,10 @@ pub struct Auction {
     pub status: AuctionStatus,
     pub bids: Vec<Bid>,
     pub winners: Vec<crate::event::Winner>,
+    /// Set when the auction was cancelled: who did it, and when. `None` for
+    /// a cancel the scheduler made on its own.
+    pub cancelled_by: Option<PlayerId>,
+    pub cancelled_ts_ms: Option<i64>,
 }
 
 /// Per-guild behavioural config with the *fixed* defaults (audit S9: the

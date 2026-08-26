@@ -332,15 +332,19 @@ impl AuctionUi {
 }
 
 /// Re-render an auction's embed to match ledger state. Never fatal.
+/// Returns whether the auction's post now shows its current state. A `false`
+/// means the officer was told something the channel was not: `/endauction`
+/// warns on it, because a settled auction whose message still shows live bid
+/// buttons is how someone bids on an item that is already gone.
 pub async fn refresh(
     http: &serenity::Http,
     ui: &AuctionUi,
     driver: &DriverHandle,
     ledger_guild: GuildId,
     auction_id: &str,
-) {
+) -> bool {
     let Some((channel, message)) = ui.locate(auction_id) else {
-        return;
+        return false;
     };
     let aid = auction_id.to_owned();
     let Some(auction) = driver
@@ -351,7 +355,7 @@ pub async fn refresh(
         })
         .await
     else {
-        return;
+        return false;
     };
     let (embed, rows) = match auction.status {
         AuctionStatus::Open => {
@@ -391,7 +395,9 @@ pub async fn refresh(
             { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
             "auction embed refresh failed"
         );
+        return false;
     }
+    true
 }
 
 /// Post an auction's embed to its channel and remember where it went.
@@ -911,7 +917,20 @@ pub async fn auctiondetails(
         return Ok(());
     };
 
-    // Legacy social feature (kept): peeking is announced publicly.
+    // Officers bid too, so the standing bids of a live auction are shown to
+    // nobody — reading them is worth an item. A cancelled auction is readable
+    // at once: its bids are dead, and the officer asking is usually asking
+    // why it was pulled.
+    if !details_readable(auction.status) {
+        ctx.say(format!(
+            ":no_entry: `{auctionid}` is still running — the bids stay sealed until it closes."
+        ))
+        .await?;
+        return Ok(());
+    }
+
+    // Legacy social feature (kept): peeking is announced publicly. Only on a
+    // reading that actually happened — a refusal is not a peek.
     if let Some(channel) = auction_channel {
         let who = ctx.author().id.get();
         let id_for_msg = auctionid.clone();
@@ -927,9 +946,17 @@ pub async fn auctiondetails(
     }
 
     let mut body = format!(
-        "Auction details: {} - {auctionid}\nNumber of items: {}\nStatus: {:?}\nBids:\n",
+        "Auction details: {} - {auctionid}\nNumber of items: {}\nStatus: {:?}\n",
         auction.item.name, auction.num_items, auction.status
     );
+    if auction.status == AuctionStatus::Cancelled {
+        body.push_str(&match (auction.cancelled_by, auction.cancelled_ts_ms) {
+            (Some(who), Some(ts)) => format!("Cancelled by <@{who}> <t:{}:R>\n", ts / 1000),
+            (None, Some(ts)) => format!("Cancelled by the bot <t:{}:R>\n", ts / 1000),
+            _ => "Cancelled\n".to_owned(),
+        });
+    }
+    body.push_str("Bids:\n");
     for b in &auction.bids {
         body.push_str(&format!(
             "- <@{}> - {} - {}\n",
@@ -951,8 +978,228 @@ pub async fn auctiondetails(
     Ok(())
 }
 
+/// Whether `/auctiondetails` may show an auction's bids.
+///
+/// Only a running auction is sealed. Officers bid too, so publishing the
+/// standing bids of a live auction is worth an item to whoever reads them —
+/// and unlike most leaks this one is invisible, because the command answers
+/// ephemerally. Everything settled is readable, cancelled auctions included:
+/// their bids are dead, and that is usually what the officer is asking about.
+fn details_readable(status: AuctionStatus) -> bool {
+    !matches!(status, AuctionStatus::Open)
+}
+
+/// Stricter than `officer_check`: these two ask for the officer role *itself*,
+/// and an Administrator who was never given it is refused.
+///
+/// Pulling or force-closing a live auction moves DKP, and the guild already
+/// said who may do that. With no officer role configured there is nothing to
+/// ask for, so it falls back to Administrator — a server that has not run
+/// `/configure` yet is not left unable to stop a 48-hour auction.
+async fn officer_role_check(ctx: Context<'_>) -> Result<bool, Error> {
+    let Some(member) = ctx.author_member().await else {
+        return Ok(false);
+    };
+    let ledger_guild = require_guild(&ctx)?;
+    let admin_role = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.config.admin_role)
+        })
+        .await;
+    let allowed = match admin_role {
+        Some(role) => member.roles.iter().any(|r| r.get() == role),
+        None => member.permissions.is_some_and(|p| p.administrator()),
+    };
+    if !allowed {
+        ctx.say(match admin_role {
+            Some(role) => format!(
+                ":no_entry: This one needs the officer role itself (<@&{role}>) — \
+                 Administrator alone is not enough for an auction that moves DKP."
+            ),
+            None => ":no_entry: You don't have the permission to use this command".to_owned(),
+        })
+        .await?;
+    }
+    Ok(allowed)
+}
+
+/// Look an auction up, or tell the caller it is not there.
+async fn find_auction(ctx: &Context<'_>, auction_id: &str) -> Result<Option<Auction>, Error> {
+    let ledger_guild = require_guild(ctx)?;
+    let aid = auction_id.to_owned();
+    let found = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.auctions.get(&aid).cloned())
+        })
+        .await;
+    if found.is_none() {
+        ctx.say(":no_entry: Auction not found").await?;
+    }
+    Ok(found)
+}
+
+/// Void a running auction: bids stop, no winner is picked, no DKP moves.
+#[tracing::instrument(name = "command.cancelauction", skip_all, fields(otel.kind = "server"))]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "cancelauction",
+    check = "officer_role_check"
+)]
+pub async fn cancelauction(
+    ctx: Context<'_>,
+    #[description = "The auction id"] auctionid: String,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    if find_auction(&ctx, &auctionid).await?.is_none() {
+        return Ok(());
+    }
+
+    // The ledger's own rule decides what may still be cancelled: anything that
+    // has not been finalized. Unlike the legacy bot, closing does not move
+    // DKP here — finalizing does — so an auction awaiting its confirmation is
+    // still safely voidable, and one already paid out is not (that is
+    // /adddkp's job).
+    let outcome = crate::discord::execute(
+        &ctx,
+        Command::CancelAuction {
+            auction_id: auctionid.clone(),
+            reason: "officer".into(),
+        },
+    )
+    .await?;
+    match outcome {
+        Ok(_) => {
+            // The bids stay in the ledger and /auctiondetails reads them back,
+            // but they are not republished: a cancelled auction is usually
+            // re-run, and reprinting everyone's first bid would hand the
+            // second round to whoever scrolls up.
+            let shown = refresh(
+                ctx.serenity_context().http.as_ref(),
+                &ctx.data().auctions,
+                &ctx.data().driver,
+                ledger_guild,
+                &auctionid,
+            )
+            .await;
+            ctx.say(if shown {
+                format!("`{auctionid}` cancelled — no winner, no DKP moved. The bids are still readable with `/auctiondetails`.")
+            } else {
+                format!(
+                    ":warning: `{auctionid}` cancelled, but its post could not be updated — \
+                     it may still show bid buttons. No winner was picked and no DKP moved."
+                )
+            })
+            .await?;
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Close a running auction now and settle it, skipping the wait.
+#[tracing::instrument(name = "command.endauction", skip_all, fields(otel.kind = "server"))]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "endauction",
+    check = "officer_role_check"
+)]
+pub async fn endauction(
+    ctx: Context<'_>,
+    #[description = "The auction id"] auctionid: String,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    if find_auction(&ctx, &auctionid).await?.is_none() {
+        return Ok(());
+    }
+    let now = crate::discord::chrono_now_ms();
+
+    // Bidding stops the instant this lands, before any winner is worked out,
+    // and the deadline becomes this moment so the recap names when the
+    // auction actually stopped rather than when it was scheduled to.
+    let closed = crate::discord::execute(
+        &ctx,
+        Command::CloseAuction {
+            auction_id: auctionid.clone(),
+            ended_ts_ms: Some(now),
+        },
+    )
+    .await?;
+    if let Err(e) = closed {
+        ctx.say(rejection_text(&e)).await?;
+        return Ok(());
+    }
+
+    // Same command the scheduler would have run after the grace period: same
+    // winners, same revalidation against current balances, same debit.
+    // Skipping the wait publishes this auction's prices while any auction
+    // running beside it is still taking bids — that is the officer's call.
+    let finalized = crate::discord::execute(
+        &ctx,
+        Command::FinalizeAuction {
+            auction_id: auctionid.clone(),
+            seed: now as u64,
+        },
+    )
+    .await?;
+    if let Err(e) = finalized {
+        // Closed but not settled: say so plainly, because bidding has already
+        // stopped and nobody has been charged.
+        ctx.say(format!(
+            "{} — `{auctionid}` is closed and taking no more bids.",
+            rejection_text(&e)
+        ))
+        .await?;
+        return Ok(());
+    }
+
+    let shown = refresh(
+        ctx.serenity_context().http.as_ref(),
+        &ctx.data().auctions,
+        &ctx.data().driver,
+        ledger_guild,
+        &auctionid,
+    )
+    .await;
+    let auction = find_auction(&ctx, &auctionid).await?;
+    let winners = auction
+        .as_ref()
+        .map(|a| winners_text(&a.winners))
+        .unwrap_or_else(|| "none".to_owned());
+    ctx.say(if shown {
+        format!("`{auctionid}` closed and settled.\nWinner/s:\n{winners}")
+    } else {
+        format!(
+            ":warning: `{auctionid}` closed and settled, but its post could not be updated — \
+             nobody was told in the channel. The DKP has already moved.\nWinner/s:\n{winners}"
+        )
+    })
+    .await?;
+    Ok(())
+}
+
 pub fn commands() -> Vec<poise::Command<crate::discord::Data, Error>> {
-    vec![startbid(), startlongbid(), bid(), auctiondetails()]
+    vec![
+        startbid(),
+        startlongbid(),
+        bid(),
+        auctiondetails(),
+        cancelauction(),
+        endauction(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -1383,7 +1630,24 @@ pub async fn handle_component(
 
 #[cfg(test)]
 mod tests {
-    use super::{closed_message, custom_id, live_message, parse_custom_id, Action, Flavor};
+    use super::{
+        closed_message, custom_id, details_readable, live_message, parse_custom_id, Action,
+        AuctionStatus, Flavor,
+    };
+
+    /// The one status that must stay sealed, and the three that must not.
+    /// A running auction's bids are worth an item to whoever reads them.
+    #[test]
+    fn only_a_running_auction_keeps_its_bids_sealed() {
+        assert!(!details_readable(AuctionStatus::Open), "still taking bids");
+        for status in [
+            AuctionStatus::Closed,
+            AuctionStatus::Finalized,
+            AuctionStatus::Cancelled,
+        ] {
+            assert!(details_readable(status), "{status:?} is settled");
+        }
+    }
 
     #[test]
     fn custom_ids_round_trip() {
@@ -1412,6 +1676,8 @@ mod tests {
             status: nocturnal_core::state::AuctionStatus::Open,
             bids: Vec::new(),
             winners: Vec::new(),
+            cancelled_by: None,
+            cancelled_ts_ms: None,
         }
     }
 

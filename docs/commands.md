@@ -71,7 +71,9 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/startbid` | officer | search, minbid?, numitems?, database? | Short auction flow (below) |
 | `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database? | Long auction; bids via `/bid` |
 | `/bid` | all | auctionid, dkps, bidformain? (default true) | Bid on a long auction; **0 retracts** |
-| `/auctiondetails` | officer | auctionid | Dump bids/winners; publicly announces the peek in the auction channel |
+| `/auctiondetails` | officer | auctionid | Dump bids/winners of a **settled** auction; refused while it is still running; publicly announces the peek in the auction channel (only when it actually showed something) |
+| `/cancelauction` | officer role | auctionid | Void a running auction: no winner, no DKP. Bids stay readable, not republished |
+| `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |
 | `/searchitem` | all | search, database? | Item lookup without an auction |
 | `/searchlogs` | all | search | Paginated ledger search by comment; searches matching `/tick/i` are refused with flavor text |
 | `/backup` | admin | — | Zip of `{guild}_players.json` + `{guild}_raids.json` attached to the reply (ephemeral); the roster page reads these |
@@ -235,7 +237,16 @@ doesn't care where it runs). Paths and the dashboard URL are config
 10. Ephemeral/public visibility per current *intent* (several legacy ephemeral
     flags are silent no-ops); `:prohibited:` renders as the emoji.
 11. Stale buttons (pre-restart) answer "this auction has ended" instead of dying.
-12. `/configure` refuses values that used to be accepted and break later: a
+12. `/auctiondetails` is refused while the auction is still running — officers
+    bid too, and the standing bids of a live auction are worth an item to
+    whoever reads them. Settled and cancelled auctions read as before, and the
+    public peek notice is posted only when something was actually shown.
+13. `/cancelauction` and `/endauction` exist (upstream, 2026-08-24): there was
+    no way to pull or force-close a long auction. Both require the officer
+    **role** itself — an Administrator who was never given it is refused,
+    because these move DKP and the guild already said who may do that. With no
+    officer role configured they fall back to Administrator.
+14. `/configure` refuses values that used to be accepted and break later: a
     tick duration of zero, a deprecation window of zero, a bid time outside
     30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
     channel equal to the first (which would double everyone's tick). Nothing

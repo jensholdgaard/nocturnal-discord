@@ -92,6 +92,7 @@ fn bid_storm_is_fast_on_heavy_history() {
                 &ctx(3_100_000),
                 &Command::CloseAuction {
                     auction_id: format!("storm-{a}"),
+                    ended_ts_ms: None,
                 },
             )
             .unwrap();

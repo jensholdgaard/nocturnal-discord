@@ -162,6 +162,7 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::CloseAuction {
             auction_id: "a1".into(),
+            ended_ts_ms: None,
         },
     );
 
@@ -200,6 +201,7 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::CloseAuction {
             auction_id: "a2".into(),
+            ended_ts_ms: None,
         },
     );
     run(
@@ -217,6 +219,7 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::CloseAuction {
             auction_id: "a3".into(),
+            ended_ts_ms: None,
         },
     );
     run(

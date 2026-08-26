@@ -201,6 +201,7 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
         } else {
             Command::CloseAuction {
                 auction_id: auction_id.clone(),
+                ended_ts_ms: None,
             }
         };
         match s.driver.execute(ledger_guild, Actor::System, cmd).await {

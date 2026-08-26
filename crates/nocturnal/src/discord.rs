@@ -908,7 +908,7 @@ pub async fn officer_check(ctx: Context<'_>) -> Result<bool, Error> {
     Ok(allowed)
 }
 
-async fn execute(
+pub(crate) async fn execute(
     ctx: &Context<'_>,
     cmd: Command,
 ) -> Result<Result<Vec<nocturnal_core::Envelope>, ExecError>, Error> {
@@ -1984,6 +1984,7 @@ pub async fn stresstest(
                 actor,
                 Command::CloseAuction {
                     auction_id: auction_id.clone(),
+                    ended_ts_ms: None,
                 },
             )
             .await

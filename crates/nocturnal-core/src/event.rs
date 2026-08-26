@@ -243,7 +243,16 @@ pub enum Event {
     },
     /// Bidding ends deterministically at this event's seq (audit #48).
     #[serde(rename = "auction.closed")]
-    AuctionClosed { auction_id: String },
+    AuctionClosed {
+        auction_id: String,
+        /// Additive (2026-08-26): set when an officer closed the auction
+        /// early with `/endauction`, and the deadline becomes this. The
+        /// recap then names the moment bidding actually stopped instead of
+        /// the time the auction was originally scheduled to end. Absent for
+        /// the scheduler's own close, which happens at the deadline anyway.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended_ts_ms: Option<i64>,
+    },
     /// The debit: winners are charged in this fold step (audit E2).
     #[serde(rename = "auction.finalized")]
     AuctionFinalized {

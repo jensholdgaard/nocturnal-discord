@@ -59,7 +59,7 @@ Rules:
 | `auction.opened` | auction_id, item, flavor, min_bid, deadline, quantity | The legacy ~80 % duplicated short/long code paths collapse into one state machine |
 | `auction.bid_placed` | auction_id, player, amount, channel (button \| dm) | Re-bid by same player replaces; decide step enforces bid ≤ current balance − committed bids on *other* open auctions (kills cross-auction double-spend at bid time too) |
 | `auction.bid_retracted` | auction_id, player | |
-| `auction.closed` | auction_id | Deadline reached — bidding ends deterministically at this seq; "bid during close window" ambiguity gone |
+| `auction.closed` | auction_id, `ended_ts_ms`? | Deadline reached — bidding ends deterministically at this seq; "bid during close window" ambiguity gone. `ended_ts_ms` (added 2026-08-26) is set only by `/endauction` and becomes the deadline, so the recap names when bidding actually stopped |
 | `auction.tie_broken` | auction_id, candidates[], seed, winner | The draw is auditable; candidate set is the *correct* array |
 | `auction.finalized` | auction_id, winners[{player, amount}] | **Is** the debit — fold decrements balances here. No separate charge step to forget |
 | `auction.cancelled` | auction_id, reason | |

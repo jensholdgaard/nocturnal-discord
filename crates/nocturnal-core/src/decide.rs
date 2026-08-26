@@ -258,7 +258,10 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
-        Command::CloseAuction { auction_id } => {
+        Command::CloseAuction {
+            auction_id,
+            ended_ts_ms,
+        } => {
             let auction = g
                 .auctions
                 .get(auction_id)
@@ -268,6 +271,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }
             Ok(vec![Event::AuctionClosed {
                 auction_id: auction_id.clone(),
+                ended_ts_ms: *ended_ts_ms,
             }])
         }
 
