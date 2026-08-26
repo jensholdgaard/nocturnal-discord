@@ -198,11 +198,21 @@ Taken so far:
       itself rather than Administrator. `/endauction` rewrites the deadline to
       the moment bidding stopped, then settles down the scheduler's own path.
 
-Not taken — they conflict with the "keep current UX" decision and need officer
-sign-off: modal bid entry replacing DMs (our DM race is already closed by the
-single pending prompt per bidder), long-auction bidding by buttons instead of
-`/bid`, and upstream'"'"'s removal of `/parsedkps`. Still open: per-auction
-`autodebit`/`lockdelay`, and the embed field-limit guard.
+- [x] Modal bid entry replaces the DM prompt, long auctions get the same two
+      bid buttons, `/bid` is gone. The race upstream fixed we never had (one
+      pending prompt per bidder); what carries over is that a modal needs no
+      open DMs and that both auction kinds behave alike.
+- [x] `/parsedkps` removed, as upstream removed it. The `/who` parser stays in
+      `nocturnal-core`.
+- [x] Embed field-limit guard: a full raid bidding on one item used to produce
+      no embed at all, not a long one.
+- [x] Item stat block tightened (raider feedback, 2026-08-26): padding and
+      blank rows out, dash rule slimmed.
+
+Still open: per-auction `autodebit` / `lockdelay`.
+
+The baseline moved: "keep current behaviour" was pinned to the bot officers
+knew in August, and these changes are live in the bot they use now.
 
 ### Deployment kit (pulled forward from M6, 2026-08-21)
 

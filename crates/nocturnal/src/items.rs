@@ -279,18 +279,26 @@ fn table_to_text(html: &str, name: &str) -> String {
             _ => {}
         }
     }
+    // Tighten it. The scraped block arrives padded for a fixed-width web
+    // table — leading spaces on some lines, runs of trailing spaces on
+    // others, and blank rows between sections. In a Discord embed that is not
+    // alignment, it is just a tall ragged block, and raiders reading it on a
+    // phone mid-raid asked for it smaller. Every line is trimmed at both
+    // ends, runs of spaces inside a line collapse to one, and blank lines go.
     let mut collapsed = String::with_capacity(out.len());
-    let mut blank = 0;
     for line in out.lines() {
-        if line.trim().is_empty() {
-            blank += 1;
-            if blank > 1 {
-                continue;
-            }
-        } else {
-            blank = 0;
+        let mut words = line.split_whitespace().peekable();
+        if words.peek().is_none() {
+            continue;
         }
-        collapsed.push_str(line.trim_end());
+        let mut first = true;
+        for word in words {
+            if !first {
+                collapsed.push(' ');
+            }
+            collapsed.push_str(word);
+            first = false;
+        }
         collapsed.push('\n');
     }
     collapsed.trim().to_owned()
@@ -316,10 +324,22 @@ mod tests {
             !text.contains("Symbol of Veeshan"),
             "name not stripped: {text:?}"
         );
-        assert!(
-            !text.contains("\n\n\n"),
-            "blank runs not collapsed: {text:?}"
-        );
+        assert!(!text.contains("\n\n"), "blank lines survived: {text:?}");
+    }
+
+    /// The scraped table is padded for a fixed-width web layout. None of that
+    /// padding survives into the embed: raiders read this on a phone during a
+    /// raid and asked for it tighter.
+    #[test]
+    fn the_web_tables_padding_does_not_reach_the_embed() {
+        let html = "<table><tr><td>Cloak</td></tr><tr><td>  LORE ITEM   NO DROP      </td></tr>\
+                    <tr><td>   </td></tr><tr><td>  WT: 5    Size: MEDIUM  </td></tr></table>";
+        let text = table_to_text(html, "Cloak");
+        assert_eq!(text, "LORE ITEM NO DROP\nWT: 5 Size: MEDIUM");
+        for line in text.lines() {
+            assert_eq!(line, line.trim(), "ragged line: {line:?}");
+            assert!(!line.contains("  "), "space run survived: {line:?}");
+        }
     }
 
     #[test]

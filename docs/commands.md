@@ -64,13 +64,11 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/adddkp` | officer | player, dkp ≥1, comment | Credit one player |
 | `/removedkp` | officer | player, dkp, comment | Debit one player (**no lower bound — legacy bug**) |
 | `/addraiddkp` | officer | dkp, comment | Credit everyone in the raid channel; needs active raid; logs attendance entry + embed |
-| `/parsedkps` | officer | comment, dkps, raid:bool, log | Award by pasted EQ `/who` log block |
 | `/registercharacter` | all | name | Link an EQ character to the caller |
 | `/startraid` | officer | name?, dkpspertick?, tickduration? | Start the (single) raid; awards a `Start` tick to those present |
 | `/endraid` | officer | — | End raid; final `End` attendance entry (0 DKP); posts full movement log; RaidHelper auto-award if event-linked |
 | `/startbid` | officer | search, minbid?, numitems?, database? | Short auction flow (below) |
 | `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database? | Long auction; bids via `/bid` |
-| `/bid` | all | auctionid, dkps, bidformain? (default true) | Bid on a long auction; **0 retracts** |
 | `/auctiondetails` | officer | auctionid | Dump bids/winners of a **settled** auction; refused while it is still running; publicly announces the peek in the auction channel (only when it actually showed something) |
 | `/cancelauction` | officer role | auctionid | Void a running auction: no winner, no DKP. Bids stay readable, not republished |
 | `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |
@@ -167,7 +165,7 @@ the rewrite does (deliberate change).
   lists: Rewarded / NOT enough attendance / NOT subscribed / NOT attended.
 - `/endraid` auto-award is hardcoded 5 DKP → make configurable (deliberate change).
 
-## `/who` log parsing (`/parsedkps`)
+## `/who` log parsing (parser retained, no command)
 
 Input: pasted EQ `/who` output. Legacy parse: timestamp from `[…]`; character
 names = first word after each `]`, filtering literals `Players`/`There`.
@@ -246,7 +244,19 @@ doesn't care where it runs). Paths and the dashboard URL are config
     **role** itself — an Administrator who was never given it is refused,
     because these move DKP and the guild already said who may do that. With no
     officer role configured they fall back to Administrator.
-14. `/configure` refuses values that used to be accepted and break later: a
+14. Bids are typed into a **modal**, not a DM, and long auctions carry the same
+    *Main bid* / *Alt bid* buttons as short ones — so `/bid` is gone. Upstream's
+    reason was a `MessageCollector` race we never had (one pending prompt per
+    bidder); the reasons that carry over are that a modal needs no open DMs and
+    that both auction kinds now behave the same way. Confirmations name the
+    item and the side.
+15. `/parsedkps` is removed, as upstream removed it — nothing used it. The
+    `/who` parser stays in `nocturnal-core` with its tests, so restoring the
+    command is a command wrapper away.
+16. The item stat block is trimmed: leading and trailing padding gone, runs of
+    spaces collapsed, blank rows dropped, and the 56-dash rule slimmed. It is
+    read on a phone during a raid.
+17. `/configure` refuses values that used to be accepted and break later: a
     tick duration of zero, a deprecation window of zero, a bid time outside
     30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
     channel equal to the first (which would double everyone's tick). Nothing

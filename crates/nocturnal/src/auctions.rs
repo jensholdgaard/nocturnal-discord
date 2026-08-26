@@ -79,35 +79,61 @@ pub fn parse_custom_id(id: &str) -> Option<(Action, &str)> {
 // Rendering (legacy formats)
 // ---------------------------------------------------------------------------
 
-fn winners_text(winners: &[nocturnal_core::event::Winner]) -> String {
-    if winners.is_empty() {
-        return "No winner".to_owned();
+/// Discord caps an embed field value at 1024 characters and rejects the whole
+/// message above it — so a full raid bidding on one item does not produce a
+/// long embed, it produces no embed at all, and the auction looks dead. Lines
+/// are dropped from the end and the count is kept, because the top bids are
+/// the ones anyone reads.
+const FIELD_LIMIT: usize = 1024;
+
+fn field_lines(lines: Vec<String>, empty: &str) -> String {
+    if lines.is_empty() {
+        return empty.to_owned();
     }
-    winners
-        .iter()
-        .map(|w| {
-            format!(
-                "<@{}>{} for {} dkp",
-                w.player,
-                if w.for_main { "" } else { " - alter" },
-                w.amount
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut out = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        let remaining = lines.len() - i;
+        // Reserve room for the "and N more" line before committing to this one.
+        let tail = format!("\n…and {remaining} more");
+        if out.len() + 1 + line.len() + tail.len() > FIELD_LIMIT {
+            out.push_str(&tail);
+            return out;
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(line);
+    }
+    out
+}
+
+fn winners_text(winners: &[nocturnal_core::event::Winner]) -> String {
+    field_lines(
+        winners
+            .iter()
+            .map(|w| {
+                format!(
+                    "<@{}>{} for {} dkp",
+                    w.player,
+                    if w.for_main { "" } else { " - alter" },
+                    w.amount
+                )
+            })
+            .collect(),
+        "No winner",
+    )
 }
 
 /// Bids are shown anonymised (amount only), exactly like the legacy embeds.
 fn bids_text(auction: &Auction) -> String {
-    if auction.bids.is_empty() {
-        return "No bids".to_owned();
-    }
     let mut bids: Vec<&nocturnal_core::state::Bid> = auction.bids.iter().collect();
     bids.sort_by_key(|b| std::cmp::Reverse(b.amount));
-    bids.iter()
-        .map(|b| format!("- {}{}", b.amount, if b.for_main { "" } else { " - alter" }))
-        .collect::<Vec<_>>()
-        .join("\n")
+    field_lines(
+        bids.iter()
+            .map(|b| format!("- {}{}", b.amount, if b.for_main { "" } else { " - alter" }))
+            .collect(),
+        "No bids",
+    )
 }
 
 /// The live (bidding) message — legacy `sendAuctionStartEmbed` /
@@ -140,10 +166,10 @@ pub fn live_message(
             );
             let row = serenity::CreateActionRow::Buttons(vec![
                 serenity::CreateButton::new(custom_id(Action::Bid, auction_id))
-                    .label("I want to bid")
+                    .label("Main bid")
                     .style(serenity::ButtonStyle::Primary),
                 serenity::CreateButton::new(custom_id(Action::BidAlt, auction_id))
-                    .label("Bid for Alter")
+                    .label("Alt bid")
                     .style(serenity::ButtonStyle::Secondary),
                 serenity::CreateButton::new(custom_id(Action::Cancel, auction_id))
                     .label("Cancel")
@@ -172,7 +198,19 @@ pub fn live_message(
                     format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
                     true,
                 );
-            (content, embed, Vec::new())
+            // The same buttons as a short auction. They keep working across a
+            // restart because the auction id is in the custom id and the
+            // auction itself is in the ledger — nothing here is a listener
+            // that dies with the process (B11/B12).
+            let row = serenity::CreateActionRow::Buttons(vec![
+                serenity::CreateButton::new(custom_id(Action::Bid, auction_id))
+                    .label("Main bid")
+                    .style(serenity::ButtonStyle::Primary),
+                serenity::CreateButton::new(custom_id(Action::BidAlt, auction_id))
+                    .label("Alt bid")
+                    .style(serenity::ButtonStyle::Secondary),
+            ]);
+            (content, embed, vec![row])
         }
     }
 }
@@ -256,28 +294,11 @@ pub fn settled_message(
 // Message registry + rendering side effects
 // ---------------------------------------------------------------------------
 
-/// A DM prompt awaiting the bidder's number.
-#[derive(Debug, Clone)]
-pub struct PendingBid {
-    pub auction_id: String,
-    pub for_main: bool,
-    pub dm_channel: u64,
-    pub expires_ms: i64,
-}
-
 #[derive(Default)]
 pub struct AuctionUi {
     /// auction id → (channel, message) of its posted embed. Presentation
     /// state: lost on restart, rebuilt by re-posting open auctions.
     messages: Mutex<HashMap<String, (u64, u64)>>,
-    /// user → the bid prompt they owe an answer to. One per user, so a second
-    /// click cannot stack prompts (audit #39) and an answer can only ever
-    /// apply to the auction it was asked for (audit #50).
-    ///
-    /// Replaces a per-click `MessageCollector`: DM replies are handled by the
-    /// same gateway event path as everything else, which is far easier to
-    /// observe and does not depend on a collector living long enough.
-    pending: Mutex<HashMap<u64, PendingBid>>,
 }
 
 impl AuctionUi {
@@ -295,39 +316,6 @@ impl AuctionUi {
         if let Ok(mut m) = self.messages.lock() {
             m.remove(auction_id);
         }
-    }
-
-    /// Record that this user owes us a bid amount. Returns false if they
-    /// already have a live prompt.
-    pub fn arm_prompt(&self, user: u64, pending: PendingBid) -> bool {
-        let Ok(mut p) = self.pending.lock() else {
-            return false;
-        };
-        let now = chrono_now_ms();
-        p.retain(|_, v| v.expires_ms > now); // opportunistic cleanup
-        if p.contains_key(&user) {
-            return false;
-        }
-        p.insert(user, pending);
-        true
-    }
-
-    fn disarm_prompt(&self, user: u64) {
-        if let Ok(mut p) = self.pending.lock() {
-            p.remove(&user);
-        }
-    }
-
-    /// The prompt this DM answers, if it is still live. Left armed: the
-    /// caller disarms once a bid actually lands (legacy lets you retype after
-    /// a refusal instead of making you click the button again).
-    fn peek_prompt(&self, user: u64, channel: u64) -> Option<PendingBid> {
-        let p = self.pending.lock().ok()?;
-        let pending = p.get(&user)?.clone();
-        if pending.dm_channel != channel || pending.expires_ms <= chrono_now_ms() {
-            return None;
-        }
-        Some(pending)
     }
 }
 
@@ -808,83 +796,6 @@ pub async fn startlongbid(
     .await
 }
 
-/// Bid on a long auction (0 removes your bid).
-#[tracing::instrument(name = "command.bid", skip_all, fields(otel.kind = "server"))]
-#[poise::command(slash_command, ephemeral, rename = "bid")]
-pub async fn bid(
-    ctx: Context<'_>,
-    #[description = "auctionid"] auctionid: String,
-    #[description = "The amount of dkps"]
-    #[min = 0]
-    dkps: i64,
-    #[description = "Bid for main (default true)"] bidformain: Option<bool>,
-) -> Result<(), Error> {
-    let ledger_guild = require_guild(&ctx)?;
-    crate::discord::ack_ephemeral(&ctx).await?;
-    let player = ctx.author().id.get();
-    let aid = auctionid.clone();
-    let item_name = ctx
-        .data()
-        .driver
-        .query(move |l| {
-            l.state()
-                .guild(ledger_guild)
-                .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
-        })
-        .await;
-    let Some(item_name) = item_name else {
-        ctx.say(":no_entry: Auction not found").await?;
-        return Ok(());
-    };
-
-    let cmd = if dkps == 0 {
-        Command::RetractBid {
-            auction_id: auctionid.clone(),
-            player,
-        }
-    } else {
-        Command::PlaceBid {
-            auction_id: auctionid.clone(),
-            player,
-            amount: dkps,
-            for_main: bidformain.unwrap_or(true),
-        }
-    };
-    match ctx
-        .data()
-        .driver
-        .execute(ledger_guild, Actor::User(player), cmd)
-        .await
-    {
-        Ok(_) if dkps == 0 => {
-            ctx.say(format!("Removed bid on {item_name}")).await?;
-        }
-        Ok(_) => {
-            ctx.say(format!(
-                "Bid {dkps} DKPs as {} on {item_name}",
-                if bidformain.unwrap_or(true) {
-                    "MAIN"
-                } else {
-                    "ALT"
-                }
-            ))
-            .await?;
-        }
-        Err(e) => {
-            ctx.say(rejection_text(&e)).await?;
-        }
-    }
-    refresh(
-        ctx.serenity_context().http.as_ref(),
-        &ctx.data().auctions,
-        &ctx.data().driver,
-        ledger_guild,
-        &auctionid,
-    )
-    .await;
-    Ok(())
-}
-
 /// Show the details of an auction.
 #[tracing::instrument(name = "command.auctiondetails", skip_all, fields(otel.kind = "server"))]
 #[poise::command(
@@ -1195,7 +1106,6 @@ pub fn commands() -> Vec<poise::Command<crate::discord::Data, Error>> {
     vec![
         startbid(),
         startlongbid(),
-        bid(),
         auctiondetails(),
         cancelauction(),
         endauction(),
@@ -1275,129 +1185,180 @@ async fn reply(
     Ok(())
 }
 
-/// The DM bid flow (legacy UX, kept — hardened). Fixes from the audit:
-/// the collector is bound to *this* auction (#50), a second click while a
-/// prompt is open does not stack another collector (#39), and a closed DM
-/// falls back to an ephemeral reply instead of throwing inside a catch (#5).
-async fn dm_bid_flow(
+/// Ask for the amount in a modal.
+///
+/// This replaces the DM prompt the legacy bot used, and closes the bug that
+/// made it worth replacing upstream: a `MessageCollector` filters only on the
+/// DM channel, so every prompt a bidder had open collected the *same* reply —
+/// one number typed with two auctions running was registered as a bid on
+/// both. A modal's value arrives on its own interaction, which belongs to one
+/// auction and one button, so concurrent auctions cannot be confused.
+///
+/// It also removes the bidder with closed DMs as a special case: there is no
+/// DM channel to fail to open.
+async fn open_bid_modal(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
-    data: &Data,
-    ledger_guild: GuildId,
     auction_id: &str,
     for_main: bool,
 ) -> anyhow::Result<()> {
-    let user = interaction.user.id;
-    let player: PlayerId = user.get();
+    let action = if for_main {
+        Action::Bid
+    } else {
+        Action::BidAlt
+    };
+    let input = serenity::CreateInputText::new(
+        serenity::InputTextStyle::Short,
+        if for_main { "Main bid" } else { "Alt bid" },
+        BID_INPUT_ID,
+    )
+    .placeholder("Whole number of DKP — 0 withdraws your bid")
+    .required(true)
+    .max_length(12);
+    interaction
+        .create_response(
+            ctx,
+            serenity::CreateInteractionResponse::Modal(
+                serenity::CreateModal::new(custom_id(action, auction_id), "Place a bid")
+                    .components(vec![serenity::CreateActionRow::InputText(input)]),
+            ),
+        )
+        .await
+        .context("opening the bid modal")?;
+    crate::discord::record_component_ack(interaction.id.get());
+    Ok(())
+}
+
+/// The text input's own id, inside the modal.
+const BID_INPUT_ID: &str = "amount";
+
+/// Pull the typed amount out of a submitted modal.
+fn submitted_amount(modal: &serenity::ModalInteraction) -> Option<&str> {
+    modal.data.components.iter().find_map(|row| {
+        row.components.iter().find_map(|c| match c {
+            serenity::ActionRowComponent::InputText(input) if input.custom_id == BID_INPUT_ID => {
+                input.value.as_deref()
+            }
+            _ => None,
+        })
+    })
+}
+
+/// Decide a submitted bid. Free of serenity beyond the parse, so the rules can
+/// be tested against a real ledger: returns the reply text and, when the
+/// ledger changed, the auction whose embed needs re-rendering.
+pub async fn resolve_modal_bid(
+    data: &Data,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    player: PlayerId,
+    for_main: bool,
+    raw: &str,
+) -> (String, Option<String>) {
+    let raw = raw.trim();
+    // Strict: "50abc" is a typo, not a bid of 50.
+    let Ok(amount) = raw.parse::<i64>() else {
+        return (
+            format!("`{raw}` is not a whole number — press the button again to retry."),
+            None,
+        );
+    };
+    let cmd = if amount == 0 {
+        Command::RetractBid {
+            auction_id: auction_id.to_owned(),
+            player,
+        }
+    } else {
+        Command::PlaceBid {
+            auction_id: auction_id.to_owned(),
+            player,
+            amount,
+            for_main,
+        }
+    };
+    let outcome = data
+        .driver
+        .execute(ledger_guild, Actor::User(player), cmd)
+        .await;
     let aid = auction_id.to_owned();
-    let item_name = data
+    let item = data
         .driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
                 .and_then(|g| g.auctions.get(&aid).map(|a| a.item.name.clone()))
-                .unwrap_or_else(|| "the item".to_owned())
         })
-        .await;
-
-    let dm = match user.create_dm_channel(ctx).await {
-        Ok(dm) => dm,
-        Err(e) => {
-            tracing::info!(
-                { attr::NOCTURNAL_PLAYER_ID } = player,
-                { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
-                "DM channel unavailable; ephemeral fallback"
-            );
-            return reply(
-                ctx,
-                interaction,
-                format!(
-                    "Couldn't DM you (privacy settings). Bid here instead: `/controels-bid auctionid:{auction_id} dkps:<amount>`"
-                ),
-            )
-            .await;
-        }
-    };
-
-    // Arm before prompting: the reply can arrive the instant the DM lands.
-    let armed = data.auctions.arm_prompt(
-        player,
-        PendingBid {
-            auction_id: auction_id.to_owned(),
-            for_main,
-            dm_channel: dm.id.get(),
-            // Legacy: a fixed 60-second DM collector from the click. A reply
-            // after the auction closed is refused by the ledger with a clear
-            // message, which is more useful than silence.
-            expires_ms: chrono_now_ms() + 60_000,
-        },
-    );
-    if !armed {
-        return reply(
-            ctx,
-            interaction,
-            "You already have a bid prompt open — check your DMs.",
-        )
-        .await;
-    }
-
-    let prompt = discord_call("dm bid prompt", async {
-        dm.say(
-            ctx,
-            format!(
-                "How much do you want to `{}` bid on {item_name}?, 0 to cancel",
-                if for_main { "MAIN" } else { "ALT" }
-            ),
-        )
         .await
-    })
-    .await;
-    if let Err(e) = prompt {
-        data.auctions.disarm_prompt(player);
-        tracing::info!(
-            { attr::NOCTURNAL_PLAYER_ID } = player,
-            { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
-            "DM send failed; ephemeral fallback"
-        );
-        return reply(
-            ctx,
-            interaction,
-            format!("Couldn't DM you. Bid here instead: `/controels-bid auctionid:{auction_id} dkps:<amount>`"),
-        )
-        .await;
-    }
+        .unwrap_or_else(|| "the item".to_owned());
+    // Name the item and the side: a bidder with two auctions open needs to
+    // see which one this answered.
+    let text = match &outcome {
+        Ok(_) if amount == 0 => format!("Bid withdrawn from **{item}**"),
+        Ok(_) => format!(
+            "Bid **{amount}** as {} on **{item}**",
+            if for_main { "MAIN" } else { "ALT" }
+        ),
+        Err(e) => rejection_text(e),
+    };
     tracing::info!(
         { attr::NOCTURNAL_PLAYER_ID } = player,
         { attr::NOCTURNAL_AUCTION_ID } = auction_id,
-        { attr::NOCTURNAL_BID_FOR_MAIN } = for_main,
-        "DM bid prompt sent; awaiting reply"
+        { attr::NOCTURNAL_BID_AMOUNT } = amount,
+        { attr::NOCTURNAL_BID_ACCEPTED } = outcome.is_ok(),
+        "modal bid resolved"
     );
-    reply(ctx, interaction, "Sent — check your DMs. 📨").await
+    (text, outcome.is_ok().then(|| auction_id.to_owned()))
 }
 
-/// A direct message to the bot. If the sender owes us a bid amount, this is
-/// it. Handled on the ordinary gateway event path — same road as every other
-/// interaction — rather than a per-click collector.
-pub async fn handle_dm(
+/// A submitted bid modal.
+#[tracing::instrument(
+    name = "modal.bid",
+    skip_all,
+    fields(otel.kind = "server", nocturnal.auction.id = tracing::field::Empty)
+)]
+pub async fn handle_modal(
     ctx: &serenity::Context,
-    message: &serenity::Message,
+    modal: &serenity::ModalInteraction,
     data: &Data,
 ) -> anyhow::Result<()> {
-    let player = message.author.id.get();
-    let channel = message.channel_id.get();
-    let Some((text, refresh_id)) = resolve_dm_bid(data, player, channel, &message.content).await
-    else {
-        return Ok(()); // not answering a prompt of ours
+    let Some((action, auction_id)) = parse_custom_id(&modal.data.custom_id) else {
+        return Ok(()); // not ours
     };
-    if let Err(e) = message.channel_id.say(ctx, &text).await {
-        tracing::warn!(
-            { attr::NOCTURNAL_PLAYER_ID } = player,
-            { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
-            "could not confirm bid in DM"
-        );
-    }
+    tracing::Span::current().record("nocturnal.auction.id", auction_id);
+    // Defer first, exactly as for a click: everything below borrows time we
+    // no longer owe Discord.
+    modal
+        .create_response(
+            ctx,
+            serenity::CreateInteractionResponse::Defer(
+                serenity::CreateInteractionResponseMessage::new().ephemeral(true),
+            ),
+        )
+        .await
+        .context("deferring bid modal")?;
+    crate::discord::record_component_ack(modal.id.get());
+
+    let Some(discord_guild) = modal.guild_id.map(|g| g.get()) else {
+        return Ok(());
+    };
+    let ledger_guild = match data.data_guild {
+        Some((from, to)) if from == discord_guild => to,
+        _ => discord_guild,
+    };
+    let Some(raw) = submitted_amount(modal) else {
+        return modal_reply(ctx, modal, ":no_entry: No amount was submitted.").await;
+    };
+    let (text, refresh_id) = resolve_modal_bid(
+        data,
+        ledger_guild,
+        auction_id,
+        modal.user.id.get(),
+        action == Action::Bid,
+        raw,
+    )
+    .await;
+    modal_reply(ctx, modal, text).await?;
     if let Some(auction_id) = refresh_id {
-        let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
         refresh(
             ctx.http.as_ref(),
             &data.auctions,
@@ -1410,70 +1371,21 @@ pub async fn handle_dm(
     Ok(())
 }
 
-/// The DM decision itself, free of serenity types so it can be tested end to
-/// end against a real ledger. Returns the reply text plus the auction whose
-/// embed needs re-rendering, or `None` when the message is not answering a
-/// prompt of ours.
-pub async fn resolve_dm_bid(
-    data: &Data,
-    player: PlayerId,
-    channel: u64,
-    content: &str,
-) -> Option<(String, Option<String>)> {
-    let pending = data.auctions.peek_prompt(player, channel)?;
-    let raw = content.trim().to_owned();
-    tracing::info!(
-        { attr::NOCTURNAL_PLAYER_ID } = player,
-        { attr::NOCTURNAL_AUCTION_ID } = %pending.auction_id,
-        { attr::NOCTURNAL_BID_REPLY_LENGTH } = raw.len(),
-        "DM bid reply received"
-    );
-
-    // A DM has no guild, so the ledger guild is the configured one.
-    let ledger_guild = data.data_guild.map_or(data.default_guild, |(_, to)| to);
-    let Ok(amount) = raw.parse::<i64>() else {
-        return Some((
-            format!("`{raw}` is not a number — click the button again to retry."),
-            None,
-        ));
-    };
-
-    let cmd = if amount == 0 {
-        Command::RetractBid {
-            auction_id: pending.auction_id.clone(),
-            player,
-        }
-    } else {
-        Command::PlaceBid {
-            auction_id: pending.auction_id.clone(),
-            player,
-            amount,
-            for_main: pending.for_main,
-        }
-    };
-    let outcome = data
-        .driver
-        .execute(ledger_guild, Actor::User(player), cmd)
-        .await;
-    let text = match &outcome {
-        Ok(_) if amount == 0 => "Bid cancelled".to_owned(),
-        Ok(_) => "Bid placed".to_owned(),
-        Err(e) => rejection_text(e),
-    };
-    tracing::info!(
-        { attr::NOCTURNAL_PLAYER_ID } = player,
-        { attr::NOCTURNAL_AUCTION_ID } = %pending.auction_id,
-        { attr::NOCTURNAL_BID_AMOUNT } = amount,
-        { attr::NOCTURNAL_BID_ACCEPTED } = outcome.is_ok(),
-        "DM bid resolved"
-    );
-    // Legacy keeps the DM collector open until a bid lands or is cancelled,
-    // so a typo or a refusal just means "type another number".
-    if outcome.is_ok() {
-        data.auctions.disarm_prompt(player);
-    }
-    let refresh_id = outcome.is_ok().then(|| pending.auction_id.clone());
-    Some((text, refresh_id))
+async fn modal_reply(
+    ctx: &serenity::Context,
+    modal: &serenity::ModalInteraction,
+    text: impl Into<String>,
+) -> anyhow::Result<()> {
+    modal
+        .create_followup(
+            ctx,
+            serenity::CreateInteractionResponseFollowup::new()
+                .content(text.into())
+                .ephemeral(true),
+        )
+        .await
+        .context("bid modal follow-up")?;
+    Ok(())
 }
 
 /// Dispatch a component click. Everything needed is in the custom id and the
@@ -1492,6 +1404,13 @@ pub async fn handle_component(
         return Ok(()); // not ours (item pickers, pagination, …)
     };
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
+    // A modal *is* the response to the click, so it cannot follow an
+    // acknowledge — this branch answers before the defer-first rule applies,
+    // and does no work of its own to stay inside the 3-second window. Every
+    // check the bid needs happens on submit, where the ledger decides.
+    if matches!(action, Action::Bid | Action::BidAlt) {
+        return open_bid_modal(ctx, interaction, auction_id, action == Action::Bid).await;
+    }
     // Defer-first: nothing below this line races the 3-second window.
     ack(ctx, interaction).await?;
     let Some(discord_guild) = interaction.guild_id.map(|g| g.get()) else {
@@ -1517,25 +1436,8 @@ pub async fn handle_component(
     };
 
     match action {
-        Action::Bid | Action::BidAlt => {
-            if status != AuctionStatus::Open {
-                return reply(
-                    ctx,
-                    interaction,
-                    ":no_entry: Bidding on this auction has closed.",
-                )
-                .await;
-            }
-            dm_bid_flow(
-                ctx,
-                interaction,
-                data,
-                ledger_guild,
-                auction_id,
-                action == Action::Bid,
-            )
-            .await
-        }
+        // Answered above: a bid opens a modal instead of being acknowledged.
+        Action::Bid | Action::BidAlt => Ok(()),
         Action::Cancel => {
             if !component_is_officer(interaction, &data.driver, ledger_guild).await {
                 return reply(
@@ -1701,13 +1603,23 @@ mod tests {
         );
     }
 
-    /// Long auctions are bid on with /bid and carry no buttons at all.
+    /// Long auctions are bid on with the same two buttons as short ones. They
+    /// survive a restart because the auction id is in the custom id and the
+    /// auction is in the ledger — no listener has to stay alive for 48 hours.
     #[test]
-    fn live_long_auction_has_no_buttons() {
+    fn live_long_auction_offers_the_bid_buttons() {
         let (_, _, rows) = live_message("au-2", &sample_auction(Flavor::Long));
-        assert!(
-            rows.is_empty(),
-            "long auctions are bid on with /bid and carry no buttons, like the legacy embed"
+        let json = serde_json::to_value(&rows).expect("rows serialize");
+        let ids: Vec<String> = json[0]["components"]
+            .as_array()
+            .expect("button row")
+            .iter()
+            .map(|b| b["custom_id"].as_str().unwrap_or_default().to_owned())
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["nb:bid:au-2", "nb:alt:au-2"],
+            "main and alt, and no Cancel — a long auction is pulled with /cancelauction"
         );
     }
 
@@ -1729,64 +1641,28 @@ mod tests {
         assert!(rows.is_empty());
     }
 
-    /// The prompt registry is what makes a DM answer land on the right
-    /// auction: one live prompt per user, matched by DM channel, expiring
-    /// with the auction.
-    #[test]
-    fn pending_prompts_are_single_and_scoped() {
-        use super::{AuctionUi, PendingBid};
-        let ui = AuctionUi::default();
-        let future = crate::discord::chrono_now_ms() + 60_000;
-        let bid = |auction: &str, expires| PendingBid {
-            auction_id: auction.to_owned(),
-            for_main: true,
-            dm_channel: 99,
-            expires_ms: expires,
-        };
-
-        assert!(ui.arm_prompt(7, bid("au-1", future)));
-        // Second click while one is open does not stack (audit #39).
-        assert!(!ui.arm_prompt(7, bid("au-2", future)));
-        // A reply from the wrong channel is not an answer to this prompt.
-        assert!(ui.peek_prompt(7, 12345).is_none());
-        // The right one resolves to the auction it was asked for (audit #50).
-        let seen = ui.peek_prompt(7, 99).expect("prompt");
-        assert_eq!(seen.auction_id, "au-1");
-        // It stays armed so a refused bid can simply be retyped (legacy), and
-        // is gone once the bid lands.
-        assert!(ui.peek_prompt(7, 99).is_some());
-        ui.disarm_prompt(7);
-        assert!(ui.peek_prompt(7, 99).is_none());
-
-        // An answer after the window closed is not applied.
-        assert!(ui.arm_prompt(8, bid("au-3", crate::discord::chrono_now_ms() - 1)));
-        assert!(ui.peek_prompt(8, 99).is_none());
-    }
-
-    /// End to end over a real ledger and WAL, minus Discord: arm a prompt the
-    /// way a button click does, then feed the DM reply through the same
-    /// function the gateway calls. This is the path that silently did nothing
-    /// when it hung on a per-click collector.
+    /// End to end over a real ledger and WAL, minus Discord: the same
+    /// function the modal submission calls. This is the path a bidder's typed
+    /// amount actually travels, and the one that used to hang on a per-click
+    /// DM collector.
     #[tokio::test]
-    async fn dm_reply_places_a_real_bid() {
-        use super::{resolve_dm_bid, AuctionUi, PendingBid};
+    async fn a_submitted_amount_places_a_real_bid() {
+        use super::resolve_modal_bid;
         use crate::discord::Data;
         use nocturnal_core::event::Flavor;
         use nocturnal_core::{Actor, Command, Item};
 
         const GUILD: u64 = 42;
         const PLAYER: u64 = 7;
-        const DM: u64 = 555;
 
         let dir = tempfile::tempdir().expect("tempdir");
         let (driver, _) = crate::driver::start(dir.path()).expect("driver");
         let data = Data {
             driver: driver.clone(),
-            default_guild: GUILD,
             bell: crate::config::BellConfig::default(),
+            auctions: std::sync::Arc::new(super::AuctionUi::default()),
             data_guild: None,
-            auctions: std::sync::Arc::new(AuctionUi::default()),
-            items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("items")),
+            items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("item search")),
             provisioning: None,
         };
 
@@ -1794,15 +1670,17 @@ mod tests {
             .execute(
                 GUILD,
                 Actor::System,
-                Command::AdjustDkp {
+                Command::ImportPlayer {
                     player: PLAYER,
-                    delta: 100,
-                    comment: "seed".into(),
-                    item: None,
+                    balance: 100,
+                    characters: vec![],
+                    creation_ts_ms: 1,
+                    log: vec![],
+                    legacy_id: None,
                 },
             )
             .await
-            .expect("seed balance");
+            .expect("import");
         driver
             .execute(
                 GUILD,
@@ -1821,33 +1699,15 @@ mod tests {
                     num_items: 1,
                     min_bid_to_lock_for_main: 0,
                     over_bid_to_win_main: 0,
-                    duration_ms: 60_000,
+                    duration_ms: 600_000,
                 },
             )
             .await
-            .expect("open auction");
+            .expect("open");
 
-        let arm = |auction: &str| {
-            data.auctions.arm_prompt(
-                PLAYER,
-                PendingBid {
-                    auction_id: auction.to_owned(),
-                    for_main: true,
-                    dm_channel: DM,
-                    expires_ms: crate::discord::chrono_now_ms() + 60_000,
-                },
-            )
-        };
-
-        // A DM with no prompt outstanding is ignored entirely.
-        assert!(resolve_dm_bid(&data, PLAYER, DM, "50").await.is_none());
-
-        // Click → prompt → "50" lands as a real, fsynced bid.
-        assert!(arm("au-1"));
-        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, " 50 ")
-            .await
-            .expect("prompt answered");
-        assert_eq!(text, "Bid placed");
+        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, " 40 ").await;
+        assert!(text.contains("40"), "{text}");
+        assert!(text.contains("Cloak"), "the item is named: {text}");
         assert_eq!(refresh.as_deref(), Some("au-1"));
         let bids = driver
             .query(|l| {
@@ -1858,32 +1718,10 @@ mod tests {
             })
             .await;
         assert_eq!(bids.len(), 1);
-        assert_eq!(bids[0].amount, 50);
+        assert_eq!(bids[0].amount, 40);
 
-        // Overspending explains itself, and — as in the legacy collector —
-        // the prompt stays open so the bidder can just type a smaller number.
-        assert!(arm("au-1"));
-        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, "500")
-            .await
-            .expect("answered");
-        assert!(text.contains("greater than your current DKP"), "{text}");
-        assert!(refresh.is_none());
-        let (text, _) = resolve_dm_bid(&data, PLAYER, DM, "abc")
-            .await
-            .expect("prompt still armed after a refusal");
-        assert!(text.contains("not a number"), "{text}");
-        let (text, refresh) = resolve_dm_bid(&data, PLAYER, DM, "20")
-            .await
-            .expect("retry lands");
-        assert_eq!(text, "Bid placed");
-        assert_eq!(refresh.as_deref(), Some("au-1"));
-
-        // 0 retracts.
-        assert!(arm("au-1"));
-        let (text, _) = resolve_dm_bid(&data, PLAYER, DM, "0")
-            .await
-            .expect("answered");
-        assert!(text.contains("cancelled"), "{text}");
+        // Re-bidding replaces rather than stacking.
+        resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "55").await;
         let bids = driver
             .query(|l| {
                 l.state()
@@ -1892,7 +1730,34 @@ mod tests {
                     .unwrap_or_default()
             })
             .await;
-        assert!(bids.is_empty(), "retraction removed the bid");
+        assert_eq!(bids.len(), 1, "the second bid replaced the first");
+        assert_eq!(bids[0].amount, 55);
+
+        // 0 withdraws.
+        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "0").await;
+        assert!(text.contains("withdrawn"), "{text}");
+        assert_eq!(refresh.as_deref(), Some("au-1"));
+        let bids = driver
+            .query(|l| {
+                l.state()
+                    .guild(GUILD)
+                    .map(|g| g.auctions["au-1"].bids.clone())
+                    .unwrap_or_default()
+            })
+            .await;
+        assert!(bids.is_empty());
+
+        // Anything that is not a whole number is a typo, not a bid.
+        for raw in ["50abc", "", "twelve", "3.5"] {
+            let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, raw).await;
+            assert!(refresh.is_none(), "{raw} changed the ledger");
+            assert!(text.contains("not a whole number"), "{raw}: {text}");
+        }
+
+        // More than the bidder has is refused by the ledger, not by the modal.
+        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "500").await;
+        assert!(refresh.is_none());
+        assert!(text.contains("greater than your current DKP"), "{text}");
     }
 
     #[test]

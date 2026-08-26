@@ -19,8 +19,6 @@ use crate::health::Readiness;
 
 pub struct Data {
     pub driver: DriverHandle,
-    /// Registration guild — the ledger guild for context-free events (DMs).
-    pub default_guild: u64,
     pub bell: crate::config::BellConfig,
     pub auctions: std::sync::Arc<crate::auctions::AuctionUi>,
     /// Test-server mapping: serve this ledger guild for interactions from the
@@ -534,22 +532,6 @@ async fn on_event(
     event: &serenity::FullEvent,
     data: &Data,
 ) -> Result<(), Error> {
-    // A DM to the bot: possibly a bid amount someone owes us.
-    if let serenity::FullEvent::Message { new_message } = event {
-        if new_message.guild_id.is_none() && !new_message.author.bot {
-            tracing::info!(
-                { attr::NOCTURNAL_DISCORD_USER_ID } = new_message.author.id.get(),
-                { attr::NOCTURNAL_DISCORD_MESSAGE_LENGTH } = new_message.content.len(),
-                "direct message received"
-            );
-            if let Err(e) = crate::auctions::handle_dm(ctx, new_message, data).await {
-                tracing::warn!(
-                    { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
-                    "DM bid handler failed"
-                );
-            }
-        }
-    }
     if let serenity::FullEvent::InteractionCreate { interaction } = event {
         if let Some(component) = interaction.as_message_component() {
             // Diagnostic: proves component clicks reach us at all, and shows
@@ -565,6 +547,20 @@ async fn on_event(
                 tracing::warn!(
                     { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
                     "auction component handler failed"
+                );
+            }
+        }
+        // The amount typed into a bid modal comes back as its own interaction.
+        if let Some(modal) = interaction.as_modal_submit() {
+            tracing::info!(
+                { attr::NOCTURNAL_DISCORD_CUSTOM_ID } = %modal.data.custom_id,
+                { attr::NOCTURNAL_DISCORD_USER_ID } = modal.user.id.get(),
+                "modal submitted"
+            );
+            if let Err(e) = crate::auctions::handle_modal(ctx, modal, data).await {
+                tracing::warn!(
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                    "bid modal handler failed"
                 );
             }
         }
@@ -608,7 +604,6 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         adddkp(),
         removedkp(),
         addraiddkp(),
-        parsedkps(),
         registercharacter(),
         addraideventdkp(),
         belltest(),
@@ -690,7 +685,6 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 }));
                 Ok(Data {
                     driver,
-                    default_guild: guild_id,
                     bell: bell_cfg,
                     auctions: auction_ui,
                     data_guild,
@@ -1551,78 +1545,6 @@ pub async fn addraiddkp(
     Ok(())
 }
 
-/// Parse an EQ /who log and award DKP by character.
-#[tracing::instrument(name = "command.parsedkps", skip_all, fields(otel.kind = "server"))]
-#[poise::command(slash_command, rename = "parsedkps", check = "officer_check")]
-pub async fn parsedkps(
-    ctx: Context<'_>,
-    #[description = "Comment"] comment: String,
-    #[description = "The amount of dkps"]
-    #[min = 1]
-    dkps: i64,
-    #[description = "Is this a raid?"] raid: bool,
-    #[description = "The /who log to parse"] log: String,
-) -> Result<(), Error> {
-    let _ = raid; // the active raid attaches automatically (fixes audit E10)
-    crate::discord::ack(&ctx).await?;
-    let parsed = nocturnal_core::who::parse_who(&log);
-    let mut errors: Vec<String> = Vec::new();
-    for character in &parsed.characters {
-        let cmd = Command::AdjustByCharacter {
-            character: character.clone(),
-            delta: dkps,
-            comment: comment.clone(),
-        };
-        if let Err(e) = execute(&ctx, cmd).await? {
-            errors.push(match e {
-                ExecError::Rejected(nocturnal_core::Rejection::CharacterNotRegistered {
-                    character,
-                }) => {
-                    format!("Character {character} not registered")
-                }
-                other => other.to_string(),
-            });
-        }
-    }
-    let mut characters = parsed.characters.clone();
-    characters.sort();
-    let embed = serenity::CreateEmbed::new()
-        .color(EMBED_BLUE_TICK)
-        .title(comment)
-        .field("DKPS", dkps.to_string(), false)
-        .field(
-            "Characters",
-            if characters.is_empty() {
-                "-".into()
-            } else {
-                characters.join("\n")
-            },
-            false,
-        )
-        .field(
-            "errors",
-            if errors.is_empty() {
-                "-".into()
-            } else {
-                errors.join("\n")
-            },
-            false,
-        );
-    if let Err(e) = ctx
-        .channel_id()
-        .send_message(
-            ctx.serenity_context(),
-            serenity::CreateMessage::new().embed(embed),
-        )
-        .await
-    {
-        tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "parsedkps embed failed");
-    }
-    ctx.say(format!("Parsed {} characters", parsed.characters.len()))
-        .await?;
-    Ok(())
-}
-
 /// Register an EQ character to your Discord account.
 #[tracing::instrument(name = "command.registercharacter", skip_all, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "registercharacter")]
@@ -2111,7 +2033,9 @@ pub async fn stresstest(
 // ===========================================================================
 
 pub fn item_embed(item: &nocturnal_core::Item, color: u32) -> serenity::CreateEmbed {
-    let separator = "--------------------------------------------------------\n";
+    // The legacy 56-dash rule wrapped onto a second line on a phone and cost
+    // more height than the stats under it. A slim divider does the same job.
+    let separator = "───────────────\n";
     let mut embed = serenity::CreateEmbed::new()
         .color(color)
         .title(format!("{} #{}", item.name, item.id))
