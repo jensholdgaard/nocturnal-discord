@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::event::{ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef};
+use crate::event::{ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef, Secret};
 
 /// One line of a player's history (mirrors the legacy log shape).
 #[derive(Debug, Clone, PartialEq)]
@@ -90,7 +90,7 @@ pub struct GuildConfig {
     pub min_bid: i64,
     pub min_bid_to_lock_for_main: i64,
     pub over_bid_to_win_main: i64,
-    pub raidhelper_api_key: Option<String>,
+    pub raidhelper_api_key: Option<Secret>,
     /// DKP awarded to signups who attended, when a linked raid ends. Legacy
     /// hardcoded 5; officers can set it.
     pub raidhelper_event_dkp: i64,

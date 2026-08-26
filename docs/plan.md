@@ -211,7 +211,16 @@ policy-blocked).
       checks, null-safe parsing, permanent in-memory cache — audit #42/E12
       fixed. `/searchitem` ports the legacy picker UX (1 hit → embed, 2–25 →
       button picker, 26–40 → list, >40 → refine).
-- [ ] Admin/config commands (`/setadminrole`, options → `config.updated`).
+- [x] Admin/config commands: `/configure` (every legacy option → a single
+      `config.updated` patch; the legacy `/setadminrole` is its `role` option)
+      and `/showconfig`. Values are validated in the **decide step**, not on
+      the slash-command options, so the migrator and every future caller are
+      held to the same rules and the officer is told which setting was refused
+      — a zero tick interval used to be accepted here and refused later at
+      `/startraid`. The two raid channels are checked against the *merged*
+      config, so they cannot collide across separate calls. The RaidHelper API
+      key is a `Secret`: transparent on the wire, redacted in `Debug`, and
+      shown by `/showconfig` as presence only.
 - [x] Runbook (`docs/runbook.md`): health checks, deploy, backup/restore with
       an RPO statement, dispute resolution by grepping the ledger, the common
       situations, and rollback rules.

@@ -4,7 +4,7 @@
 
 use crate::auction::{winners, Rng};
 use crate::command::{Command, Ctx};
-use crate::event::{Event, RaidRef, Winner};
+use crate::event::{ConfigPatch, Event, RaidRef, Winner};
 use crate::reject::Rejection;
 use crate::state::{AuctionStatus, Bid, State};
 
@@ -301,9 +301,12 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }
         }
 
-        Command::UpdateConfig { patch } => Ok(vec![Event::ConfigUpdated {
-            patch: patch.clone(),
-        }]),
+        Command::UpdateConfig { patch } => {
+            validate_config(g, patch)?;
+            Ok(vec![Event::ConfigUpdated {
+                patch: patch.clone(),
+            }])
+        }
 
         Command::IssueToken {
             username,
@@ -371,6 +374,78 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             entries: entries.clone(),
         }]),
     }
+}
+
+/// Guard the values `/configure` writes.
+///
+/// Discord enforces some of these on the slash-command options themselves, but
+/// that check only exists on the one path that happens to use it: the migrator
+/// and any future caller reach the ledger directly. And an unguarded value is
+/// felt somewhere else entirely — a zero tick interval is accepted happily at
+/// `/configure` and only refused at `/startraid`, as `InvalidAmount`, long
+/// after the officer who typed it has moved on. Refusing it where it is
+/// entered names the setting instead.
+///
+/// Values the patch leaves absent are unchanged, so they are checked against
+/// what the guild already holds rather than against a default.
+fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), Rejection> {
+    let bad = |setting, reason: &str| Rejection::InvalidConfig {
+        setting,
+        reason: reason.to_owned(),
+    };
+
+    if let Some(ms) = p.tick_duration_ms {
+        if ms <= 0 {
+            return Err(bad("tickduration", "must be more than zero minutes"));
+        }
+    }
+    if let Some(ms) = p.raid_deprecation_ms {
+        if ms <= 0 {
+            // The legacy fallback was 90 *milliseconds* (audit S9), which
+            // deprecated every raid the instant it ended. Zero would be worse.
+            return Err(bad("raiddeprecationtime", "must be more than zero days"));
+        }
+    }
+    if let Some(s) = p.bid_time_s {
+        if !(30..=1000).contains(&s) {
+            return Err(bad("bidtime", "must be between 30 and 1000 seconds"));
+        }
+    }
+    for (setting, value) in [
+        ("minbid", p.min_bid),
+        ("minbidtolockformain", p.min_bid_to_lock_for_main),
+        ("overbidtowinmain", p.over_bid_to_win_main),
+        ("raidhelpereventdkp", p.raidhelper_event_dkp),
+    ] {
+        if value.is_some_and(|v| v < 0) {
+            return Err(bad(setting, "cannot be negative"));
+        }
+    }
+    if p.raidhelper_api_key.as_ref().is_some_and(|k| {
+        let k = k.as_str();
+        k.trim().is_empty() || k.trim().len() != k.len()
+    }) {
+        // A blank key is not "disabled": it is stored, found, and sent, so
+        // every raid start would call RaidHelper and fail. Surrounding
+        // whitespace is the copy-paste version of the same outage.
+        return Err(bad(
+            "raidhelperapikey",
+            "cannot be blank or have surrounding whitespace",
+        ));
+    }
+    // Both channels are counted for attendance, so the same one twice would
+    // award a doubled tick to everyone in it.
+    let raid = p.raid_channel.or(g.config.raid_channel);
+    let second = p.second_raid_channel.or(g.config.second_raid_channel);
+    if let (Some(r), Some(s)) = (raid, second) {
+        if r == s {
+            return Err(bad(
+                "secondraidchannel",
+                "must be a different channel from the raid channel",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn active_raid_ref(g: &crate::state::GuildState) -> Option<RaidRef> {

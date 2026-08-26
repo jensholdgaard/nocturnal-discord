@@ -66,6 +66,43 @@ pub struct ImportedLogEntry {
     pub item: Option<Item>,
 }
 
+/// A configured secret (today: the RaidHelper API key).
+///
+/// `Debug` prints a placeholder rather than the value. Nothing debug-logs a
+/// command or an event today, but a `?patch` added later, a panic message, or
+/// a span attribute would otherwise spill the key into the log pipeline —
+/// which ships off the box. The wire format is `transparent`, so the stored
+/// JSON is an ordinary string and existing logs still load.
+#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(String);
+
+impl Secret {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl From<String> for Secret {
+    fn from(s: String) -> Self {
+        Secret(s)
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_empty() {
+            "Secret(\"\")"
+        } else {
+            "Secret(<redacted>)"
+        })
+    }
+}
+
 /// Patch to per-guild behavioural config (`/configure`). Absent = unchanged.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConfigPatch {
@@ -94,7 +131,7 @@ pub struct ConfigPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub over_bid_to_win_main: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub raidhelper_api_key: Option<String>,
+    pub raidhelper_api_key: Option<Secret>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raidhelper_event_dkp: Option<i64>,
 }

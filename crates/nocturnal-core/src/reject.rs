@@ -40,6 +40,13 @@ pub enum Rejection {
     NotProvisioned {
         username: String,
     },
+    /// A `/configure` value the ledger refuses to hold. Carries the option
+    /// name so the officer is told which one, not just that something was
+    /// wrong.
+    InvalidConfig {
+        setting: &'static str,
+        reason: String,
+    },
 }
 
 impl Rejection {
@@ -62,6 +69,7 @@ impl Rejection {
             Rejection::BidBelowMinimum { .. } => "bid_below_minimum",
             Rejection::AlreadyProvisioned { .. } => "already_provisioned",
             Rejection::NotProvisioned { .. } => "not_provisioned",
+            Rejection::InvalidConfig { .. } => "invalid_config",
         }
     }
 }

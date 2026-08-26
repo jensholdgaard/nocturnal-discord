@@ -975,6 +975,9 @@ pub fn rejection_text(e: &ExecError) -> String {
             format!(":no_entry: {username} already has a token")
         }
         R::NotProvisioned { username } => format!(":no_entry: {username} has no token"),
+        R::InvalidConfig { setting, reason } => {
+            format!(":no_entry: `{setting}` {reason} — nothing was changed")
+        }
     }
 }
 
@@ -1028,11 +1031,9 @@ pub async fn configure(
     raidhelpereventdkp: Option<i64>,
 ) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;
-    if raidchannel.id == secondraidchannel.as_ref().map(|c| c.id).unwrap_or_default() {
-        ctx.say(":no_entry: Raid channel and second raid channel must be different")
-            .await?;
-        return Ok(());
-    }
+    // Every value here is validated by the decide step, which is the only
+    // place that sees the merged result — set the second raid channel today
+    // and the raid channel tomorrow and there is no single call to check.
     let patch = nocturnal_core::event::ConfigPatch {
         admin_role: Some(role.id.get()),
         raid_channel: Some(raidchannel.id.get()),
@@ -1047,7 +1048,7 @@ pub async fn configure(
         min_bid: minbid,
         min_bid_to_lock_for_main: minbidtolockformain,
         over_bid_to_win_main: overbidtowinmain,
-        raidhelper_api_key: raidhelperapikey,
+        raidhelper_api_key: raidhelperapikey.map(nocturnal_core::Secret::from),
         raidhelper_event_dkp: raidhelpereventdkp,
     };
     match execute(&ctx, Command::UpdateConfig { patch }).await? {
@@ -1055,6 +1056,16 @@ pub async fn configure(
         Err(e) => ctx.say(rejection_text(&e)).await?,
     };
     Ok(())
+}
+
+/// Tick durations are sub-minute in practice (`0.5` = 30 s), so plain integer
+/// minutes would render the guild's real setting as "0 minutes".
+fn human_ms(ms: i64) -> String {
+    if ms % 60_000 == 0 {
+        format!("{} minutes", ms / 60_000)
+    } else {
+        format!("{} seconds", ms as f64 / 1000.0)
+    }
 }
 
 /// Show the current configuration of the bot in this server.
@@ -1097,11 +1108,7 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
         .field("Bid time", format!("{} seconds", cfg.bid_time_s), false)
-        .field(
-            "Tick duration",
-            format!("{} minutes", cfg.tick_duration_ms / 60_000),
-            false,
-        )
+        .field("Tick duration", human_ms(cfg.tick_duration_ms), false)
         .field("Minimum bid", format!("{} DKP", cfg.min_bid), false)
         .field(
             "Minimum bid to lock for main",
@@ -1111,6 +1118,22 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "Over bid to win main",
             format!("{} DKP", cfg.over_bid_to_win_main),
+            false,
+        )
+        // Presence only. The key is a live credential, and this embed is one
+        // screenshot away from a public channel.
+        .field(
+            "RaidHelper API key",
+            if cfg.raidhelper_api_key.is_some() {
+                "Set"
+            } else {
+                "Not set"
+            },
+            false,
+        )
+        .field(
+            "RaidHelper event DKP",
+            format!("{} DKP", cfg.raidhelper_event_dkp),
             false,
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
@@ -1175,7 +1198,9 @@ pub async fn startraid(
     let mut event_id = None;
     let mut name = name;
     if let Some(key) = api_key {
-        match crate::raidhelper::event_starting_now(&key, discord_guild, chrono_now_ms()).await {
+        match crate::raidhelper::event_starting_now(key.as_str(), discord_guild, chrono_now_ms())
+            .await
+        {
             Ok(Some(event)) => {
                 if name.is_none() {
                     name = Some(event.title.clone());

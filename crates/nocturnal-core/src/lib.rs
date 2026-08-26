@@ -17,7 +17,7 @@ pub mod who;
 pub use apply::apply;
 pub use command::{Command, Ctx};
 pub use decide::{compute_winners, decide};
-pub use event::{Actor, Envelope, Event, Flavor, GuildId, Item, PlayerId};
+pub use event::{Actor, Envelope, Event, Flavor, GuildId, Item, PlayerId, Secret};
 pub use reject::Rejection;
 pub use state::State;
 

@@ -46,7 +46,7 @@ by picker, role by picker):
 | minbid | | Default minimum bid | 0 |
 | minbidtolockformain | | Min bid for a MAIN bid to lock priority | 0 |
 | overbidtowinmain | | Amount an ALT must overbid the top MAIN to win | 0 |
-| raidhelperapikey | | RaidHelper API key (enables event integration) | |
+| raidhelperapikey | | RaidHelper API key (enables event integration) | never echoed; `/showconfig` shows presence only |
 
 `/showconfig` — admin-only; embed listing every setting with human units
 ("Not set" when absent).
@@ -235,6 +235,11 @@ doesn't care where it runs). Paths and the dashboard URL are config
 10. Ephemeral/public visibility per current *intent* (several legacy ephemeral
     flags are silent no-ops); `:prohibited:` renders as the emoji.
 11. Stale buttons (pre-restart) answer "this auction has ended" instead of dying.
+12. `/configure` refuses values that used to be accepted and break later: a
+    tick duration of zero, a deprecation window of zero, a bid time outside
+    30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
+    channel equal to the first (which would double everyone's tick). Nothing
+    is applied when a value is refused.
 
 ## Resolved decisions (2026-08-21: keep current behaviour throughout)
 
