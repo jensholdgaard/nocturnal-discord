@@ -48,6 +48,33 @@ usable as a pre-flight in CI and as a Docker healthcheck during rollout.
 
 ## Observability
 
+### Ports on the observability VM
+
+Both standard OTLP ports are already spoken for on `eq-perses`, so nothing
+here sits where an OTel-shaped guess would put it. Each service took the next
+free number as it arrived, in this order:
+
+| Port | Owner | Since | Notes |
+|---|---|---|---|
+| 4318 | Ourios OTLP receiver | 2026-08-23 | The standard OTLP/HTTP port, taken by the log backend |
+| 4319 | eq-gateway (otelcol) | 2026-07-31 | Member ingest, bearer-authenticated; Caddy proxies `/otlp/*` here, and the bot exports here |
+| 4320 | Ourios querier | 2026-08-23 | Ourios documents 4319 for this; the gateway already had it |
+| 14317 | Jaeger OTLP/gRPC | | Enabled by Jaeger's config; nothing here writes to it |
+| 14318 | Jaeger OTLP/HTTP | | Traces, written by the gateway |
+| 9090 | Prometheus OTLP | | Metrics, written by the gateway |
+
+Two consequences worth knowing before touching any of it. **Nothing listens
+on 4317**, the standard OTLP/gRPC port: every ingest path here is HTTP, and
+the only gRPC listener in the stack is Jaeger's 14317, which nothing writes
+to. And **the gateway cannot simply be moved to 4318**: it chose 4319 on
+2026-07-31 when 4318 was free, but Ourios took 4318 three weeks later, so
+what was once an arbitrary choice is now load-bearing. Moving it would need
+Ourios moved first, three coordinated restarts across two repos, and would
+end up exactly where we already are.
+
+Everything above binds to localhost. Members never see a port: they post to
+the public `/otlp/*` path and Caddy routes it.
+
 - **Export allowlist** — only telemetry from `nocturnal*` crate targets is
   exported (hazard B13); dependency spans/logs never leave the process, no
   matter what libraries stuff into their fields. The allowlist is pinned by a
@@ -214,7 +241,8 @@ traces. The path, and the three things that surprise people about it:
   unaffected and stays queryable across the upgrade.
 
 The querier binds **4320** here, not the documented 4319 — the eq-gateway
-collector already owns 4319 on this host.
+collector already owns 4319 on this host. See the port table above for who
+holds what, and why none of it is where you would guess.
 
 ### Attribute naming
 
