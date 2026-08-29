@@ -295,7 +295,21 @@ exists; the Python dpsbot retires when this ships.
       success unless the re-derived file matches. Rehearsed against a copy of
       the live VM's data: 10 grants imported, the `nocturnal-bot` service token
       skipped, every token value preserved, 0 provisioning files rewritten.
-- [ ] Deploy the unified bot on the observability VM; retire `dpsbot.py`.
+- [x] Deploy the unified bot on the observability VM; retire `dpsbot.py`
+      (2026-08-29). The blocker was never the code: the rewrite is a different
+      Discord application, registered guild-scoped to the test server behind a
+      `controels-` prefix until cutover, so moving the token commands to it
+      would have meant members losing `/dpstoken` — or the whole DKP surface
+      arriving early, ahead of the sign-off it is gated on.
+      Solved by running **two identities in one process**: a second gateway
+      connection under the bot the guild already has, registering only
+      `/dpstoken` and `/dpsrevoke`. Members saw no change at all — same bot,
+      same commands, no re-invite. `eq-bot.service` is stopped and disabled,
+      and stays installed as the rollback.
+      The import ran first, as it must: 11 grants imported, the `nocturnal-bot`
+      service token skipped, and `tokens.txt` verified to re-derive to the same
+      lines. A second run imported 0 and rewrote 0 files — the ledger
+      reproduces dpsbot's output byte-for-byte on production data.
 
 ### `/backup` (2026-08-26 — the one legacy command that was still missing)
 
@@ -312,6 +326,18 @@ exists; the Python dpsbot retires when this ships.
 
 **Exit:** `/dpstoken` on the real VM issues a working token; `kill -9` between
 event and file write heals on restart; dpsbot's systemd unit disabled.
+*(Unit disabled and the files verified byte-identical on 2026-08-29. Still
+unexercised: an actual `/dpstoken` call by a member, and the kill -9 drill
+against the live box.)*
+
+Two things the cutover turned up, both now fixed and tested:
+
+- **`tokens.txt` came back world-readable.** Replacing a file by rename takes
+  the new file's permissions, not the old one's, so the atomic write widened
+  0640 to 0664 — every member's bearer token — on every rewrite the umask
+  allowed. The mode is now set before any content reaches the temp file.
+- **An atomic replace needs write on the *directory*.** `/etc/eq-otel` is
+  therefore group-owned and sticky rather than the file simply being chowned.
 
 ---
 

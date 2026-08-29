@@ -14,6 +14,13 @@ EnvironmentFile=/etc/nocturnal/env
 # encryption that makes a VM rebuild mean "issue a new token".
 LoadCredentialEncrypted=bot_token:/etc/nocturnal/bot_token.cred
 Environment=DISCORD_TOKEN_FILE=%d/bot_token
+# The second identity: /dpstoken and /dpsrevoke, served under the bot the guild
+# already has, so retiring the Python bot changed nothing members could see.
+LoadCredentialEncrypted=provision_bot_token:/etc/nocturnal/provision_bot_token.cred
+Environment=PROVISION_DISCORD_TOKEN_FILE=%d/provision_bot_token
+# The provisioning files are outside the data directory, and ProtectSystem=strict
+# would otherwise make them read-only.
+ReadWritePaths=/etc/eq-otel /etc/perses/provisioning
 Restart=on-failure
 RestartSec=3
 # Crash-restart is safe by design (replay); the lock file prevents overlap.

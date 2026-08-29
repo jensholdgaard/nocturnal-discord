@@ -91,6 +91,30 @@ OTEL_METRIC_EXPORT_INTERVAL=15000
 EOF
 chmod 600 /etc/nocturnal/env
 
+# Telemetry provisioning (M8): the bot serves /dpstoken and /dpsrevoke under the
+# members' own bot identity, on a second gateway connection. That token gets the
+# same treatment as the first — an encrypted credential, never an environment
+# variable.
+if [ -n "${PROVISION_BOT_TOKEN:-}" ]; then
+  printf '%s' "${PROVISION_BOT_TOKEN}" \
+    | systemd-creds encrypt --name=provision_bot_token - /etc/nocturnal/provision_bot_token.cred
+  chmod 600 /etc/nocturnal/provision_bot_token.cred
+fi
+
+# The derived files live outside the data directory and this bot is their only
+# writer. An atomic replace renames a temp file over the target, which needs
+# write on the *directory*, not just the file — the reason this is a group-owned
+# directory and not simply a chown of tokens.txt. Sticky, so the bot cannot
+# swap out anything else in there.
+if [ -d /etc/eq-otel ]; then
+  chown root:eqgw /etc/eq-otel
+  chmod 3770 /etc/eq-otel
+  id -nG nocturnal 2>/dev/null | grep -qw eqgw || usermod -a -G eqgw nocturnal
+  [ -e /etc/eq-otel/tokens.txt ] && chown nocturnal:eqgw /etc/eq-otel/tokens.txt
+  [ -e /etc/eq-otel/roles.yaml ] && chown nocturnal:eqgw /etc/eq-otel/roles.yaml
+fi
+[ -d /etc/perses/provisioning ] && chown -R nocturnal:perses /etc/perses/provisioning
+
 install -m 0755 /usr/local/bin/nocturnal.new /usr/local/bin/nocturnal
 rm -f /usr/local/bin/nocturnal.new
 install -m 0644 /tmp/nocturnal.service /etc/systemd/system/nocturnal.service
