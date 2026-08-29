@@ -492,8 +492,8 @@ fn record_ack(created_ms: i64, kind: &'static str) {
 /// Every command defers before doing work — the legacy bot's habit of
 /// answering inline is what made the 3-second window a recurring outage — so
 /// this is the one place the acknowledgment latency can be measured.
-pub async fn ack(ctx: &Context<'_>) -> Result<(), serenity::Error> {
-    let result = ctx.defer().await;
+pub async fn ack(ctx: &Context<'_>) -> Result<(), Box<serenity::Error>> {
+    let result = ctx.defer().await.map_err(Box::new);
     if let poise::Context::Application(app) = ctx {
         record_ack(snowflake_ms(app.interaction.id.get()), "command");
     }
@@ -501,8 +501,8 @@ pub async fn ack(ctx: &Context<'_>) -> Result<(), serenity::Error> {
 }
 
 /// As [`ack`], for the ephemeral replies most commands use.
-pub async fn ack_ephemeral(ctx: &Context<'_>) -> Result<(), serenity::Error> {
-    let result = ctx.defer_ephemeral().await;
+pub async fn ack_ephemeral(ctx: &Context<'_>) -> Result<(), Box<serenity::Error>> {
+    let result = ctx.defer_ephemeral().await.map_err(Box::new);
     if let poise::Context::Application(app) = ctx {
         record_ack(snowflake_ms(app.interaction.id.get()), "command");
     }
@@ -514,8 +514,8 @@ pub async fn ack_ephemeral(ctx: &Context<'_>) -> Result<(), serenity::Error> {
 pub async fn ack_component(
     ctx: &serenity::Context,
     press: &serenity::ComponentInteraction,
-) -> Result<(), serenity::Error> {
-    let result = press.defer(ctx).await;
+) -> Result<(), Box<serenity::Error>> {
+    let result = press.defer(ctx).await.map_err(Box::new);
     record_component_ack(press.id.get());
     result
 }
