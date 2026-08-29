@@ -9,6 +9,11 @@ User=nocturnal
 Group=nocturnal
 ExecStart=/usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.yaml
 EnvironmentFile=/etc/nocturnal/env
+# The token is the one secret here that does not have to be an environment
+# variable, so it is not one. See install-vm.sh for why, and for the host-bound
+# encryption that makes a VM rebuild mean "issue a new token".
+LoadCredentialEncrypted=bot_token:/etc/nocturnal/bot_token.cred
+Environment=DISCORD_TOKEN_FILE=%d/bot_token
 Restart=on-failure
 RestartSec=3
 # Crash-restart is safe by design (replay); the lock file prevents overlap.

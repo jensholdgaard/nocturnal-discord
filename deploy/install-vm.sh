@@ -60,13 +60,26 @@ else
   NOC_TOKEN="$(awk '/ # nocturnal-bot$/{print $1}' /etc/eq-otel/tokens.txt)"
 fi
 
-# Config + secrets (root-owned; service reads via EnvironmentFile).
+# Config + secrets (root-owned).
 mkdir -p /etc/nocturnal
 install -m 0644 /tmp/nocturnal.yaml /etc/nocturnal/nocturnal.yaml
 umask 077
+
+# The Discord token goes in as an encrypted credential, not an environment
+# variable: an environment is readable through /proc/<pid>/environ, is inherited
+# by anything the service spawns, and lands in crash dumps. systemd decrypts a
+# credential into a tmpfs directory only this unit can see, and the binary reads
+# it via DISCORD_TOKEN_FILE, which Config::discord_token() already prefers.
+#
+# Encrypted against /var/lib/systemd/credential.secret, so it is host-bound on
+# purpose: rebuild the VM and this file is scrap. Issuing a new token is the
+# intended recovery, not restoring the ciphertext.
+printf '%s' "${DISCORD_BOT_TOKEN}" \
+  | systemd-creds encrypt --name=bot_token - /etc/nocturnal/bot_token.cred
+chmod 600 /etc/nocturnal/bot_token.cred
+
 # Telemetry: the standard OpenTelemetry environment, nothing bespoke.
 cat > /etc/nocturnal/env <<EOF
-DISCORD_TOKEN=${DISCORD_BOT_TOKEN}
 OTEL_SERVICE_NAME=nocturnal
 OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
