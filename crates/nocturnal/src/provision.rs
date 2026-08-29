@@ -164,19 +164,39 @@ fn record(operation: &'static str, outcome: &'static str) {
 }
 
 /// The DM the member receives, byte-for-byte the legacy template.
+/// The DM a member gets with their token.
+///
+/// Setup used to be a PowerShell one-liner that installed a local collector, because the collector
+/// was the only thing that could attach the bearer token. Zeal does that itself now, so this is
+/// three lines typed in game and nothing left running in the background.
 fn dm_body(token: &str, dashboard: &str) -> String {
     format!(
-        "Your personal DPS meter token (keep it private):\n\
+        "Your personal DPS meter token — **keep it private, it is yours alone**:\n\
          ```\n{token}\n```\n\
-         **Windows setup — open PowerShell (no admin) and paste this one line:**\n\
-         ```powershell\n\
-         & ([scriptblock]::Create((irm https://raw.githubusercontent.com/jensholdgaard/everquest-observability/main/client/windows/install.ps1))) -Token {token}\n\
+         **Setup is three lines typed in game.** No installer, no collector, nothing running in \
+         the background any more.\n\n\
+         **1.** Get the latest Zeal: \
+         https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview\n\
+         Download `Zeal.asi` and drop it in your EverQuest folder, replacing the one there. \
+         (Keep a copy of your old one first. It replaces that single file — you still need your \
+         normal Zeal install.)\n\n\
+         **2.** Start EverQuest, then paste these one at a time:\n\
          ```\n\
-         It finds your EverQuest folder by itself. Then in game: `/otlp on`\n\
-         (That line contains your token — don't paste it in a public channel. It also stays in your\n\
-         PowerShell history; `-Uninstall` on the same script removes everything later.)\n\
+         /otlp endpoint https://dps.nocturnal-guild.de/otlp\n\
+         /otlp token {token}\n\
+         /otlp on\n\
+         ```\n\n\
+         **3.** Check it worked:\n\
+         ```\n/otlp status\n```\n\
+         You want `token: set (ends ...)` and `last HTTP status: 200` with the payload count going \
+         up. If it says `401`, tell an officer — that is the server refusing the token, not you \
+         doing it wrong.\n\n\
+         Your token is stored encrypted and tied to this Windows account, so the file it lives in \
+         is useless to anyone else. Still: **do not paste that `/otlp token` line in a public \
+         channel**, and note that chat is written to your `eqlog` file when logging is on.\n\n\
          Dashboard: {dashboard} (log in with Discord — your access is already set up)\n\
-         You also get a personal project to save your own dashboards in; the guild ones stay read-only.\n\
+         You also get a personal project to save your own dashboards in; the guild ones stay \
+         read-only.\n\
          Lost the token? Ask an officer to `/dpsrevoke` you, then run `/dpstoken` again."
     )
 }
