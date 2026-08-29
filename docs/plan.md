@@ -221,8 +221,22 @@ observability VM (data on the host at `/var/lib/nocturnal`, OTLP through the
 on-box gateway with a dedicated bearer token), hardened systemd unit,
 Perses dashboard (`Nocturnal Bot` in project everquest: ledger head, command
 rates/outcomes, commit + fsync latency percentiles, events by kind), and the
-idempotent `install-vm.sh` (run by the maintainer; agent SSH is
-policy-blocked).
+idempotent `install-vm.sh`.
+
+**Deploy access (changed 2026-08-29).** Agent SSH to the observability VM was
+policy-blocked; it is not any more. `deploy/tokens.sh`'s key
+(`.local/deploy_key` in the observability repo) reaches `root@eq-perses`, and
+that is root on the box running Perses, Prometheus, Jaeger, Ourios, the
+gateway and this bot's live ledger — `HCLOUD_TOKEN` in `.env` is broader still,
+since it can destroy the server rather than merely misconfigure it.
+
+What it bought, on the day it was lifted: two questions that had cost hours of
+inference — is the client's telemetry actually arriving, and is the token
+accepted — were each answered by one Prometheus query. The rule existed
+because the far end was invisible; the fix for that turned out to be *reading*
+the far end, which is the half that cannot break anything. Writing to it is a
+separate judgement each time, and deploys still back up what they overwrite
+and diff it first.
 
 ## M6 — Ops & hardening *(~1 week)*
 
