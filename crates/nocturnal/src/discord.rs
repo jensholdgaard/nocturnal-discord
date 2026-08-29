@@ -585,6 +585,70 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 }
 
 /// Connect the gateway, register commands in the configured test guild, and
+/// A second gateway connection, for the bot identity members already have.
+///
+/// The DKP commands are guild-scoped to the test server behind a `controels-`
+/// prefix until cutover, but the token commands are finished, and they were the
+/// only reason a separate Python bot was still running beside this one. Rather
+/// than move members to a new bot — a re-invite, a new name in the member list,
+/// and the rewrite's whole command surface arriving early — this process opens
+/// a second connection under the existing application and registers only
+/// `/dpstoken` and `/dpsrevoke` there.
+///
+/// Two identities, one process, one ledger: the frameworks share a
+/// `DriverHandle`, so there is no second data directory and nothing to keep in
+/// step. Intents are narrower than the DKP client's — this one reads member
+/// roles off the interaction and *sends* DMs, so it needs neither
+/// DIRECT_MESSAGES nor a voice stack.
+async fn provisioning_client(
+    token: String,
+    guild_id: u64,
+    driver: DriverHandle,
+    provisioning: crate::provision::Provisioning,
+) -> anyhow::Result<serenity::Client> {
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: crate::provision::commands(),
+            on_error: |error| Box::pin(async move { on_error(error).await }),
+            ..Default::default()
+        })
+        .setup(move |ctx, ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_in_guild(
+                    ctx,
+                    &framework.options().commands,
+                    serenity::GuildId::new(guild_id),
+                )
+                .await?;
+                tracing::info!(
+                    { attr::NOCTURNAL_DISCORD_USER_NAME } = %ready.user.name,
+                    { attr::NOCTURNAL_GUILD_ID } = guild_id,
+                    "provisioning gateway ready, commands registered"
+                );
+                // The derived files are healed by the DKP client's boot
+                // recovery, which owns the same ledger. Doing it twice would
+                // race two writers over one tokens.txt for no gain.
+                Ok(Data {
+                    driver,
+                    bell: crate::config::BellConfig::default(),
+                    auctions: std::sync::Arc::new(crate::auctions::AuctionUi::default()),
+                    // This identity lives in the members' guild, which *is* the
+                    // ledger guild, so there is nothing to remap.
+                    data_guild: None,
+                    items: std::sync::Arc::new(
+                        crate::items::ItemSearch::new().expect("item search client"),
+                    ),
+                    provisioning: Some(provisioning),
+                })
+            })
+        })
+        .build();
+    serenity::ClientBuilder::new(&token, serenity::GatewayIntents::GUILDS)
+        .framework(framework)
+        .await
+        .context("building provisioning Discord client")
+}
+
 /// run until shutdown.
 pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> anyhow::Result<()> {
     let token = Config::discord_token()?;
@@ -626,6 +690,9 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         event_handler: |ctx, event, _framework, data| Box::pin(on_event(ctx, event, data)),
         ..Default::default()
     };
+    // Cloned before the DKP framework's setup closure consumes it: the second
+    // identity talks to the same ledger through the same writer.
+    let provision_driver = driver.clone();
     let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
     let bell_cfg = cfg.bell.clone();
     let provisioning = crate::provision::Provisioning::from_config(&cfg.provision);
@@ -761,7 +828,40 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
         shard_manager.shutdown_all().await;
     });
 
-    client.start().await.context("gateway run")?;
+    // The second identity, when one is configured. Both run on this runtime and
+    // are joined rather than spawned: if either gateway dies the process exits
+    // and systemd restarts it, instead of the bot half-working with one set of
+    // commands silently gone.
+    let second = match (
+        Config::provision_token()?,
+        cfg.provision.guild_id,
+        crate::provision::Provisioning::from_config(&cfg.provision),
+    ) {
+        (Some(token), Some(guild), Some(p)) => {
+            Some(provisioning_client(token, guild, provision_driver, p).await?)
+        }
+        (Some(_), Some(_), None) => {
+            anyhow::bail!(
+                "a provisioning bot token and guild are set, but the provisioning paths are not \
+                 — /dpstoken would register and then refuse every caller"
+            )
+        }
+        _ => {
+            tracing::info!(
+                "single Discord identity; provisioning commands are not registered separately"
+            );
+            None
+        }
+    };
+
+    match second {
+        Some(mut second) => {
+            let (a, b) = tokio::join!(client.start(), second.start());
+            a.context("gateway run")?;
+            b.context("provisioning gateway run")?;
+        }
+        None => client.start().await.context("gateway run")?,
+    }
     Ok(())
 }
 

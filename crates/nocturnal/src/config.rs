@@ -88,6 +88,15 @@ pub struct ProvisionConfig {
     pub perses_provisioning_dir: Option<PathBuf>,
     pub roles_map_path: Option<PathBuf>,
     pub dashboard_url: Option<String>,
+    /// Guild the provisioning commands register in, under their *own* bot
+    /// identity (`PROVISION_DISCORD_TOKEN_FILE`). Unset = single identity, and
+    /// `/dpstoken` registers alongside the DKP commands like everything else.
+    ///
+    /// This exists so the members' guild keeps the bot it already has. The DKP
+    /// side is still guild-scoped to the test server behind a command prefix
+    /// until cutover; the token commands are ready now, and are the whole
+    /// reason a second Python process was still running.
+    pub guild_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -254,6 +263,22 @@ impl Config {
         }
         std::env::var("DISCORD_TOKEN")
             .context("set DISCORD_TOKEN or DISCORD_TOKEN_FILE (a separate bot application — never the legacy bot's token, its slash commands would collide)")
+    }
+
+    /// The provisioning identity's bot token, when the commands run under
+    /// their own application. Same precedence as `discord_token`: a file
+    /// first, so systemd can hand it over as a credential rather than an
+    /// environment variable.
+    pub fn provision_token() -> anyhow::Result<Option<String>> {
+        if let Ok(path) = std::env::var("PROVISION_DISCORD_TOKEN_FILE") {
+            return Ok(Some(
+                std::fs::read_to_string(&path)
+                    .with_context(|| format!("reading PROVISION_DISCORD_TOKEN_FILE {path}"))?
+                    .trim()
+                    .to_owned(),
+            ));
+        }
+        Ok(std::env::var("PROVISION_DISCORD_TOKEN").ok())
     }
 
     /// Redacted, resolved view for `--print-config`.
