@@ -66,3 +66,27 @@ fn the_personal_project_name_agrees_across_its_three_files() {
     assert!(get("51-ds-magis.yaml").contains("project: u-magis"));
     assert!(get("52-rb-own-magis.yaml").contains("project: u-magis"));
 }
+
+/// `tokens.txt` is every member's bearer token, and it is rewritten from the
+/// ledger on every boot and every `/dpstoken`. Replacing a file by rename takes
+/// the *new* file's permissions, not the old one's, so a rewrite under a
+/// different umask silently widened it from 0640 to 0664 on the live VM. The
+/// mode is therefore set on the temp file before any content reaches it.
+#[test]
+fn a_rewritten_tokens_file_is_never_world_readable() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("tokens.txt");
+    // Start from a deliberately wide file: the rewrite must narrow it.
+    std::fs::write(&path, "old\n").expect("seed");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).expect("chmod");
+
+    nocturnal_provision::write_atomic_for_test(&path, "new\n").expect("write");
+
+    let mode = std::fs::metadata(&path).expect("stat").permissions().mode() & 0o777;
+    assert_eq!(
+        mode, 0o640,
+        "got {mode:o}: other must not be able to read tokens"
+    );
+}

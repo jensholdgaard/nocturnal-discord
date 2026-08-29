@@ -268,8 +268,19 @@ fn line_username(line: &str) -> Option<&str> {
 
 /// Write `contents` to `path` so a reader never sees a partial file: a temp
 /// file in the same directory, fsynced, then renamed over the target.
+///
+/// The mode is set explicitly rather than left to the umask. Replacing a file
+/// by rename does not inherit the old file's permissions — it takes the new
+/// one's — so a `tokens.txt` that was 0640 came back 0664 the first time this
+/// ran under a different umask, which is every member's bearer token turned
+/// world-readable by a routine rewrite.
+pub fn write_atomic_for_test(path: &Path, contents: &str) -> io::Result<()> {
+    write_atomic(path, contents)
+}
+
 fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     use std::io::Write as _;
+    use std::os::unix::fs::PermissionsExt as _;
     let dir = path.parent().unwrap_or(Path::new("."));
     let tmp = dir.join(format!(
         ".{}.tmp",
@@ -277,6 +288,9 @@ fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     ));
     {
         let mut f = std::fs::File::create(&tmp)?;
+        // Before any content reaches it: owner read/write, group read for the
+        // gateway and Perses, nothing for anyone else.
+        f.set_permissions(std::fs::Permissions::from_mode(0o640))?;
         f.write_all(contents.as_bytes())?;
         f.sync_all()?;
     }
