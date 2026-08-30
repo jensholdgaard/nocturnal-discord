@@ -56,6 +56,7 @@ free number as it arrived, in this order:
 
 | Port | Owner | Since | Notes |
 |---|---|---|---|
+| 4317 | Ourios OTLP/gRPC receiver | 2026-08-23 | Correction 2026-08-30: this table originally claimed 4317 was unused — the unit file binds it |
 | 4318 | Ourios OTLP receiver | 2026-08-23 | The standard OTLP/HTTP port, taken by the log backend |
 | 4319 | eq-gateway (otelcol) | 2026-07-31 | Member ingest, bearer-authenticated; Caddy proxies `/otlp/*` here, and the bot exports here |
 | 4320 | Ourios querier | 2026-08-23 | Ourios documents 4319 for this; the gateway already had it |
@@ -63,10 +64,10 @@ free number as it arrived, in this order:
 | 14318 | Jaeger OTLP/HTTP | | Traces, written by the gateway |
 | 9090 | Prometheus OTLP | | Metrics, written by the gateway |
 
-Two consequences worth knowing before touching any of it. **Nothing listens
-on 4317**, the standard OTLP/gRPC port: every ingest path here is HTTP, and
-the only gRPC listener in the stack is Jaeger's 14317, which nothing writes
-to. And **the gateway cannot simply be moved to 4318**: it chose 4319 on
+Two consequences worth knowing before touching any of it. **The standard
+OTLP ports belong to Ourios** — 4317 (gRPC) and 4318 (HTTP) both; every
+*other* ingest path here is HTTP, and nothing currently writes to either
+gRPC listener (Ourios' 4317 or Jaeger's 14317). And **the gateway cannot simply be moved to 4318**: it chose 4319 on
 2026-07-31 when 4318 was free, but Ourios took 4318 three weeks later, so
 what was once an arbitrary choice is now load-bearing. Moving it would need
 Ourios moved first, three coordinated restarts across two repos, and would
