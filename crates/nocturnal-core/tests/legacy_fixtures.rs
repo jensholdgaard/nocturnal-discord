@@ -732,3 +732,73 @@ fn auction_loot_is_attributed_to_the_active_raid() {
         .raid
         .is_none());
 }
+
+/// The gauge on the dashboard and the table in Discord must be the same
+/// number, because they are meant to be the same number. Pinning it here
+/// means a future "improvement" to one definition fails a test instead of
+/// producing two truths.
+#[test]
+fn the_attendance_gauge_averages_exactly_the_rows_the_command_lists() {
+    use nocturnal_core::event::ImportedLogEntry;
+    let mut l = Ledger::new();
+    let now = 10_000_000;
+    let window = l
+        .state()
+        .guild(GUILD)
+        .map_or(90 * nocturnal_core::state::DAY_MS, |g| {
+            g.config.raid_deprecation_ms
+        });
+    // Three players: two active inside the window, one whose last activity
+    // is older than the window and must be excluded from both views.
+    for (player, last_ms) in [
+        (1u64, now - 1_000),
+        (2u64, now - 2_000),
+        (3u64, now - window - 1),
+    ] {
+        l.execute(
+            &ctx(now),
+            &Command::ImportPlayer {
+                player,
+                balance: 10,
+                characters: vec![],
+                creation_ts_ms: 1,
+                log: vec![ImportedLogEntry {
+                    dkp: 10,
+                    comment: "Tick".into(),
+                    ts_ms: last_ms,
+                    raid: None,
+                    item: None,
+                }],
+                legacy_id: None,
+            },
+        )
+        .unwrap();
+    }
+    let g = l.state().guild(GUILD).unwrap();
+    let listed: Vec<u64> = g.raiding_players(now).map(|(id, _)| id).collect();
+    assert_eq!(listed, vec![1, 2], "the stale player is out of the listing");
+
+    let by_hand: f64 = listed
+        .iter()
+        .map(|&id| g.attendance_pct(id, now))
+        .sum::<f64>()
+        / listed.len() as f64;
+    assert_eq!(
+        g.average_attendance(now),
+        Some(by_hand),
+        "the gauge is the listing averaged"
+    );
+
+    let mut empty = Ledger::new();
+    let _ = empty.execute(
+        &ctx(now),
+        &Command::UpdateConfig {
+            patch: Default::default(),
+        },
+    );
+    assert_eq!(
+        empty.state().guild(GUILD).unwrap().average_attendance(now),
+        None,
+        "nobody raiding is absent, not zero"
+    );
+}

@@ -176,17 +176,9 @@ fn sample_gauges(store: &nocturnal_store::Store, ledger: &Ledger, metrics: &Metr
                     .record(last.players.len() as u64, &[]);
             }
         }
-        // The same rows /listplayersdkps shows, averaged — same set, same
-        // formula — so this is the officers' number, not a parallel one.
-        let cutoff = now - guild.config.raid_deprecation_ms;
-        let pcts: Vec<f64> = guild
-            .players
-            .iter()
-            .filter(|(_, p)| p.log.last().is_some_and(|e| e.ts_ms >= cutoff))
-            .map(|(id, _)| guild.attendance_pct(*id, now))
-            .collect();
-        if !pcts.is_empty() {
-            let mean = pcts.iter().sum::<f64>() / pcts.len() as f64;
+        // One definition of "the raiders", owned by the ledger, shared with
+        // /listplayersdkps — so the gauge and the command cannot disagree.
+        if let Some(mean) = guild.average_attendance(now) {
             metrics.guild_attendance_average.record(mean, &[]);
         }
     }

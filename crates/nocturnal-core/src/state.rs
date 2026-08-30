@@ -223,6 +223,32 @@ impl GuildState {
         raid.date_ms >= now_ms - self.config.raid_deprecation_ms
     }
 
+    /// The players who count as raiding right now: anyone with ledger
+    /// activity inside the raid-deprecation window.
+    ///
+    /// This is *the* definition. `/listplayersdkps` lists exactly these rows,
+    /// the `nocturnal.guild.attendance.average` gauge averages exactly these
+    /// rows, and anything else that reports "the raiders" must call this —
+    /// two hand-written copies of the same filter is how a dashboard and a
+    /// command quietly start disagreeing about who is in the guild.
+    pub fn raiding_players(&self, now_ms: i64) -> impl Iterator<Item = (PlayerId, &Player)> + '_ {
+        let cutoff = now_ms - self.config.raid_deprecation_ms;
+        self.players
+            .iter()
+            .filter(move |(_, p)| p.log.last().is_some_and(|e| e.ts_ms >= cutoff))
+            .map(|(id, p)| (*id, p))
+    }
+
+    /// Mean attendance over [`raiding_players`], or `None` when nobody is
+    /// raiding — so a gauge can stay absent rather than report a fictional 0.
+    pub fn average_attendance(&self, now_ms: i64) -> Option<f64> {
+        let pcts: Vec<f64> = self
+            .raiding_players(now_ms)
+            .map(|(id, _)| self.attendance_pct(id, now_ms))
+            .collect();
+        (!pcts.is_empty()).then(|| pcts.iter().sum::<f64>() / pcts.len() as f64)
+    }
+
     /// Attendance %, legacy formula (2 decimal places; no possible entries =>
     /// 100). Entries in raids that predate the player count only from the
     /// player's creation timestamp onward.

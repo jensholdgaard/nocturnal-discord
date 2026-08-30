@@ -212,15 +212,12 @@ pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
                     caller_row: None,
                 };
             }
-            let cutoff = now_ms - g.config.raid_deprecation_ms;
             let mut rows: Vec<Row> = g
-                .players
-                .iter()
-                .filter(|(_, p)| p.log.last().is_some_and(|e| e.ts_ms >= cutoff))
+                .raiding_players(now_ms)
                 .map(|(id, p)| Row {
-                    player: *id,
+                    player: id,
                     current: p.balance,
-                    attendance: g.attendance_pct(*id, now_ms),
+                    attendance: g.attendance_pct(id, now_ms),
                 })
                 .collect();
             rows.sort_by_key(|r| std::cmp::Reverse(r.current));
