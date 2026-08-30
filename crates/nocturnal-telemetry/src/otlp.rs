@@ -326,6 +326,8 @@ pub struct Metrics {
     pub provision_operations: Counter<u64>,
     pub auctions_active: Gauge<u64>,
     pub raids_active: Gauge<u64>,
+    pub raid_attendance: Gauge<u64>,
+    pub guild_attendance_average: Gauge<f64>,
     /// How late a derived timer fired against its due instant.
     pub scheduler_drift: Histogram<f64>,
     pub discord_reconnects: Counter<u64>,
@@ -416,6 +418,14 @@ impl Metrics {
             raids_active: meter
                 .u64_gauge(metric::NOCTURNAL_RAIDS_ACTIVE)
                 .with_unit("{raid}")
+                .build(),
+            raid_attendance: meter
+                .u64_gauge(metric::NOCTURNAL_RAID_ATTENDANCE)
+                .with_unit("{player}")
+                .build(),
+            guild_attendance_average: meter
+                .f64_gauge(metric::NOCTURNAL_GUILD_ATTENDANCE_AVERAGE)
+                .with_unit("%")
                 .build(),
             scheduler_drift: meter
                 .f64_histogram(metric::NOCTURNAL_SCHEDULER_DRIFT)

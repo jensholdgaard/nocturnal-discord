@@ -95,6 +95,53 @@ spec:
               kind: PrometheusTimeSeriesQuery
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_commit_duration_seconds_count[5m])) > 0)
+    ts_raid_attendance:
+      kind: Panel
+      spec:
+        display:
+          name: Raid attendance
+          description: >-
+            Players present at each tick of the running raid. Absent between
+            raids by design — a gap means no raid, not an empty one. No player
+            identity here; who was there is /listplayersdkps.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(nocturnal_raid_attendance)
+                seriesNameFormat: players present
+    ts_attendance_average:
+      kind: Panel
+      spec:
+        display:
+          name: Average attendance %
+          description: >-
+            Mean of the attendance column /listplayersdkps shows, over the same
+            rows it shows. Moves slowly: it is a 90-day window, so one raid
+            nudges it, a month changes it.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              min: 0
+              max: 100
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: avg(nocturnal_guild_attendance_average_percent)
+                seriesNameFormat: guild average
     ts_commands_by_kind:
       kind: Panel
       spec:
@@ -677,6 +724,25 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_latency'
+  - kind: Grid
+    spec:
+      display:
+        title: Raids
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_raid_attendance'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_attendance_average'
   - kind: Grid
     spec:
       display:

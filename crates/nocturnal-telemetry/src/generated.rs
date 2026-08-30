@@ -82,11 +82,13 @@ pub mod metric {
         "nocturnal.discord.ratelimit.delay.duration";
     pub const NOCTURNAL_DISCORD_RATELIMIT_DELAYS: &str = "nocturnal.discord.ratelimit.delays";
     pub const NOCTURNAL_DISCORD_RECONNECTS: &str = "nocturnal.discord.reconnects";
+    pub const NOCTURNAL_GUILD_ATTENDANCE_AVERAGE: &str = "nocturnal.guild.attendance.average";
     pub const NOCTURNAL_INTERACTION_ACK_DURATION: &str = "nocturnal.interaction.ack.duration";
     pub const NOCTURNAL_INTERACTION_COMMIT_DURATION: &str = "nocturnal.interaction.commit.duration";
     pub const NOCTURNAL_LEDGER_EVENTS: &str = "nocturnal.ledger.events";
     pub const NOCTURNAL_LEDGER_SEQ: &str = "nocturnal.ledger.seq";
     pub const NOCTURNAL_PROVISION_OPERATIONS: &str = "nocturnal.provision.operations";
+    pub const NOCTURNAL_RAID_ATTENDANCE: &str = "nocturnal.raid.attendance";
     pub const NOCTURNAL_RAIDS_ACTIVE: &str = "nocturnal.raids.active";
     pub const NOCTURNAL_SCHEDULER_DRIFT: &str = "nocturnal.scheduler.drift";
     pub const NOCTURNAL_SCHEDULER_HEARTBEAT: &str = "nocturnal.scheduler.heartbeat";

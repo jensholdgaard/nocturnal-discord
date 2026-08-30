@@ -156,6 +156,40 @@ fn sample_gauges(store: &nocturnal_store::Store, ledger: &Ledger, metrics: &Metr
         )],
     );
     metrics.raids_active.record(raids, &[]);
+
+    // Attendance, guild-level only. Player identity never reaches a metric
+    // label: Prometheus is readable by every dashboard token holder, so a
+    // per-player series would let any member look up any other member.
+    let now = now_ms();
+    for guild in ledger.state().guilds.values() {
+        // Headcount at the latest tick of the running raid. Not recorded when
+        // no raid is on: a gauge that is absent reads as "no raid", where a
+        // zero would read as "a raid nobody attended".
+        if let Some(raid) = guild
+            .active_raid
+            .as_ref()
+            .and_then(|id| guild.raids.get(id))
+        {
+            if let Some(last) = raid.entries.last() {
+                metrics
+                    .raid_attendance
+                    .record(last.players.len() as u64, &[]);
+            }
+        }
+        // The same rows /listplayersdkps shows, averaged — same set, same
+        // formula — so this is the officers' number, not a parallel one.
+        let cutoff = now - guild.config.raid_deprecation_ms;
+        let pcts: Vec<f64> = guild
+            .players
+            .iter()
+            .filter(|(_, p)| p.log.last().is_some_and(|e| e.ts_ms >= cutoff))
+            .map(|(id, _)| guild.attendance_pct(*id, now))
+            .collect();
+        if !pcts.is_empty() {
+            let mean = pcts.iter().sum::<f64>() / pcts.len() as f64;
+            metrics.guild_attendance_average.record(mean, &[]);
+        }
+    }
 }
 
 fn now_ms() -> i64 {

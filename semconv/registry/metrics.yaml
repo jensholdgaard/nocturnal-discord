@@ -94,6 +94,28 @@ groups:
     brief: Currently active raids (0 or 1 per guild by invariant — >1 is an alarm).
     instrument: gauge
     unit: "{raid}"
+  - id: metric.nocturnal.raid.attendance
+    type: metric
+    metric_name: nocturnal.raid.attendance
+    stability: development
+    brief: >
+      Players present at the active raid's most recent tick. Absent while no
+      raid is running, so a raid night reads as a plateau and a quiet week as
+      nothing — not as zero. Deliberately carries no player attribute: who was
+      there is the ledger's answer (`/listplayersdkps`), never a metric label.
+    instrument: gauge
+    unit: "{player}"
+  - id: metric.nocturnal.guild.attendance.average
+    type: metric
+    metric_name: nocturnal.guild.attendance.average
+    stability: development
+    brief: >
+      Mean attendance percentage over the players `/listplayersdkps` would list
+      (last activity inside the raid-deprecation window), computed by the same
+      legacy formula the command uses, so the number here is the number officers
+      see averaged. One series per guild, no player identity.
+    instrument: gauge
+    unit: "%"
   - id: metric.nocturnal.scheduler.drift
     type: metric
     metric_name: nocturnal.scheduler.drift
