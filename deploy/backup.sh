@@ -24,3 +24,29 @@ echo "verified $out"
 
 ls -1t "$DEST"/nocturnal-*.tar.gz | tail -n +$((KEEP + 1)) | xargs -r rm --
 echo "kept the newest $KEEP backups"
+
+# Off-site copy. The archive mirrors compacted Parquet, but the WAL tail —
+# everything since the last compaction — exists only on this disk without
+# this. curl signs SigV4 natively, so no CLI or SDK is needed; credentials
+# come from the same env file the service reads. Failure is loud but does
+# not fail the local backup above: an unreachable bucket must never stop
+# the tarball existing at all.
+# Only the AWS_ lines. Sourcing the whole file is wrong twice over: systemd
+# EnvironmentFile syntax allows unquoted spaces the shell does not (the OTLP
+# header line *executed its own bearer token* as a command and printed it to
+# the journal), and this script has no business seeing the other secrets.
+if [ -f /etc/nocturnal/env ]; then
+  while IFS= read -r line; do
+    case "$line" in AWS_*=*) export "$line" ;; esac
+  done < /etc/nocturnal/env
+fi
+if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_ENDPOINT:-}" ]; then
+  host="${AWS_ENDPOINT#https://}"
+  if curl -fsS --aws-sigv4 "aws:amz:${AWS_REGION:-fsn1}:s3"       --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"       -T "$out" "https://nocturnal-ledger.${host}/backups/nocturnal-$stamp.tar.gz"; then
+    echo "off-site copy: backups/nocturnal-$stamp.tar.gz"
+  else
+    echo "off-site copy FAILED (local backup unaffected)" >&2
+  fi
+else
+  echo "off-site copy skipped: no AWS_* in the environment" >&2
+fi
