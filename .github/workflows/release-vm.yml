@@ -1,0 +1,58 @@
+# Build the VM binary and publish it to the rolling `vm-deploy` release.
+#
+# Deployment is pull-based: the VM's nocturnal-deploy.timer polls the release's
+# .sha256 (a plain CDN GET, no API rate limit), and when it differs from the
+# installed binary's hash it downloads, verifies, installs and restarts —
+# rolling back on a failed health check. SSH is for initial setup only.
+#
+# Trust model, stated plainly: whoever can push to main controls the VM. That
+# was already true when deploys were push-over-SSH from a maintainer checkout;
+# the sha256 protects against a torn download, not against a hostile repo.
+name: release-vm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-vm
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # upload release assets
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-unknown-linux-musl }
+      - uses: Swatinem/rust-cache@v2
+      # zig is the cross-linker; the pip package is the least stateful way to get it.
+      - run: pip install cargo-zigbuild ziglang
+      - name: build static musl binary
+        env:
+          # opus's CMakeLists declares a pre-3.5 minimum; CMake 4 refuses those
+          # outright. Same override the maintainer build uses.
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl -p nocturnal
+      - name: checksum
+        run: |
+          cd target/x86_64-unknown-linux-musl/release
+          sha256sum nocturnal | awk '{print $1}' > nocturnal.sha256
+          cat nocturnal.sha256
+      - name: publish to the rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd target/x86_64-unknown-linux-musl/release
+          gh release view vm-deploy -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create vm-deploy -R "$GITHUB_REPOSITORY" --prerelease \
+              --title "VM deploy channel" \
+              --notes "Rolling artifact pulled by the VM. Do not download by hand; see deploy/pull-deploy.sh."
+          # sha256 last: the puller reads it first, so a half-updated release
+          # fails verification (old sum, old binary still cached) instead of
+          # installing a mismatched pair. Verification failing is the safe state.
+          gh release upload vm-deploy nocturnal --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload vm-deploy nocturnal.sha256 --clobber -R "$GITHUB_REPOSITORY"

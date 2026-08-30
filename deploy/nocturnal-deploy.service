@@ -1,0 +1,8 @@
+[Unit]
+Description=Pull and install a newly published nocturnal binary
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nocturnal-pull-deploy

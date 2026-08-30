@@ -27,6 +27,9 @@ echo "== copying artifacts =="
 "${SCP[@]}" "$BIN" "root@$VM_IP:/usr/local/bin/nocturnal.new"
 "${SCP[@]}" deploy/nocturnal.yaml "root@$VM_IP:/tmp/nocturnal.yaml"
 "${SCP[@]}" deploy/nocturnal.service "root@$VM_IP:/tmp/nocturnal.service"
+"${SCP[@]}" deploy/pull-deploy.sh "root@$VM_IP:/tmp/pull-deploy.sh"
+"${SCP[@]}" deploy/nocturnal-deploy.service "root@$VM_IP:/tmp/nocturnal-deploy.service"
+"${SCP[@]}" deploy/nocturnal-deploy.timer "root@$VM_IP:/tmp/nocturnal-deploy.timer"
 "${SCP[@]}" deploy/perses/4*.yaml "root@$VM_IP:/tmp/"
 tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events wal 2>/dev/null || tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events
 "${SCP[@]}" /tmp/nocturnal-data.tgz "root@$VM_IP:/tmp/nocturnal-data.tgz"
@@ -114,6 +117,14 @@ if [ -d /etc/eq-otel ]; then
   [ -e /etc/eq-otel/roles.yaml ] && chown nocturnal:eqgw /etc/eq-otel/roles.yaml
 fi
 [ -d /etc/perses/provisioning ] && chown -R nocturnal:perses /etc/perses/provisioning
+
+# Pull-based CD: the VM polls the vm-deploy release and installs new builds
+# itself; SSH is for initial setup only. See deploy/pull-deploy.sh.
+install -m 0755 /tmp/pull-deploy.sh /usr/local/bin/nocturnal-pull-deploy
+install -m 0644 /tmp/nocturnal-deploy.service /etc/systemd/system/nocturnal-deploy.service
+install -m 0644 /tmp/nocturnal-deploy.timer /etc/systemd/system/nocturnal-deploy.timer
+systemctl daemon-reload
+systemctl enable --now nocturnal-deploy.timer
 
 install -m 0755 /usr/local/bin/nocturnal.new /usr/local/bin/nocturnal
 rm -f /usr/local/bin/nocturnal.new

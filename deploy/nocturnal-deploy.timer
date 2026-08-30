@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll the vm-deploy release for a new nocturnal binary
+
+[Timer]
+# Every 2 minutes: the poll is one tiny CDN GET, and a push-to-deployed
+# latency of ~2min plus build time is close enough to push-based CD.
+OnBootSec=2min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20
+
+[Install]
+WantedBy=timers.target
