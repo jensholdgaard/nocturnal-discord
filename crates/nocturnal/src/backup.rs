@@ -46,15 +46,18 @@ fn human(bytes: usize) -> String {
 
 /// Export the DKP ledger as the legacy players/raids JSON pair, zipped.
 #[tracing::instrument(name = "command.backup", skip_all, fields(otel.kind = "server"))]
+// Deliberately *not* ephemeral. The reply is the interface: the roster bot
+// watches the channel for the attachment and copies it to Drive, and an
+// ephemeral reply is invisible to every other bot. Legacy did
+// deferReply() + editReply({files}) — a public message — for this reason.
 #[poise::command(
     slash_command,
-    ephemeral,
     rename = "backup",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn backup(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = crate::discord::require_guild(&ctx)?;
-    crate::discord::ack_ephemeral(&ctx).await?;
+    crate::discord::ack(&ctx).await?;
 
     let now_ms = crate::discord::chrono_now_ms();
     let rendered = ctx
@@ -131,8 +134,7 @@ pub async fn backup(ctx: Context<'_>) -> Result<(), Error> {
                 human(zipped.len()),
                 human(raw)
             ))
-            .attachment(serenity::CreateAttachment::bytes(zipped, filename))
-            .ephemeral(true),
+            .attachment(serenity::CreateAttachment::bytes(zipped, filename)),
     )
     .await?;
     Ok(())
