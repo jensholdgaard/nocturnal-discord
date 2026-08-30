@@ -74,7 +74,7 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |
 | `/searchitem` | all | search, database? | Item lookup without an auction |
 | `/searchlogs` | all | search | Paginated ledger search by comment; searches matching `/tick/i` are refused with flavor text |
-| `/backup` | admin | — | Zip of `{guild}_players.json` + `{guild}_raids.json` attached to the reply (ephemeral); the roster page reads these |
+| `/backup` | admin | — | `backup.zip` containing `players.json` + `raids.json`, attached to the reply (ephemeral); the roster page reads these, so the names are a contract |
 | `/addraideventdkp` | officer | dkp, raidid, eventid | Manually run the RaidHelper award for a past raid |
 | `/configure` `/showconfig` | see above | | |
 

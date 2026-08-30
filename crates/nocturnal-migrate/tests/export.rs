@@ -54,6 +54,28 @@ fn round_trip(players_json: &str, raids_json: &str) -> (Value, Value) {
     )
 }
 
+/// The names are the contract. The legacy command put `players.json` and
+/// `raids.json` into a zip called `backup.zip`, and anything that unpacks a
+/// backup looks for exactly those. The prefixed `{guild}_players.json` form
+/// only ever existed as an intermediate on the legacy server's own disk —
+/// reading that into this repo's doc comment is how they got shipped wrong.
+#[test]
+fn the_files_are_named_the_way_the_legacy_command_named_them() {
+    let players: Vec<LegacyPlayer> = serde_json::from_str(PLAYERS).unwrap();
+    let raids: Vec<LegacyRaid> = serde_json::from_str(RAIDS).unwrap();
+    let (guild, commands, _) = genesis_commands(&players, &raids, None);
+    let mut ledger = Ledger::new();
+    run_genesis(&mut ledger, guild, &commands, &players, NOW);
+    let g = ledger.state().guild(guild).unwrap();
+
+    let names: Vec<String> = export::files(g, guild, NOW)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, vec!["players.json", "raids.json"]);
+}
+
 #[test]
 fn an_exported_player_is_the_document_it_came_from() {
     let (players, _) = round_trip(PLAYERS, RAIDS);

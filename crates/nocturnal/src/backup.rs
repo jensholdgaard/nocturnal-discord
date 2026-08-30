@@ -119,11 +119,14 @@ pub async fn backup(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    let filename = format!("{ledger_guild}_backup_{}.zip", now_ms / 1000);
+    // `backup.zip`, exactly as the legacy command named it. Anything that
+    // unpacks one of these looks for that name and for the two plain entries
+    // inside it, so the filename is part of the contract, not decoration.
+    let filename = "backup.zip".to_owned();
     ctx.send(
         poise::CreateReply::default()
             .content(format!(
-                "Backup of `{}` — {} zipped, {} uncompressed.",
+                "Backup created — `{}`, {} zipped, {} uncompressed.",
                 names.join("`, `"),
                 human(zipped.len()),
                 human(raw)
@@ -147,23 +150,20 @@ mod tests {
     #[test]
     fn the_zip_holds_both_documents_under_their_legacy_names() {
         let files = vec![
-            (
-                "42_players.json".to_owned(),
-                b"[{\"player\":\"1\"}]".to_vec(),
-            ),
-            ("42_raids.json".to_owned(), b"[]".to_vec()),
+            ("players.json".to_owned(), b"[{\"player\":\"1\"}]".to_vec()),
+            ("raids.json".to_owned(), b"[]".to_vec()),
         ];
         let bytes = zip_files(&files).unwrap();
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         assert_eq!(archive.len(), 2);
         let names: Vec<String> = archive.file_names().map(str::to_owned).collect();
-        assert!(names.contains(&"42_players.json".to_owned()), "{names:?}");
-        assert!(names.contains(&"42_raids.json".to_owned()), "{names:?}");
+        assert!(names.contains(&"players.json".to_owned()), "{names:?}");
+        assert!(names.contains(&"raids.json".to_owned()), "{names:?}");
 
         use std::io::Read;
         let mut s = String::new();
         archive
-            .by_name("42_players.json")
+            .by_name("players.json")
             .unwrap()
             .read_to_string(&mut s)
             .unwrap();

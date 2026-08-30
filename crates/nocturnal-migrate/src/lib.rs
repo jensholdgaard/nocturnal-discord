@@ -1,7 +1,9 @@
 //! Legacy `nocturnal-dkp-bot` data → genesis events (M2).
 //!
-//! Input: the `{guild}_players.json` / `{guild}_raids.json` collection dumps
-//! the legacy `/backup` command produces (raw `find().toArray()` output).
+//! Input: the players/raids collection dumps (raw `find().toArray()` output).
+//! The legacy server wrote these to its own disk as `{guild}_players.json` and
+//! `{guild}_raids.json`; the zip `/backup` hands out calls them `players.json`
+//! and `raids.json`. Either name parses — this reads whatever it is given.
 //! Output: `player.imported` / `raid.imported` genesis envelopes appended to a
 //! fresh WAL, plus a verification report proving every replayed balance
 //! matches the snapshot to the point (hazard B10).

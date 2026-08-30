@@ -314,8 +314,11 @@ exists; the Python dpsbot retires when this ships.
 ### `/backup` (2026-08-26 — the one legacy command that was still missing)
 
 - [x] `nocturnal-migrate::export`: the projection rendered back into
-      `{guild}_players.json` / `{guild}_raids.json` using **the same structs
-      the importer parses**, so there is one definition of the format.
+      `players.json` / `raids.json` using **the same structs the importer
+      parses**, so there is one definition of the format. The zip is
+      `backup.zip`; the prefixed `{guild}_players.json` form only ever existed
+      as an intermediate on the legacy server's own disk, and shipping it as
+      the entry name was a contract break caught by the maintainer.
 - [x] `/backup` (Administrator, ephemeral): both documents zipped — 71 MB of
       JSON becomes ~5 MB — with a size refusal that names the nightly tarball.
 - [x] Round-trip proof against the real 2026-08-20 snapshot: all 281 players

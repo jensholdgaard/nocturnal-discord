@@ -1,5 +1,5 @@
 //! The inverse of the import: the ledger rendered back into the legacy
-//! `{guild}_players.json` / `{guild}_raids.json` documents.
+//! `players.json` / `raids.json` documents.
 //!
 //! This is not a convenience. `/backup`'s output is an interface: the guild's
 //! roster page reads these two files, and the legacy bot is what taught it the
@@ -19,7 +19,7 @@ use crate::{
     LegacyAttendance, LegacyItem, LegacyLogEntry, LegacyPlayer, LegacyRaid, LegacyRaidRef,
 };
 
-/// Render `{guild}_players.json`.
+/// Render `players.json`.
 pub fn players(g: &GuildState, guild: GuildId) -> Vec<LegacyPlayer> {
     g.players
         .iter()
@@ -56,7 +56,7 @@ pub fn players(g: &GuildState, guild: GuildId) -> Vec<LegacyPlayer> {
         .collect()
 }
 
-/// Render `{guild}_raids.json`.
+/// Render `raids.json`.
 ///
 /// `deprecated` is stored in legacy and derived here (hazard-free: there are
 /// no deprecation events, the window is config), so it is computed against
@@ -89,23 +89,20 @@ pub fn raids(g: &GuildState, guild: GuildId, now_ms: i64) -> Vec<LegacyRaid> {
         .collect()
 }
 
-/// The two files `/backup` ships, named as the legacy bot named them (the
-/// importer reads these names, and so does whatever else has been pointed at
-/// them over the years).
+/// The two files `/backup` ships, named as the legacy bot named them *inside
+/// the zip*: `players.json` and `raids.json`, with no guild prefix.
+///
+/// The prefixed `{guild}_players.json` form is what the legacy server wrote to
+/// its own disk as an intermediate. Only the plain names ever reached anyone,
+/// and they are the names whatever unpacks a backup will look for.
 pub fn files(
     g: &GuildState,
     guild: GuildId,
     now_ms: i64,
 ) -> Result<Vec<(String, Vec<u8>)>, serde_json::Error> {
     Ok(vec![
-        (
-            format!("{guild}_players.json"),
-            to_json(&players(g, guild))?,
-        ),
-        (
-            format!("{guild}_raids.json"),
-            to_json(&raids(g, guild, now_ms))?,
-        ),
+        ("players.json".to_owned(), to_json(&players(g, guild))?),
+        ("raids.json".to_owned(), to_json(&raids(g, guild, now_ms))?),
     ])
 }
 
