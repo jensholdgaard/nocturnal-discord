@@ -13,6 +13,17 @@ name: release-vm
 on:
   push:
     branches: [main]
+    # Only when the binary can actually change. A docs or dashboard commit
+    # would otherwise rebuild, republish, and restart the bot on the VM for a
+    # byte-different but functionally identical binary.
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'semconv/**'
+      - 'templates/**'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/release-vm.yml'
   workflow_dispatch:
 
 concurrency:

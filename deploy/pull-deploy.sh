@@ -17,7 +17,12 @@ BASE="https://github.com/${REPO}/releases/download/vm-deploy"
 BIN=/usr/local/bin/nocturnal
 HEALTH="http://127.0.0.1:8090/readyz"
 
-want=$(curl -fsSL "${BASE}/nocturnal.sha256" | tr -d '[:space:]')
+# Cache-busted: release assets sit behind GitHub's CDN, which served the
+# *previous* checksum for a minute or so after a publish. The poll then saw
+# "already installed", exited quietly, and the deploy simply did not happen
+# until a later tick — with nothing in the journal to say why. A throwaway
+# query parameter forces a fresh object.
+want=$(curl -fsSL "${BASE}/nocturnal.sha256?cb=$(date +%s)" | tr -d '[:space:]')
 [ -n "$want" ] || { echo "empty sha256 from release; skipping"; exit 0; }
 have=$(sha256sum "$BIN" | awk '{print $1}')
 [ "$want" = "$have" ] && exit 0
@@ -25,7 +30,7 @@ have=$(sha256sum "$BIN" | awk '{print $1}')
 echo "new build published: ${want:0:12} (running ${have:0:12})"
 tmp=$(mktemp /usr/local/bin/.nocturnal.pull.XXXXXX)
 trap 'rm -f "$tmp"' EXIT
-curl -fsSL -o "$tmp" "${BASE}/nocturnal"
+curl -fsSL -o "$tmp" "${BASE}/nocturnal?cb=$(date +%s)"
 got=$(sha256sum "$tmp" | awk '{print $1}')
 if [ "$got" != "$want" ]; then
   # CI uploads the binary before the sum, so a poll landing mid-publish sees a
