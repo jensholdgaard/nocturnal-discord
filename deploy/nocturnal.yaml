@@ -7,9 +7,10 @@ log:
   format: json
 
 discord:
-  guild_id: 1540111927995539506       # test server (legacy fork testing)
-  command_prefix: "controels-"
-  data_guild_id: 1169758926825324645  # serve the imported production ledger
+  # Cutover 2026-08-30: production guild, unprefixed, under the NocturnalGuild
+  # identity members already had. The registration guild IS the ledger guild,
+  # so there is no remap and no prefix; the test-server identity is retired.
+  guild_id: 1169758926825324645
 
 bell:
   enabled: true              # rings in the raid channels when a short auction opens
