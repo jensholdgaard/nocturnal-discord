@@ -16,6 +16,18 @@ out="$DEST/nocturnal-$stamp.tar.gz"
 # replay truncates a torn tail exactly as it would after a crash.
 tar -C "$DATA_DIR" -czf "$out.tmp" events wal
 mv "$out.tmp" "$out"
+
+# Members' personal Perses projects (the u-<name> dashboards /dpstoken grants)
+# live only in Perses' local database — the guild dashboards are provisioned
+# from git, but these are user-created and restorable from nowhere else. The
+# plugins trees are 380 MB of re-installable archives and stay out.
+pout=""
+if [ -d /var/lib/perses/data ]; then
+  pout="$DEST/perses-$stamp.tar.gz"
+  tar -C /var/lib/perses -czf "$pout.tmp" data && mv "$pout.tmp" "$pout"
+  tar -tzf "$pout" >/dev/null && echo "wrote $pout"
+  ls -1t "$DEST"/perses-*.tar.gz 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm --
+fi
 echo "wrote $out ($(du -h "$out" | cut -f1))"
 
 # Prove it is readable before trusting it.
@@ -42,11 +54,14 @@ if [ -f /etc/nocturnal/env ]; then
 fi
 if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_ENDPOINT:-}" ]; then
   host="${AWS_ENDPOINT#https://}"
-  if curl -fsS --aws-sigv4 "aws:amz:${AWS_REGION:-fsn1}:s3"       --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"       -T "$out" "https://nocturnal-ledger.${host}/backups/nocturnal-$stamp.tar.gz"; then
-    echo "off-site copy: backups/nocturnal-$stamp.tar.gz"
-  else
-    echo "off-site copy FAILED (local backup unaffected)" >&2
-  fi
+  for f in "$out" $pout; do
+    [ -f "$f" ] || continue
+    if curl -fsS --aws-sigv4 "aws:amz:${AWS_REGION:-fsn1}:s3" --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" -T "$f" "https://nocturnal-ledger.${host}/backups/$(basename "$f")"; then
+      echo "off-site copy: backups/$(basename "$f")"
+    else
+      echo "off-site copy FAILED for $(basename "$f") (local backup unaffected)" >&2
+    fi
+  done
 else
   echo "off-site copy skipped: no AWS_* in the environment" >&2
 fi
