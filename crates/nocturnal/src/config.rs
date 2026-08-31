@@ -46,6 +46,10 @@ pub struct RosterConfig {
     pub ourios_query_url: Option<String>,
     #[serde(default = "default_ourios_tenant")]
     pub ourios_tenant: String,
+    /// Where the puller unpacks the Perses island (`island.js`, `island.css`).
+    /// The page server serves it under /assets. Unset = charts render as a
+    /// note saying the island is not installed.
+    pub assets_dir: Option<PathBuf>,
 }
 
 fn default_ourios_tenant() -> String {
@@ -63,6 +67,7 @@ impl Default for RosterConfig {
             output_path: None,
             ourios_query_url: None,
             ourios_tenant: default_ourios_tenant(),
+            assets_dir: None,
         }
     }
 }

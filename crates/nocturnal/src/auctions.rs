@@ -1670,6 +1670,7 @@ mod tests {
             item_mirror: std::sync::Arc::new(crate::items::ItemMirror::new(std::path::Path::new(
                 "/nonexistent",
             ))),
+            site: Default::default(),
             members: Default::default(),
         };
 

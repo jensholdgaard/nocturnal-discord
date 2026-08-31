@@ -18,6 +18,7 @@ on:
     # byte-different but functionally identical binary.
     paths:
       - 'crates/**'
+      - 'web/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'semconv/**'
@@ -52,6 +53,15 @@ jobs:
         run: |
           cd target/x86_64-unknown-linux-musl/release
           sha256sum nocturnal | awk '{print $1}' > nocturnal.sha256
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: web/package-lock.json }
+      - name: Build the Perses island (the site's one piece of TypeScript)
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          tar -C dist -czf ../island.tar.gz assets
+          cd .. && sha256sum island.tar.gz | awk '{print $1}' > island.sha256
           cat nocturnal.sha256
       - name: publish to the rolling release
         env:
@@ -66,4 +76,6 @@ jobs:
           # fails verification (old sum, old binary still cached) instead of
           # installing a mismatched pair. Verification failing is the safe state.
           gh release upload vm-deploy nocturnal --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload vm-deploy island.tar.gz --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload vm-deploy island.sha256 --clobber -R "$GITHUB_REPOSITORY"
           gh release upload vm-deploy nocturnal.sha256 --clobber -R "$GITHUB_REPOSITORY"

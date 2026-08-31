@@ -35,6 +35,8 @@ pub struct Data {
     pub ourios: Option<(String, String)>,
     /// The item mirror (pqdi rows cached on disk), for profiles' gear.
     pub item_mirror: std::sync::Arc<crate::items::ItemMirror>,
+    /// The page server's live snapshot, replaced on every render.
+    pub site: crate::site::SiteHandle,
     /// Discord display names and roles by player id, filled lazily by the
     /// page materializer. Presentation state: lost on restart, refilled.
     pub members: std::sync::Arc<
@@ -655,6 +657,7 @@ async fn provisioning_client(
                     item_mirror: std::sync::Arc::new(crate::items::ItemMirror::new(
                         std::path::Path::new("/nonexistent"),
                     )),
+                    site: Default::default(),
                     members: Default::default(),
                 })
             })
@@ -667,7 +670,12 @@ async fn provisioning_client(
 }
 
 /// run until shutdown.
-pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> anyhow::Result<()> {
+pub async fn run(
+    cfg: &Config,
+    driver: DriverHandle,
+    readiness: Readiness,
+    site_handle: crate::site::SiteHandle,
+) -> anyhow::Result<()> {
     let ourios: Option<(String, String)> = cfg
         .roster
         .ourios_query_url
@@ -780,6 +788,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     let driver = driver.clone();
                     let members = members.clone();
                     let ourios = ourios.clone();
+                    let site_for_render = site_handle.clone();
                     let items = item_mirror.clone();
                     let ledger_guild = data_guild.map_or(guild_id, |(_, to)| to);
                     // And every half hour after: profiles arrive from
@@ -796,6 +805,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                                 ledger_guild,
                                 ourios.as_ref(),
                                 &items,
+                                &site_for_render,
                             )
                             .await;
                             tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
@@ -831,6 +841,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     roster_output: roster_output.clone(),
                     ourios: ourios.clone(),
                     item_mirror: item_mirror.clone(),
+                    site: site_handle.clone(),
                     members: members.clone(),
                 })
             })

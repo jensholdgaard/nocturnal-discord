@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nocturnal Guild</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- dev harness only: the bot renders real pages. -->
+    <div data-panel='{"kind":"TimeSeriesChart","title":"Damage, last hour","query":"sum by (everquest_combat_source) (rate(everquest_combat_damage_total{everquest_combat_direction=\"outgoing\"}[2m]))","seriesNameFormat":"{{everquest_combat_source}}","start":0,"end":0}'></div>
+    <script type="module" src="/src/island.tsx"></script>
+  </body>
+</html>

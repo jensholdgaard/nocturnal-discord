@@ -245,6 +245,7 @@ async fn upsert(
                     ledger_guild,
                     ctx.data().ourios.as_ref(),
                     &ctx.data().item_mirror,
+                    &ctx.data().site,
                 )
                 .await;
             }
@@ -356,6 +357,7 @@ pub async fn remove(
                     ledger_guild,
                     ctx.data().ourios.as_ref(),
                     &ctx.data().item_mirror,
+                    &ctx.data().site,
                 )
                 .await;
             }

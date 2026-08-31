@@ -18,6 +18,8 @@ mod raidhelper;
 mod roster;
 mod roster_page;
 mod scheduler;
+mod site;
+mod web;
 
 use anyhow::Context as _;
 use config::Config;
@@ -207,8 +209,14 @@ fn main() -> anyhow::Result<()> {
     }
 
     let readiness = health::Readiness::default();
+    let site_handle: site::SiteHandle = Default::default();
     if let Some(bind) = &cfg.health.bind {
-        health::serve(bind, readiness.clone())?;
+        health::serve(
+            bind,
+            readiness.clone(),
+            site_handle.clone(),
+            cfg.roster.assets_dir.clone(),
+        )?;
     }
 
     if offline {
@@ -223,7 +231,7 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    rt.block_on(discord::run(&cfg, driver, readiness))
+    rt.block_on(discord::run(&cfg, driver, readiness, site_handle))
 }
 
 /// `nocturnal --bell-test <guild_id>:<voice_channel_id>`

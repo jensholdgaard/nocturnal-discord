@@ -336,231 +336,25 @@ pub fn render(
     })
 }
 
-/// The site's data: the last raids with who came and what dropped (with what
-/// it cost — the guild keeps its loot history), and each member's own standing
-/// keyed by Discord username so the page shows the viewer theirs. Behind the
-/// login. What is deliberately absent is any per-item price aggregate: that
-/// is a bidding guide, and the guild does not want one.
-/// One squished line of a member's ledger: a raid's ticks as one entry
-/// ("+33 · Vulak & Ring War · 33 ticks") rather than thirty-three "+1"s,
-/// with loot and adjustments kept as their own lines.
-fn squish_history(log: &[nocturnal_core::state::LogEntry], max: usize) -> Vec<serde_json::Value> {
-    let mut out: Vec<serde_json::Value> = Vec::new();
-    let mut i = log.len();
-    while i > 0 && out.len() < max {
-        i -= 1;
-        let e = &log[i];
-        let is_tick =
-            e.dkp > 0 && (e.comment == "Tick" || e.comment == "Start") && e.raid.is_some();
-        if is_tick {
-            // Absorb every earlier tick of the same raid.
-            let raid = e.raid.as_ref().map(|r| r.raid_id.clone());
-            let mut ticks = 1;
-            let mut dkp = e.dkp;
-            let last_ts = e.ts_ms;
-            while i > 0 {
-                let f = &log[i - 1];
-                let same = f.dkp > 0
-                    && (f.comment == "Tick" || f.comment == "Start")
-                    && f.raid.as_ref().map(|r| r.raid_id.clone()) == raid;
-                if !same {
-                    break;
-                }
-                ticks += 1;
-                dkp += f.dkp;
-                i -= 1;
-            }
-            out.push(serde_json::json!({
-                "kind": "raid", "dkp": dkp, "ticks": ticks, "ts_ms": last_ts,
-                "raid": e.raid.as_ref().map(|r| r.name.clone()),
-            }));
-        } else {
-            out.push(serde_json::json!({
-                "kind": if e.item.is_some() { "loot" } else { "adjust" },
-                "dkp": e.dkp, "comment": e.comment, "ts_ms": e.ts_ms,
-                "raid": e.raid.as_ref().map(|r| r.name.clone()),
-                "item": e.item.as_ref().map(|i| i.name.clone()),
-            }));
-        }
-    }
-    out
-}
-
+/// The site payload as JSON — `SiteData` serialized; kept for the shape tests.
+#[cfg(test)]
 pub fn render_site(
     g: &GuildState,
     members: &HashMap<u64, MemberInfo>,
     now_ms: i64,
     upcoming: &[serde_json::Value],
 ) -> serde_json::Value {
-    // Who a player *is*, for the page: their roster main, failing that any
-    // roster character, failing that the Discord display name. The first two
-    // come from the ledger — set once, verifiable in game, the same on every
-    // render — where a Discord name is whatever the member typed this week
-    // and cannot be enforced. The Discord name is still carried alongside
-    // for disambiguation; it is just not the identity.
-    let name = |id: &PlayerId| -> String {
-        if let Some(chars) = g.roster.get(id) {
-            if let Some(main) = chars.values().find(|c| c.main == Some(MainRank::Main)) {
-                return main.name.clone();
-            }
-            if let Some(any) = chars.values().next() {
-                return any.name.clone();
-            }
-        }
-        members
-            .get(id)
-            .map(|m| m.display_name.clone())
-            .unwrap_or_else(|| "unknown".to_owned())
-    };
-    let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> = g.raids.iter().collect();
-    raids.sort_by_key(|(_, r)| std::cmp::Reverse(r.date_ms));
-    let raids: Vec<serde_json::Value> = raids
+    let upcoming: Vec<crate::site::UpcomingView> = upcoming
         .iter()
-        .take(8)
-        .map(|(id, r)| {
-            let mut loot: Vec<(i64, String, String, i64)> = Vec::new();
-            for (pid, p) in &g.players {
-                for e in &p.log {
-                    if e.dkp < 0 && e.raid.as_ref().map(|x| &x.raid_id) == Some(*id) {
-                        let item = e
-                            .item
-                            .as_ref()
-                            .map(|i| i.name.clone())
-                            .unwrap_or_else(|| e.comment.clone());
-                        loot.push((e.ts_ms, item, name(pid), -e.dkp));
-                    }
-                }
-            }
-            loot.sort();
-            let attendees: std::collections::BTreeSet<PlayerId> =
-                r.entries.iter().flat_map(|e| e.players.iter().copied()).collect();
-            serde_json::json!({
-                "id": id, "name": r.name, "date_ms": r.date_ms,
-                "start_ms": r.entries.first().map_or(r.date_ms, |e| e.ts_ms),
-                // /endraid's timestamp when the ledger has it; the last tick
-                // otherwise (imported raids). `exact` tells the page which.
-                "end_ms": r.ended_ms.unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms)),
-                "exact": r.ended_ms.is_some(),
-                // Characters on the roster of everyone who attended, so the
-                // page can count only this raid's people — a boxed alt or a
-                // non-attendee reporting during the window drops out.
-                "attendee_characters": attendees
-                    .iter()
-                    .filter_map(|id| g.roster.get(id))
-                    .flat_map(|cs| cs.values().map(|c| c.name.to_lowercase()))
-                    .collect::<Vec<_>>(),
-                "ticks": r.entries.iter().filter(|e| e.comment == "Tick" || e.comment == "Start").count(),
-                "dkp_per_tick": r.dkp_per_tick,
-                "attendees": attendees.iter().map(name).collect::<Vec<_>>(),
-                "loot": loot.into_iter().map(|(ts, item, winner, cost)| serde_json::json!({"ts_ms": ts, "item": item, "winner": winner, "cost": cost})).collect::<Vec<_>>(),
-            })
+        .map(|u| crate::site::UpcomingView {
+            id: u["id"].as_str().unwrap_or("").to_owned(),
+            title: u["title"].as_str().unwrap_or("").to_owned(),
+            start_ms: u["start_ms"].as_i64().unwrap_or(0),
+            signups: u["signups"].as_u64().unwrap_or(0) as usize,
         })
         .collect();
-    let recent: Vec<String> = raids
-        .iter()
-        .filter_map(|r| r["id"].as_str().map(String::from))
-        .collect();
-    let mut me = serde_json::Map::new();
-    for (id, p) in g.raiding_players(now_ms) {
-        let Some(m) = members.get(&id) else { continue };
-        let attended = recent
-            .iter()
-            .filter(|rid| {
-                g.raids
-                    .get(*rid)
-                    .is_some_and(|r| r.entries.iter().any(|e| e.players.contains(&id)))
-            })
-            .count();
-        let history = squish_history(&p.log, 12);
-        let chars: Vec<serde_json::Value> = g
-            .roster
-            .get(&id)
-            .map(|cs| {
-                cs.values()
-                    .map(|c| serde_json::json!({"name": c.name, "class": c.class, "level": c.level, "main": c.main}))
-                    .collect()
-            })
-            .unwrap_or_default();
-        me.insert(
-            m.username.clone(),
-            serde_json::json!({
-                "name": name(&id), "discord": m.display_name, "dkp": p.balance, "attendance": g.attendance_pct(id, now_ms),
-                "raids_attended": attended, "last_active_ms": p.log.last().map_or(0, |e| e.ts_ms),
-                "history": history, "characters": chars,
-            }),
-        );
-    }
-    // Every item the ledger has ever charged, with the stat block and icon
-    // captured when it was looked up — so the page can show an item on hover
-    // from our own data, and its award history on click. History, not a
-    // price guide: the entries are who, when, at which raid, for what.
-    let mut items: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    let mut awards: HashMap<String, Vec<(i64, String, String, i64)>> = HashMap::new();
-    for (pid, p) in &g.players {
-        for e in &p.log {
-            let Some(item) = &e.item else { continue };
-            if e.dkp >= 0 {
-                continue;
-            }
-            awards.entry(item.name.clone()).or_default().push((
-                e.ts_ms,
-                e.raid.as_ref().map(|r| r.name.clone()).unwrap_or_default(),
-                name(pid),
-                -e.dkp,
-            ));
-            items.entry(item.name.clone()).or_insert_with(|| {
-                serde_json::json!({"id": item.id, "url": item.url, "image": item.image, "data": item.data})
-            });
-        }
-    }
-    for (iname, mut list) in awards {
-        list.sort_by_key(|a| std::cmp::Reverse(a.0));
-        if let Some(serde_json::Value::Object(o)) = items.get_mut(&iname) {
-            o.insert(
-                "history".into(),
-                serde_json::Value::Array(
-                    list.into_iter()
-                        .map(|(ts, raid, winner, cost)| serde_json::json!({"ts_ms": ts, "raid": raid, "winner": winner, "cost": cost}))
-                        .collect(),
-                ),
-            );
-        }
-    }
-    // Everyone the page might name, keyed by the name it uses, so a click on
-    // any name resolves to one person without going through Discord.
-    let mut people = serde_json::Map::new();
-    let mut ids: Vec<PlayerId> = g.roster.keys().copied().collect();
-    ids.extend(g.raiding_players(now_ms).map(|(id, _)| id));
-    ids.sort_unstable();
-    ids.dedup();
-    for id in ids {
-        let chars: Vec<serde_json::Value> = g
-            .roster
-            .get(&id)
-            .map(|cs| {
-                cs.values()
-                    .map(|c| serde_json::json!({"name": c.name, "class": c.class, "level": c.level, "main": c.main}))
-                    .collect()
-            })
-            .unwrap_or_default();
-        people.insert(
-            name(&id),
-            serde_json::json!({
-                "discord": members.get(&id).map(|m| m.display_name.clone()),
-                "characters": chars,
-                "raiding": g.raiding_players(now_ms).any(|(p, _)| p == id),
-            }),
-        );
-    }
-    serde_json::json!({
-        "generatedAt": now_ms,
-        "avgAttendance": g.average_attendance(now_ms),
-        "raids": raids,
-        "upcoming": upcoming,
-        "members": me,
-        "people": people,
-        "items": items,
-    })
+    serde_json::to_value(crate::site::SiteData::build(g, members, now_ms, upcoming))
+        .unwrap_or_default()
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -651,6 +445,7 @@ pub async fn rematerialize(
     ledger_guild: GuildId,
     ourios: Option<&(String, String)>,
     items: &crate::items::ItemMirror,
+    site_handle: &crate::site::SiteHandle,
 ) {
     let now = crate::discord::chrono_now_ms();
     let ids: Vec<PlayerId> = driver
@@ -709,7 +504,10 @@ pub async fn rematerialize(
     };
     // Character profiles from members' clients. Fetched first, because what
     // they say becomes roster events before the page is rendered from it.
-    let mut profile_payload: Option<serde_json::Value> = None;
+    let mut profile_payload: Option<(
+        std::collections::BTreeMap<String, crate::profiles::Profile>,
+        std::collections::BTreeMap<String, crate::items::ItemSummary>,
+    )> = None;
     if let Some((url, tenant)) = ourios {
         let profiles = crate::profiles::fetch_profiles(url, tenant).await;
         if !profiles.is_empty() {
@@ -743,25 +541,39 @@ pub async fn rematerialize(
                 );
             }
         }
-        profile_payload = Some(crate::profiles::render(&profiles, items).await);
+        profile_payload = Some(crate::profiles::resolve(&profiles, items).await);
     }
+    let upcoming_views: Vec<crate::site::UpcomingView> = upcoming
+        .iter()
+        .map(|u| crate::site::UpcomingView {
+            id: u["id"].as_str().unwrap_or("").to_owned(),
+            title: u["title"].as_str().unwrap_or("").to_owned(),
+            start_ms: u["start_ms"].as_i64().unwrap_or(0),
+            signups: u["signups"].as_u64().unwrap_or(0) as usize,
+        })
+        .collect();
     let both = driver
         .query(move |l| {
             l.state().guild(ledger_guild).map(|g| {
                 (
                     render(g, &members, now),
-                    render_site(g, &members, now, &upcoming),
+                    crate::site::SiteData::build(g, &members, now, upcoming_views),
                 )
             })
         })
         .await;
-    let Some((json, mut site)) = both else {
+    let Some((json, mut data)) = both else {
         return;
     };
-    if let (Some(rendered), serde_json::Value::Object(o)) = (profile_payload, &mut site) {
-        o.insert("profiles".into(), rendered["profiles"].clone());
-        o.insert("gear_items".into(), rendered["gear_items"].clone());
+    if let Some((profiles, gear)) = profile_payload {
+        data.profiles = profiles;
+        data.gear_items = gear;
     }
+    let data = std::sync::Arc::new(data);
+    if let Ok(mut slot) = site_handle.write() {
+        *slot = Some(data.clone());
+    }
+    let site = serde_json::to_value(data.as_ref()).unwrap_or_default();
     let site_path = out.with_file_name("site.json");
     if let Err(e) = serde_json::to_vec(&site)
         .map_err(std::io::Error::other)

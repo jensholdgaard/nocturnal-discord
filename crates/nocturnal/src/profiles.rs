@@ -294,11 +294,16 @@ pub async fn sync_roster(
     written
 }
 
-/// Profiles with their items resolved, as the site payload wants them:
-/// `{ "<name lower>": profile }` plus `gear_items: { "<id>": ItemSummary }`
-/// for every item any profile wears. Misses are fetched once and cached.
-pub async fn render(profiles: &HashMap<String, Profile>, mirror: &ItemMirror) -> serde_json::Value {
-    let mut gear: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+/// Profiles keyed by lowercase name, and every worn item's summary keyed by
+/// id — typed, for the page server. Misses are fetched once and cached.
+pub async fn resolve(
+    profiles: &HashMap<String, Profile>,
+    mirror: &ItemMirror,
+) -> (
+    std::collections::BTreeMap<String, Profile>,
+    std::collections::BTreeMap<String, ItemSummary>,
+) {
+    let mut gear = std::collections::BTreeMap::new();
     for p in profiles.values() {
         for s in &p.equipment {
             let Some(id) = s.id else { continue };
@@ -307,16 +312,15 @@ pub async fn render(profiles: &HashMap<String, Profile>, mirror: &ItemMirror) ->
                 continue;
             }
             if let Some(row) = mirror.get(id).await {
-                if let Ok(v) = serde_json::to_value(ItemSummary::from_row(&row)) {
-                    gear.insert(key, v);
-                }
+                gear.insert(key, ItemSummary::from_row(&row));
             }
         }
     }
-    serde_json::json!({
-        "profiles": profiles,
-        "gear_items": gear,
-    })
+    let profiles: std::collections::BTreeMap<String, Profile> = profiles
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    (profiles, gear)
 }
 
 #[cfg(test)]
