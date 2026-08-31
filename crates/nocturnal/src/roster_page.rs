@@ -392,7 +392,21 @@ pub fn render_site(
     now_ms: i64,
     upcoming: &[serde_json::Value],
 ) -> serde_json::Value {
-    let name = |id: &PlayerId| {
+    // Who a player *is*, for the page: their roster main, failing that any
+    // roster character, failing that the Discord display name. The first two
+    // come from the ledger — set once, verifiable in game, the same on every
+    // render — where a Discord name is whatever the member typed this week
+    // and cannot be enforced. The Discord name is still carried alongside
+    // for disambiguation; it is just not the identity.
+    let name = |id: &PlayerId| -> String {
+        if let Some(chars) = g.roster.get(id) {
+            if let Some(main) = chars.values().find(|c| c.main == Some(MainRank::Main)) {
+                return main.name.clone();
+            }
+            if let Some(any) = chars.values().next() {
+                return any.name.clone();
+            }
+        }
         members
             .get(id)
             .map(|m| m.display_name.clone())
@@ -470,7 +484,7 @@ pub fn render_site(
         me.insert(
             m.username.clone(),
             serde_json::json!({
-                "name": m.display_name, "dkp": p.balance, "attendance": g.attendance_pct(id, now_ms),
+                "name": name(&id), "discord": m.display_name, "dkp": p.balance, "attendance": g.attendance_pct(id, now_ms),
                 "raids_attended": attended, "last_active_ms": p.log.last().map_or(0, |e| e.ts_ms),
                 "history": history, "characters": chars,
             }),
@@ -512,12 +526,39 @@ pub fn render_site(
             );
         }
     }
+    // Everyone the page might name, keyed by the name it uses, so a click on
+    // any name resolves to one person without going through Discord.
+    let mut people = serde_json::Map::new();
+    let mut ids: Vec<PlayerId> = g.roster.keys().copied().collect();
+    ids.extend(g.raiding_players(now_ms).map(|(id, _)| id));
+    ids.sort_unstable();
+    ids.dedup();
+    for id in ids {
+        let chars: Vec<serde_json::Value> = g
+            .roster
+            .get(&id)
+            .map(|cs| {
+                cs.values()
+                    .map(|c| serde_json::json!({"name": c.name, "class": c.class, "level": c.level, "main": c.main}))
+                    .collect()
+            })
+            .unwrap_or_default();
+        people.insert(
+            name(&id),
+            serde_json::json!({
+                "discord": members.get(&id).map(|m| m.display_name.clone()),
+                "characters": chars,
+                "raiding": g.raiding_players(now_ms).any(|(p, _)| p == id),
+            }),
+        );
+    }
     serde_json::json!({
         "generatedAt": now_ms,
         "avgAttendance": g.average_attendance(now_ms),
         "raids": raids,
         "upcoming": upcoming,
         "members": me,
+        "people": people,
         "items": items,
     })
 }
