@@ -367,7 +367,7 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
                 @if m.characters.is_empty() { p class="empty" { "Nothing on the roster yet — " code { "/roster add" } " in Discord, or run the meter and zone." } }
                 @else { (characters_chips(data, &m.characters)) }
                 @if m.characters.iter().any(|c| data.profiles.contains_key(&c.name.to_lowercase())) { p class="mut" style="font-size:13px" { "Underlined characters have a gear profile from the meter — click one." } }
-                @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/otlp profile" } " in game sends one, and every zone-in after that keeps it current." } }
+                @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/magelo" } " in game sends one, and every zone-in after that keeps it current." } }
             }
             div class="col" {
             div class="panels" {
@@ -533,7 +533,7 @@ pub fn character(data: &SiteData, name: &str) -> String {
         return layout(
             name,
             "me",
-            html! { div class="read" { h1 { "No profile" } p class="lede" { "Nothing has been reported for " b { (name) } ". With the meter running, " code { "/otlp profile" } " in game sends one." } } },
+            html! { div class="read" { h1 { "No profile" } p class="lede" { "Nothing has been reported for " b { (name) } ". With the meter running, " code { "/magelo" } " in game sends one." } } },
             false,
         );
     };
@@ -589,7 +589,7 @@ pub fn character(data: &SiteData, name: &str) -> String {
         }
         div class="read" {
             p class="mut" style="font-size:13px" { "Item numbers are the item's own; totals are gear only, not the character's computed stats — those come later." }
-            (discord_box("Want this updated? Zone, or type /otlp profile in game."))
+            (discord_box("Want this updated? Zone, or type /magelo in game."))
         }
     };
     layout(&p.name, "me", body, false)
