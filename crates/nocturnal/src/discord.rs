@@ -782,18 +782,24 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     let ourios = ourios.clone();
                     let items = item_mirror.clone();
                     let ledger_guild = data_guild.map_or(guild_id, |(_, to)| to);
+                    // And every half hour after: profiles arrive from
+                    // members' clients through Ourios on their own schedule,
+                    // and nothing else would re-render the page for them.
                     tokio::spawn(async move {
-                        crate::roster_page::rematerialize(
-                            http.as_ref(),
-                            guild_id,
-                            &driver,
-                            &out,
-                            &members,
-                            ledger_guild,
-                            ourios.as_ref(),
-                            &items,
-                        )
-                        .await;
+                        loop {
+                            crate::roster_page::rematerialize(
+                                http.as_ref(),
+                                guild_id,
+                                &driver,
+                                &out,
+                                &members,
+                                ledger_guild,
+                                ourios.as_ref(),
+                                &items,
+                            )
+                            .await;
+                            tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
+                        }
                     });
                 }
                 // Boot recovery: auctions still open in the ledger get fresh
