@@ -547,7 +547,7 @@ pub fn character(data: &SiteData, name: &str) -> String {
                 div { b { (fmt(ac)) } span { "AC from gear" } }
                 div { b { (fmt(hp)) } span { "HP from gear" } }
                 div { b { (fmt(mana)) } span { "Mana from gear" } }
-                div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA spent" } }
+                div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA ranks" } }
                 div { b { (p.aa.get("unspent").copied().unwrap_or(0)) } span { "AA unspent" } }
             }
             div class="stats" { @for (i, k) in ["str", "sta", "agi", "dex", "wis", "int", "cha"].iter().enumerate() {
@@ -561,6 +561,13 @@ pub fn character(data: &SiteData, name: &str) -> String {
             } }
         }
         div class="wide-block" {
+            @if !p.aa_abilities.is_empty() {
+                h2 { "Alternate Advancement" }
+                p class="mut" style="font-size:14px" {
+                    (p.aa_abilities.len()) " abilities trained, "
+                    (p.aa_abilities.iter().map(|(_, r)| *r as u32).sum::<u32>()) " ranks — named listing lands once the index table is verified."
+                }
+            }
             h2 { "Gear" }
             div class="gear" { @for s in &slots {
                 @match s.id.and_then(gear_of) {

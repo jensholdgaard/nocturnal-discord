@@ -38,6 +38,11 @@ pub struct Profile {
     pub aa: HashMap<String, i64>,
     #[serde(default)]
     pub equipment: Vec<Slot>,
+    /// Trained abilities as the client reports them: `[client_index, rank]`
+    /// pairs, the same numbers `/outputfile quarmy` writes. Names are a
+    /// mapping the site owns, once it is proven against the client's table.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aa_abilities: Vec<(u16, u8)>,
     /// When the client sent it (ms since epoch).
     #[serde(default)]
     pub reported_ms: i64,
@@ -65,6 +70,8 @@ struct Body {
     aa: HashMap<String, i64>,
     #[serde(default)]
     equipment: Vec<Slot>,
+    #[serde(default)]
+    aa_abilities: Vec<(u16, u8)>,
 }
 
 /// An Ourios record, only the parts we read. The body arrives either as the
@@ -141,6 +148,7 @@ pub fn latest_per_character(records: &[serde_json::Value]) -> HashMap<String, Pr
                     base_stats: b.base_stats,
                     aa: b.aa,
                     equipment: b.equipment,
+                    aa_abilities: b.aa_abilities,
                     reported_ms,
                     reporter: string_attr(&rec.attributes, "everquest.reporter"),
                 },
