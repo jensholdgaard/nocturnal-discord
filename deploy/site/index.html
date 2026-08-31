@@ -72,7 +72,7 @@ input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid 
 </style>
 <nav><div class="in">
 <a class="brand" href="#raid">Nocturnal</a>
-<a class="tab" href="#raid">Raid night</a><a class="tab" href="#me">Me</a><a class="tab" href="#roster">Roster</a><a class="tab" href="#loot">Loot</a>
+<a class="tab" href="#raid">Raid night</a><a class="tab" href="#me">Me</a><a class="tab" href="#roster">Roster</a><a class="tab" href="#loot">Loot</a><a class="tab" href="/perses/" title="The full Perses dashboards">Dashboards ↗</a>
 <span class="who" id="who"></span>
 </div></nav>
 <main id="main"></main>
@@ -208,14 +208,14 @@ async function boot(){
   try{
     const siteRes = await fetch('/data/site.json');
     if(siteRes.status===401||siteRes.status===403){
-      main.innerHTML=`<div class="read"><div class="eyebrow">Nocturnal</div><h1>Sign in first</h1><p class="lede">This site shows the guild's raids, your own standing and the roster, so it sits behind the same Discord login as the dashboards.</p><p><a href="/" style="display:inline-block;background:var(--accent);color:var(--accent-ink);padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Sign in with Discord</a> <span class="mut">— then come back to this page.</span></p></div>`;
+      main.innerHTML=`<div class="read"><div class="eyebrow">Nocturnal</div><h1>Sign in first</h1><p class="lede">This site shows the guild's raids, your own standing and the roster, so it sits behind the same Discord login as the dashboards.</p><p><a href="/perses/api/auth/providers/oauth/discord/login?rd=%2F" style="display:inline-block;background:var(--accent);color:var(--accent-ink);padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Sign in with Discord</a> <span class="mut">— you come straight back here.</span></p></div>`;
       document.getElementById('who').textContent='not signed in';
       return;
     }
     const [site, roster, meRes] = await Promise.all([
       siteRes.json(),
       fetch('/data/data.json').then(r=>r.json()),
-      fetch('/api/v1/user/whoami').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch('/perses/api/v1/user/whoami').then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     const login = meRes && (meRes.metadata?.name || meRes.name || meRes.login || null);
     const v=roster.values, H=4;
