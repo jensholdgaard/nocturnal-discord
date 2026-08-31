@@ -16,6 +16,11 @@ use std::path::{Path, PathBuf};
 
 use crate::site::SiteHandle;
 
+/// Where the island lives, recorded once at startup so templates can find
+/// its checksum for cache-busting without threading a path through every
+/// page function.
+pub static ASSETS_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 /// What a request gets back.
 pub struct Response {
     pub status: &'static str,
@@ -52,6 +57,9 @@ fn decode(seg: &str) -> String {
 
 /// Route one request. `path` is the request target without a query string.
 pub fn respond(path: &str, site: &SiteHandle, assets_dir: Option<&Path>) -> Response {
+    if let Some(d) = assets_dir {
+        let _ = ASSETS_DIR.set(d.to_path_buf());
+    }
     let path = path.split('?').next().unwrap_or("/");
     if let Some(rest) = path.strip_prefix("/assets/") {
         return serve_asset(rest, assets_dir);
