@@ -280,6 +280,15 @@ pub fn write_atomic_for_test(path: &Path, contents: &str) -> io::Result<()> {
 
 fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     use std::io::Write as _;
+    // Unchanged content is not written: tokens.txt has a systemd path unit
+    // behind it that restarts the gateway on any mtime bump, and every bot
+    // deploy was bouncing the gateway for a byte-identical file.
+    if std::fs::read_to_string(path)
+        .map(|old| old == contents)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
     use std::os::unix::fs::PermissionsExt as _;
     let dir = path.parent().unwrap_or(Path::new("."));
     let tmp = dir.join(format!(
