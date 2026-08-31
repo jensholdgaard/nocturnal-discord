@@ -156,14 +156,17 @@ function mePage(who){
   if(!who && !D.me) return `<div class="read"><h1>Who are you?</h1><p class="lede">You are signed in to Perses as <b>${esc(D.login||'?')}</b>, but that name is not on the DKP ledger as someone raiding in the last 90 days.</p>${discord('Think that is wrong?')}</div>`;
   const s = who ? null : D.me;
   const name = who || D.me.name;
-  const row = D.matrix.rows.find(r=>r[0].trim().toLowerCase()===name.trim().toLowerCase());
-  const chars = s ? s.characters.map(c=>[c.class, `${c.name} (${c.main==='main'?'M-':c.main==='second'?'M2-':''}${c.level})`]) : (row||[]).slice(3,18).map((c,i)=>[D.matrix.classes[i],c]).filter(x=>x[1]);
+  const person = (D.people||{})[name] || null;
+  const discord = s ? s.discord : (person && person.discord);
+  const row = discord ? D.matrix.rows.find(r=>r[0].trim().toLowerCase()===String(discord).trim().toLowerCase()) : null;
+  const fmtChar = c => [c.class, `${c.name} (${c.main==='main'?'M-':c.main==='second'?'M2-':''}${c.level})`];
+  const chars = s ? s.characters.map(fmtChar) : person ? person.characters.map(fmtChar) : (row||[]).slice(3,18).map((c,i)=>[D.matrix.classes[i],c]).filter(x=>x[1]);
   const last=D.raids[0], m=charts[last.id];
   const rep = s && m ? m.damage.find(([n])=>chars.some(([,c])=>c.toLowerCase().startsWith(n.toLowerCase()))) : null;
   const meter = s ? (m ? (rep ? `Your meter reported <b>${esc(rep[0])}</b> in the last raid: ${fmt.format(rep[1])} damage.` : `Your meter did not report any damage in the last raid.`) : 'Loading…') : '';
   const hist = s && s.history.length ? `<ul class="hist">${s.history.map(h=>`<li><span class="d ${h.dkp<0?'neg':'pos'}">${h.dkp>0?'+':''}${h.dkp}</span><span>${h.kind==='raid'?esc(h.raid||'Raid')+` <span class="mut">· ${h.ticks} tick${h.ticks===1?'':'s'}</span>`:h.kind==='loot'?itemEl(h.item):esc(h.comment)}<small>${h.kind!=='raid'&&h.raid?esc(h.raid)+' · ':''}${ago(h.ts_ms)}</small></span></li>`).join('')}</ul>` : '';
   return `<div class="read">
-    <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}</h1>
+    <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}${discord&&discord!==name?` <span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif">· ${esc(discord)} on Discord</span>`:''}</h1>
     ${s?`<div class="nums"><div class="brass"><b>${fmt.format(s.dkp)}</b><span>DKP</span></div><div><b>${s.attendance}%</b><span>attendance, 90 days</span></div><div><b>${s.raids_attended}<span style="font-size:16px;font-weight:400;color:var(--muted)"> / ${D.raids.length}</span></b><span>of the last ${D.raids.length} raids</span></div></div>`:(row?`<div class="nums"><div class="brass"><b>${esc(row[1])}</b><span>DKP</span></div><div><b>${esc(row[2])}</b><span>attendance</span></div></div>`:'<p class="lede">Not on the roster.</p>')}
     <h2>Characters</h2>${chars.length?`<div class="chips">${chars.map(([k,c])=>`<span class="chip">${esc(c)} <span class="mut">${esc(k)}</span></span>`).join('')}</div>`:'<p class="empty">Nothing on the roster yet — <code>/roster add</code> in Discord.</p>'}
     ${s?`<h2>Your meter</h2><p>${meter}</p>`:''}
