@@ -22,6 +22,23 @@ HEALTH="http://127.0.0.1:8090/readyz"
 # "already installed", exited quietly, and the deploy simply did not happen
 # until a later tick — with nothing in the journal to say why. A throwaway
 # query parameter forces a fresh object.
+# The island: the site's one TypeScript bundle, unpacked where the bot serves
+# it from. Same checksum discipline; a bad archive leaves the old one in place.
+ISLAND_DIR=/var/www/site-assets
+iwant=$(curl -fsSL "${BASE}/island.sha256?cb=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
+ihave=$(cat "${ISLAND_DIR}/.sha256" 2>/dev/null || true)
+if [ -n "$iwant" ] && [ "$iwant" != "$ihave" ]; then
+  itmp=$(mktemp)
+  if curl -fsSL -o "$itmp" "${BASE}/island.tar.gz?cb=$(date +%s)" && [ "$(sha256sum "$itmp" | awk '{print $1}')" = "$iwant" ]; then
+    mkdir -p "${ISLAND_DIR}.new" && tar -C "${ISLAND_DIR}.new" -xzf "$itmp" && rm -rf "${ISLAND_DIR}.old" \
+      && { [ -d "$ISLAND_DIR" ] && mv "$ISLAND_DIR" "${ISLAND_DIR}.old" || true; } && mv "${ISLAND_DIR}.new" "$ISLAND_DIR" \
+      && echo "$iwant" > "${ISLAND_DIR}/.sha256" && chown -R nocturnal:caddy "$ISLAND_DIR" && echo "island ${iwant:0:12} installed"
+  else
+    echo "island download or checksum failed; keeping the current one"
+  fi
+  rm -f "$itmp"
+fi
+
 want=$(curl -fsSL "${BASE}/nocturnal.sha256?cb=$(date +%s)" | tr -d '[:space:]')
 [ -n "$want" ] || { echo "empty sha256 from release; skipping"; exit 0; }
 have=$(sha256sum "$BIN" | awk '{print $1}')
@@ -41,22 +58,6 @@ fi
 
 cp -p "$BIN" "${BIN}.prev"
 install -m 0755 "$tmp" "$BIN"
-# The island: the site's one TypeScript bundle, unpacked where the bot serves
-# it from. Same checksum discipline; a bad archive leaves the old one in place.
-ISLAND_DIR=/var/www/site-assets
-iwant=$(curl -fsSL "${BASE}/island.sha256?cb=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
-ihave=$(cat "${ISLAND_DIR}/.sha256" 2>/dev/null || true)
-if [ -n "$iwant" ] && [ "$iwant" != "$ihave" ]; then
-  itmp=$(mktemp)
-  if curl -fsSL -o "$itmp" "${BASE}/island.tar.gz?cb=$(date +%s)" && [ "$(sha256sum "$itmp" | awk '{print $1}')" = "$iwant" ]; then
-    mkdir -p "${ISLAND_DIR}.new" && tar -C "${ISLAND_DIR}.new" -xzf "$itmp" && rm -rf "${ISLAND_DIR}.old" \
-      && { [ -d "$ISLAND_DIR" ] && mv "$ISLAND_DIR" "${ISLAND_DIR}.old" || true; } && mv "${ISLAND_DIR}.new" "$ISLAND_DIR" \
-      && echo "$iwant" > "${ISLAND_DIR}/.sha256" && chown -R nocturnal:caddy "$ISLAND_DIR" && echo "island ${iwant:0:12} installed"
-  else
-    echo "island download or checksum failed; keeping the current one"
-  fi
-  rm -f "$itmp"
-fi
 systemctl restart nocturnal
 
 # Give it a generous window: replay of the full ledger is seconds, gateway
