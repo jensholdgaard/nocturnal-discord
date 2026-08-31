@@ -18,6 +18,8 @@ Caddy serves the directory:
         file_server
     }
 
+The guild site itself (`deploy/site/index.html`) is served at `/`, with Perses under `/perses/`; its data is `/data/*` behind the Perses login.
+
 `/var/www/roster` is owned `nocturnal:caddy`, mode 0750: the bot writes,
 Caddy reads, nobody else. The page is public, as the Google-hosted one was.
 Putting it behind the Discord login is a separate step: Discord is not an
