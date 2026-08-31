@@ -166,8 +166,8 @@ function mePage(who){
   const s = who ? null : D.me;
   const name = who || D.me.name;
   const person = (D.people||{})[name] || null;
-  const discord = s ? s.discord : (person && person.discord);
-  const row = discord ? D.matrix.rows.find(r=>r[0].trim().toLowerCase()===String(discord).trim().toLowerCase()) : null;
+  const discordName = s ? s.discord : (person && person.discord);
+  const row = discordName ? D.matrix.rows.find(r=>r[0].trim().toLowerCase()===String(discordName).trim().toLowerCase()) : null;
   const fmtChar = c => [c.class, `${c.name} (${c.main==='main'?'M-':c.main==='second'?'M2-':''}${c.level})`];
   const chars = s ? s.characters.map(fmtChar) : person ? person.characters.map(fmtChar) : (row||[]).slice(3,18).map((c,i)=>[D.matrix.classes[i],c]).filter(x=>x[1]);
   const last=D.raids[0], m=charts[last.id];
@@ -177,7 +177,7 @@ function mePage(who){
   const prof = (D.profiles||{});
   const chipFor = ([k,c]) => { const nm=c.replace(/\s*\(.*$/,'').toLowerCase(); const has=!!prof[nm]; return `<span class="chip">${has?`<button class="namelink" data-profile="${esc(nm)}">${esc(c)}</button>`:esc(c)} <span class="mut">${esc(k)}</span></span>`; };
   return `<div class="read">
-    <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}${discord&&discord!==name?` <span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif">· ${esc(discord)} on Discord</span>`:''}</h1>
+    <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}${discordName&&discordName!==name?` <span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif">· ${esc(discordName)} on Discord</span>`:''}</h1>
     ${s?`<div class="nums"><div class="brass"><b>${fmt.format(s.dkp)}</b><span>DKP</span></div><div><b>${s.attendance}%</b><span>attendance, 90 days</span></div><div><b>${s.raids_attended}<span style="font-size:16px;font-weight:400;color:var(--muted)"> / ${D.raids.length}</span></b><span>of the last ${D.raids.length} raids</span></div></div>`:(row?`<div class="nums"><div class="brass"><b>${esc(row[1])}</b><span>DKP</span></div><div><b>${esc(row[2])}</b><span>attendance</span></div></div>`:'<p class="lede">Not on the roster.</p>')}
     <h2>Characters</h2>${chars.length?`<div class="chips">${chars.map(chipFor).join('')}</div>`:'<p class="empty">Nothing on the roster yet — <code>/roster add</code> in Discord.</p>'}
     ${chars.some(([,c])=>prof[c.replace(/\s*\(.*$/,'').toLowerCase()])?'<p class="mut" style="font-size:13px">Underlined characters have a gear profile from the meter — click one.</p>':(s?'<p class="mut" style="font-size:13px">No gear profile yet: with the meter running, <code>/otlp profile</code> in game sends one, and every zone-in after that keeps it current.</p>':'')}
