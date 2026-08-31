@@ -42,7 +42,6 @@ impl Response {
             headers: Vec::new(),
         }
     }
-    }
 }
 
 fn decode(seg: &str) -> String {
