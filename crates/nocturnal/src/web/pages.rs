@@ -420,6 +420,38 @@ pub fn person(data: &SiteData, name: &str) -> String {
     layout(name, "roster", body, false)
 }
 
+/// The Quarm AA table, keyed by the client index the profile event carries
+/// (altadv_vars.eqmacid): name, first-rank cost, per-rank increment, ranks.
+/// Extracted from the published Quarm database; regenerate when the dump bumps.
+#[derive(serde::Deserialize)]
+struct AaRow {
+    eqmacid: u16,
+    name: String,
+    cost: i64,
+    cost_inc: i64,
+    max_level: i64,
+}
+
+fn aa_table() -> &'static std::collections::HashMap<u16, AaRow> {
+    static T: std::sync::OnceLock<std::collections::HashMap<u16, AaRow>> =
+        std::sync::OnceLock::new();
+    T.get_or_init(|| {
+        serde_json::from_str::<Vec<AaRow>>(include_str!("aa_table.json"))
+            .map(|rows| rows.into_iter().map(|r| (r.eqmacid, r)).collect())
+            .unwrap_or_default()
+    })
+}
+
+/// Points a trained ability has cost: rank r costs `cost + (r-1) * cost_inc`.
+fn aa_points_spent(index: u16, rank: u8) -> i64 {
+    let Some(row) = aa_table().get(&index) else {
+        return 0;
+    };
+    (1..=i64::from(rank))
+        .map(|r| row.cost + (r - 1) * row.cost_inc)
+        .sum()
+}
+
 const SLOT_ORDER: [&str; 22] = [
     "Charm",
     "Ear1",
@@ -547,7 +579,11 @@ pub fn character(data: &SiteData, name: &str) -> String {
                 div { b { (fmt(ac)) } span { "AC from gear" } }
                 div { b { (fmt(hp)) } span { "HP from gear" } }
                 div { b { (fmt(mana)) } span { "Mana from gear" } }
-                div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA ranks" } }
+                @if p.aa_abilities.is_empty() {
+                    div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA ranks (update Zeal for points)" } }
+                } @else {
+                    div { b { (p.aa_abilities.iter().map(|(i, r)| aa_points_spent(*i, *r)).sum::<i64>()) } span { "AA points spent" } }
+                }
                 div { b { (p.aa.get("unspent").copied().unwrap_or(0)) } span { "AA unspent" } }
             }
             div class="stats" { @for (i, k) in ["str", "sta", "agi", "dex", "wis", "int", "cha"].iter().enumerate() {
@@ -562,11 +598,20 @@ pub fn character(data: &SiteData, name: &str) -> String {
         }
         div class="wide-block" {
             @if !p.aa_abilities.is_empty() {
+                @let spent: i64 = p.aa_abilities.iter().map(|(i, r)| aa_points_spent(*i, *r)).sum();
                 h2 { "Alternate Advancement" }
                 p class="mut" style="font-size:14px" {
-                    (p.aa_abilities.len()) " abilities trained, "
-                    (p.aa_abilities.iter().map(|(_, r)| *r as u32).sum::<u32>()) " ranks — named listing lands once the index table is verified."
+                    (p.aa_abilities.len()) " abilities · "
+                    b { (spent) " points spent" }
+                    " (" (p.aa.get("unspent").copied().unwrap_or(0)) " unspent)"
                 }
+                div class="chips" { @for (i, r) in &p.aa_abilities {
+                    @let row = aa_table().get(i);
+                    span class="chip" {
+                        (row.map_or_else(|| format!("AA #{i}"), |x| x.name.clone()))
+                        " " span class="mut" { (r) @if let Some(x) = row { "/" (x.max_level) } }
+                    }
+                } }
             }
             h2 { "Gear" }
             div class="gear" { @for s in &slots {
@@ -648,4 +693,25 @@ pub fn item(data: &SiteData, name: &str) -> String {
         }
     };
     layout(name, "loot", body, false)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod aa_tests {
+    use super::*;
+
+    #[test]
+    fn the_table_loads_and_the_cost_math_is_the_games() {
+        let t = aa_table();
+        assert!(t.len() > 200, "table loaded: {}", t.len());
+        // Innate Stamina: cost 1, no increment, 5 ranks -> 5 points at max.
+        let innate = t.values().find(|r| r.name == "Innate Stamina").unwrap();
+        assert_eq!(aa_points_spent(innate.eqmacid, 5), 5);
+        // A cost_inc ability charges cost, cost+inc, cost+2*inc...
+        if let Some(r) = t.values().find(|r| r.cost_inc > 0 && r.max_level >= 3) {
+            let expect = r.cost + (r.cost + r.cost_inc) + (r.cost + 2 * r.cost_inc);
+            assert_eq!(aa_points_spent(r.eqmacid, 3), expect, "{}", r.name);
+        }
+        assert_eq!(aa_points_spent(9999, 3), 0, "unknown index counts nothing");
+    }
 }

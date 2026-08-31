@@ -584,9 +584,20 @@ pub async fn rematerialize(
     let Some((json, mut data)) = both else {
         return;
     };
-    if let Some((profiles, gear)) = profile_payload {
-        data.profiles = profiles;
-        data.gear_items = gear;
+    match profile_payload {
+        Some((profiles, gear)) if !profiles.is_empty() => {
+            data.profiles = profiles;
+            data.gear_items = gear;
+        }
+        _ => {
+            // A failed or empty fetch must not erase what members already
+            // see: carry the previous snapshot's profiles forward. Stale
+            // beats vanished; the next render refreshes.
+            if let Some(prev) = site_handle.read().ok().and_then(|s| s.clone()) {
+                data.profiles = prev.profiles.clone();
+                data.gear_items = prev.gear_items.clone();
+            }
+        }
     }
     let data = std::sync::Arc::new(data);
     if let Ok(mut slot) = site_handle.write() {

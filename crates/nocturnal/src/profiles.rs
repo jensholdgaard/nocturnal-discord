@@ -235,11 +235,11 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Pr
     let body: serde_json::Value = match resp {
         Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
         Ok(r) => {
-            tracing::debug!(status = %r.status(), "ourios profile query refused");
+            tracing::warn!(status = %r.status(), "ourios refused the profile query; keeping the previous profiles");
             return HashMap::new();
         }
         Err(e) => {
-            tracing::debug!(error = %e, "ourios unreachable; profiles unchanged");
+            tracing::warn!(error = %e, "ourios unreachable for profiles; keeping the previous ones");
             return HashMap::new();
         }
     };
