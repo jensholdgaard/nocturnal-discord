@@ -430,3 +430,23 @@ GitHub Actions:
 Sign-in from the site: `/perses/api/auth/providers/oauth/discord/login?rd=%2F` — Perses does the Discord round-trip and returns to `/`.
 
 Moving to `nocturnal-guild.de`: the apex is a Hetzner webhosting package carrying the guild's mail (MX, `autoconfig`); repointing `@`/`www` A+AAAA to the VM leaves mail alone but needs the owner's say-so. Perses' session cookie is host-scoped, so the site and Perses move together, and one new redirect URI must be registered in the Discord app. DNS is in the Hetzner Cloud API (`/v1/zones`), reachable with the cloud token.
+
+## The site (2026-08-31, bot-rendered)
+
+The bot renders every page: `crates/nocturnal/src/web/` — Maud templates over
+`crate::site::SiteData`, a typed snapshot of the ledger replaced on each
+render (boot, every roster change, every half hour), served by the same
+std thread as `/healthz` on `health.bind` (8090). Caddy proxies `/` to it
+behind the login wall. Routes: `/`, `/raid/<id>`, `/me` → `/member/<login>`,
+`/who/<name>`, `/char/<name>`, `/roster`, `/loot`, `/item/<name>`, `/assets/*`.
+
+The one piece of TypeScript is `web/`: the Perses **island**. Pages leave
+`<div data-panel='{...}'>` placeholders; `island.js` mounts real Perses
+panels into them (`@perses-dev/*` pinned to the server's 0.54, chart plugins
+0.13, Prometheus plugin 0.58), querying through `/perses/proxy/...` with the
+viewer's cookie. CI builds it (`island.tar.gz` + `.sha256` on the `vm-deploy`
+release); the puller unpacks it to `/var/www/site-assets`; the bot serves it
+from `roster.assets_dir`.
+
+`site.json` is still written (the serialized snapshot) but nothing reads it
+after the cutover; `deploy/site/index.html` is the retired static page.
