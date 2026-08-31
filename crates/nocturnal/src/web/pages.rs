@@ -492,27 +492,9 @@ fn gear_tip(it: &crate::items::ItemSummary) -> String {
     if it.req_level > 0 {
         parts.push(format!("Req level {}", it.req_level));
     }
-    let mut st: Vec<String> = Vec::new();
-    for (n, v) in [("AC", it.ac), ("HP", it.hp), ("Mana", it.mana)] {
-        if v != 0 {
-            st.push(format!("{n}: {v}"));
-        }
-    }
-    for (n, v) in ["STR", "STA", "AGI", "DEX", "WIS", "INT", "CHA"]
-        .iter()
-        .zip(it.stats.iter())
-    {
-        if *v != 0 {
-            st.push(format!("{n}: {v}"));
-        }
-    }
-    for (n, v) in ["MR", "FR", "CR", "DR", "PR"].iter().zip(it.resists.iter()) {
-        if *v != 0 {
-            st.push(format!("{n}: {v}"));
-        }
-    }
-    if !st.is_empty() {
-        parts.push(st.join("  "));
+    let line = gear_stat_line(it);
+    if !line.is_empty() {
+        parts.push(line);
     }
     for (n, v) in [
         ("Click", &it.click),
@@ -582,7 +564,7 @@ pub fn character(data: &SiteData, name: &str) -> String {
             h2 { "Gear" }
             div class="gear" { @for s in &slots {
                 @match s.id.and_then(gear_of) {
-                    Some(it) => div class="g" { div class="s" { (s.slot) } div class="n" { span class="item" data-tip=(gear_tip(it)) { (it.name) } } div class="st" { (gear_stat_line(it)) } },
+                    Some(it) => div class="g" { div class="s" { (s.slot) } div class="n" { span class="item" data-tip=(gear_tip(it)) { (it.name) } } },
                     None => @if let Some(n) = &s.name { div class="g" { div class="s" { (s.slot) } div class="n" { (n) } } } @else { div class="g empty" { div class="s" { (s.slot) } div class="n mut" { "—" } } },
                 }
             } }
