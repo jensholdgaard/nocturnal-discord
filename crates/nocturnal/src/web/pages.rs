@@ -463,6 +463,30 @@ const CLASSES: [&str; 16] = [
     "Beastlord",
 ];
 
+/// The stat line an item shows in its cell: everything numeric, compact.
+fn gear_stat_line(it: &crate::items::ItemSummary) -> String {
+    let mut st: Vec<String> = Vec::new();
+    for (n, v) in [("AC", it.ac), ("HP", it.hp), ("Mana", it.mana)] {
+        if v != 0 {
+            st.push(format!("{n} {v}"));
+        }
+    }
+    for (n, v) in ["STR", "STA", "AGI", "DEX", "WIS", "INT", "CHA"]
+        .iter()
+        .zip(it.stats.iter())
+    {
+        if *v != 0 {
+            st.push(format!("{n} {v:+}"));
+        }
+    }
+    for (n, v) in ["MR", "FR", "CR", "DR", "PR"].iter().zip(it.resists.iter()) {
+        if *v != 0 {
+            st.push(format!("{n} {v:+}"));
+        }
+    }
+    st.join(" · ")
+}
+
 fn gear_tip(it: &crate::items::ItemSummary) -> String {
     let mut parts: Vec<String> = Vec::new();
     if it.req_level > 0 {
@@ -517,11 +541,19 @@ pub fn character(data: &SiteData, name: &str) -> String {
     slots.sort_by_key(|s| SLOT_ORDER.iter().position(|x| *x == s.slot).unwrap_or(99));
     let gear_of = |id: i64| data.gear_items.get(&id.to_string());
     let (mut ac, mut hp, mut mana) = (0i64, 0i64, 0i64);
+    let mut gstats = [0i64; 7];
+    let mut gresists = [0i64; 5];
     for s in &slots {
         if let Some(it) = s.id.and_then(gear_of) {
             ac += it.ac;
             hp += it.hp;
             mana += it.mana;
+            for (t, v) in gstats.iter_mut().zip(it.stats.iter()) {
+                *t += v;
+            }
+            for (t, v) in gresists.iter_mut().zip(it.resists.iter()) {
+                *t += v;
+            }
         }
     }
     let class = CLASSES.get(p.class as usize).copied().unwrap_or("");
@@ -536,13 +568,21 @@ pub fn character(data: &SiteData, name: &str) -> String {
                 div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA spent" } }
                 div { b { (p.aa.get("unspent").copied().unwrap_or(0)) } span { "AA unspent" } }
             }
-            div class="stats" { @for k in ["str", "sta", "agi", "dex", "wis", "int", "cha"] { @if let Some(v) = p.base_stats.get(k) { div { b { (v) } span { "base " (k) } } } } }
+            div class="stats" { @for (i, k) in ["str", "sta", "agi", "dex", "wis", "int", "cha"].iter().enumerate() {
+                @let base = p.base_stats.get(*k).copied().unwrap_or(0);
+                @if base != 0 || gstats[i] != 0 {
+                    div { b { (base + gstats[i]) } span { (k) " · base " (base) " + gear " (gstats[i]) } }
+                }
+            } }
+            div class="stats" { @for (i, k) in ["MR", "FR", "CR", "DR", "PR"].iter().enumerate() {
+                div { b { (gresists[i]) } span { (k) " from gear" } }
+            } }
         }
         div class="wide-block" {
             h2 { "Gear" }
             div class="gear" { @for s in &slots {
                 @match s.id.and_then(gear_of) {
-                    Some(it) => div class="g" { div class="s" { (s.slot) } div class="n" { span class="item" data-tip=(gear_tip(it)) { (it.name) } } div class="st" { @if it.ac != 0 { "AC " (it.ac) " " } @if it.hp != 0 { "HP " (it.hp) " " } @if it.mana != 0 { "Mana " (it.mana) } } },
+                    Some(it) => div class="g" { div class="s" { (s.slot) } div class="n" { span class="item" data-tip=(gear_tip(it)) { (it.name) } } div class="st" { (gear_stat_line(it)) } },
                     None => @if let Some(n) = &s.name { div class="g" { div class="s" { (s.slot) } div class="n" { (n) } } } @else { div class="g empty" { div class="s" { (s.slot) } div class="n mut" { "—" } } },
                 }
             } }
