@@ -198,7 +198,7 @@ pub fn render(
             }
         })
         .collect();
-    rows.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    rows.sort_by_key(|r| r.name.to_lowercase());
 
     // Headcounts for the preamble.
     let mut total = vec![0usize; CLASSES.len()];
@@ -238,8 +238,8 @@ pub fn render(
     // class columns.
     for (r, pre) in t.preamble_values.iter().enumerate().take(4) {
         let mut v = blank();
-        for c in 0..3 {
-            v[c] = pre.get(c).cloned().unwrap_or_default();
+        for (slot, text) in v.iter_mut().zip(pre.iter()).take(3) {
+            *slot = text.clone();
         }
         if r == 3 {
             v[0] = format!("Raid force : {raid_force}");
