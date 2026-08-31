@@ -1666,6 +1666,10 @@ mod tests {
             provisioning: None,
             roster_access_labels: Vec::new(),
             roster_output: None,
+            ourios: None,
+            item_mirror: std::sync::Arc::new(crate::items::ItemMirror::new(std::path::Path::new(
+                "/nonexistent",
+            ))),
             members: Default::default(),
         };
 

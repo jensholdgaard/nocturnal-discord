@@ -31,6 +31,10 @@ pub struct Data {
     pub roster_access_labels: Vec<String>,
     /// Where the roster page payload is written; `None` = not materialized.
     pub roster_output: Option<std::path::PathBuf>,
+    /// Ourios query endpoint and tenant for character profiles; `None` = none.
+    pub ourios: Option<(String, String)>,
+    /// The item mirror (pqdi rows cached on disk), for profiles' gear.
+    pub item_mirror: std::sync::Arc<crate::items::ItemMirror>,
     /// Discord display names and roles by player id, filled lazily by the
     /// page materializer. Presentation state: lost on restart, refilled.
     pub members: std::sync::Arc<
@@ -647,6 +651,10 @@ async fn provisioning_client(
                     provisioning: Some(provisioning),
                     roster_access_labels: Vec::new(),
                     roster_output: None,
+                    ourios: None,
+                    item_mirror: std::sync::Arc::new(crate::items::ItemMirror::new(
+                        std::path::Path::new("/nonexistent"),
+                    )),
                     members: Default::default(),
                 })
             })
@@ -660,6 +668,12 @@ async fn provisioning_client(
 
 /// run until shutdown.
 pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> anyhow::Result<()> {
+    let ourios: Option<(String, String)> = cfg
+        .roster
+        .ourios_query_url
+        .clone()
+        .map(|u| (u, cfg.roster.ourios_tenant.clone()));
+    let item_mirror = std::sync::Arc::new(crate::items::ItemMirror::new(&cfg.data.dir));
     let token = Config::discord_token()?;
     let guild_id = cfg
         .discord
@@ -765,6 +779,8 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     let http = ctx.http.clone();
                     let driver = driver.clone();
                     let members = members.clone();
+                    let ourios = ourios.clone();
+                    let items = item_mirror.clone();
                     let ledger_guild = data_guild.map_or(guild_id, |(_, to)| to);
                     tokio::spawn(async move {
                         crate::roster_page::rematerialize(
@@ -774,6 +790,8 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                             &out,
                             &members,
                             ledger_guild,
+                            ourios.as_ref(),
+                            &items,
                         )
                         .await;
                     });
@@ -805,6 +823,8 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     provisioning,
                     roster_access_labels: roster_labels.clone(),
                     roster_output: roster_output.clone(),
+                    ourios: ourios.clone(),
+                    item_mirror: item_mirror.clone(),
                     members: members.clone(),
                 })
             })

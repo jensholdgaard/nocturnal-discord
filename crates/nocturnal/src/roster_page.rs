@@ -641,6 +641,7 @@ async fn resolve_members(
 /// Re-render the page payload from the ledger and write it. Never fatal:
 /// the roster command that triggered it has already succeeded in the ledger,
 /// and the page is derived state that the next change re-derives.
+#[allow(clippy::too_many_arguments)]
 pub async fn rematerialize(
     http: &serenity::Http,
     discord_guild: u64,
@@ -648,6 +649,8 @@ pub async fn rematerialize(
     out: &Path,
     members_cache: &std::sync::Mutex<HashMap<u64, MemberInfo>>,
     ledger_guild: GuildId,
+    ourios: Option<&(String, String)>,
+    items: &crate::items::ItemMirror,
 ) {
     let now = crate::discord::chrono_now_ms();
     let ids: Vec<PlayerId> = driver
@@ -714,9 +717,18 @@ pub async fn rematerialize(
             })
         })
         .await;
-    let Some((json, site)) = both else {
+    let Some((json, mut site)) = both else {
         return;
     };
+    // Character profiles from members' clients, with their gear resolved.
+    if let Some((url, tenant)) = ourios {
+        let profiles = crate::profiles::fetch_profiles(url, tenant).await;
+        let rendered = crate::profiles::render(&profiles, items).await;
+        if let serde_json::Value::Object(ref mut o) = site {
+            o.insert("profiles".into(), rendered["profiles"].clone());
+            o.insert("gear_items".into(), rendered["gear_items"].clone());
+        }
+    }
     let site_path = out.with_file_name("site.json");
     if let Err(e) = serde_json::to_vec(&site)
         .map_err(std::io::Error::other)

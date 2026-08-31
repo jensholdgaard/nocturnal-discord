@@ -41,6 +41,15 @@ pub struct RosterConfig {
     /// Where the rendered roster payload is written for the web page to read.
     /// Unset = the page is not materialized.
     pub output_path: Option<PathBuf>,
+    /// Ourios' query endpoint, for character profile events sent by members'
+    /// Zeal clients. Unset = no profiles on the site.
+    pub ourios_query_url: Option<String>,
+    #[serde(default = "default_ourios_tenant")]
+    pub ourios_tenant: String,
+}
+
+fn default_ourios_tenant() -> String {
+    "nocturnal".to_owned()
 }
 
 fn default_access_labels() -> Vec<String> {
@@ -52,6 +61,8 @@ impl Default for RosterConfig {
         RosterConfig {
             access_labels: default_access_labels(),
             output_path: None,
+            ourios_query_url: None,
+            ourios_tenant: default_ourios_tenant(),
         }
     }
 }

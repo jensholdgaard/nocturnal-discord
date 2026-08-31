@@ -69,6 +69,15 @@ input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid 
 #modal .box h2{margin-top:0}#modal .close{float:right;background:none;border:0;color:var(--muted);font:inherit;font-size:22px;cursor:pointer}
 .next{display:grid;gap:8px}.next .ev{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .next .ev b{font-size:16px}.next .ev small{display:block;color:var(--muted)}
+.gear{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:10px 0 18px}
+.gear .g{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:58px}
+.gear .g .s{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gear .g .n{font-size:14px;line-height:1.3;margin-top:2px}.gear .g .n .item{display:inline}
+.gear .g .st{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.gear .g.empty{opacity:.55}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:8px 0 16px}
+.stats div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.stats b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stats span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 </style>
 <nav><div class="in">
 <a class="brand" href="#raid">Nocturnal</a>
@@ -165,13 +174,39 @@ function mePage(who){
   const rep = s && m ? m.damage.find(([n])=>chars.some(([,c])=>c.toLowerCase().startsWith(n.toLowerCase()))) : null;
   const meter = s ? (m ? (rep ? `Your meter reported <b>${esc(rep[0])}</b> in the last raid: ${fmt.format(rep[1])} damage.` : `Your meter did not report any damage in the last raid.`) : 'Loading…') : '';
   const hist = s && s.history.length ? `<ul class="hist">${s.history.map(h=>`<li><span class="d ${h.dkp<0?'neg':'pos'}">${h.dkp>0?'+':''}${h.dkp}</span><span>${h.kind==='raid'?esc(h.raid||'Raid')+` <span class="mut">· ${h.ticks} tick${h.ticks===1?'':'s'}</span>`:h.kind==='loot'?itemEl(h.item):esc(h.comment)}<small>${h.kind!=='raid'&&h.raid?esc(h.raid)+' · ':''}${ago(h.ts_ms)}</small></span></li>`).join('')}</ul>` : '';
+  const prof = (D.profiles||{});
+  const chipFor = ([k,c]) => { const nm=c.replace(/\s*\(.*$/,'').toLowerCase(); const has=!!prof[nm]; return `<span class="chip">${has?`<button class="namelink" data-profile="${esc(nm)}">${esc(c)}</button>`:esc(c)} <span class="mut">${esc(k)}</span></span>`; };
   return `<div class="read">
     <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}${discord&&discord!==name?` <span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif">· ${esc(discord)} on Discord</span>`:''}</h1>
     ${s?`<div class="nums"><div class="brass"><b>${fmt.format(s.dkp)}</b><span>DKP</span></div><div><b>${s.attendance}%</b><span>attendance, 90 days</span></div><div><b>${s.raids_attended}<span style="font-size:16px;font-weight:400;color:var(--muted)"> / ${D.raids.length}</span></b><span>of the last ${D.raids.length} raids</span></div></div>`:(row?`<div class="nums"><div class="brass"><b>${esc(row[1])}</b><span>DKP</span></div><div><b>${esc(row[2])}</b><span>attendance</span></div></div>`:'<p class="lede">Not on the roster.</p>')}
-    <h2>Characters</h2>${chars.length?`<div class="chips">${chars.map(([k,c])=>`<span class="chip">${esc(c)} <span class="mut">${esc(k)}</span></span>`).join('')}</div>`:'<p class="empty">Nothing on the roster yet — <code>/roster add</code> in Discord.</p>'}
+    <h2>Characters</h2>${chars.length?`<div class="chips">${chars.map(chipFor).join('')}</div>`:'<p class="empty">Nothing on the roster yet — <code>/roster add</code> in Discord.</p>'}
+    ${chars.some(([,c])=>prof[c.replace(/\s*\(.*$/,'').toLowerCase()])?'<p class="mut" style="font-size:13px">Underlined characters have a gear profile from the meter — click one.</p>':(s?'<p class="mut" style="font-size:13px">No gear profile yet: with the meter running, <code>/otlp profile</code> in game sends one, and every zone-in after that keeps it current.</p>':'')}
     ${s?`<h2>Your meter</h2><p>${meter}</p>`:''}
     ${s?`<h2>Recent ledger</h2>${hist||'<p class="empty">Nothing yet.</p>'}`:''}
     ${discord(s?'Need a meter token, or want to register a character?':'Want to award or take DKP?')}
+  </div>`;
+}
+const CLASSES={1:'Warrior',2:'Cleric',3:'Paladin',4:'Ranger',5:'Shadow Knight',6:'Druid',7:'Monk',8:'Bard',9:'Rogue',10:'Shaman',11:'Necromancer',12:'Wizard',13:'Magician',14:'Enchanter',15:'Beastlord'};
+const RACES={1:'Human',2:'Barbarian',3:'Erudite',4:'Wood Elf',5:'High Elf',6:'Dark Elf',7:'Half Elf',8:'Dwarf',9:'Troll',10:'Ogre',11:'Halfling',12:'Gnome',128:'Iksar',130:'Vah Shir'};
+const SLOT_ORDER=['Charm','Ear1','Head','Face','Ear2','Neck','Shoulders','Arms','Back','Wrist1','Wrist2','Range','Hands','Primary','Secondary','Ring1','Ring2','Chest','Legs','Feet','Waist','Ammo'];
+function profilePage(nm){
+  const p=(D.profiles||{})[nm]; if(!p) return `<div class="read"><h1>No profile</h1><p class="lede">Nothing has been reported for this character.</p></div>`;
+  const gi=D.gear_items||{};
+  const slots=[...p.equipment].sort((a,b)=>SLOT_ORDER.indexOf(a.slot)-SLOT_ORDER.indexOf(b.slot));
+  const tot={ac:0,hp:0,mana:0}; slots.forEach(sl=>{const it=sl.id&&gi[sl.id]; if(it){tot.ac+=it.ac||0;tot.hp+=it.hp||0;tot.mana+=it.mana||0;}});
+  const gear=slots.map(sl=>{ const it=sl.id?gi[sl.id]:null;
+    if(!sl.id) return `<div class="g empty"><div class="s">${esc(sl.slot)}</div><div class="n mut">—</div></div>`;
+    const st=it?[it.ac?`AC ${it.ac}`:'',it.hp?`HP ${it.hp}`:'',it.mana?`Mana ${it.mana}`:''].filter(Boolean).join(' · '):'';
+    return `<div class="g"><div class="s">${esc(sl.slot)}</div><div class="n"><span class="item" data-gear="${sl.id}">${esc(sl.name||('#'+sl.id))}</span></div>${st?`<div class="st">${st}</div>`:''}</div>`; }).join('');
+  const bs=p.base_stats||{}; const statOrder=['str','sta','agi','dex','wis','int','cha'];
+  return `<div class="read">
+    <div class="eyebrow">Character · reported ${ago(p.reported_ms)}</div>
+    <h1>${esc(p.name)} <span class="mut" style="font:400 16px/1 'Atkinson Hyperlegible',system-ui,sans-serif">· ${p.level} ${esc(CLASSES[p.class]||('class '+p.class))} · ${esc(RACES[p.race]||'')}${p.guild?' · '+esc(p.guild):''}</span></h1>
+    <div class="stats"><div><b>${fmt.format(tot.ac)}</b><span>AC from gear</span></div><div><b>${fmt.format(tot.hp)}</b><span>HP from gear</span></div><div><b>${fmt.format(tot.mana)}</b><span>Mana from gear</span></div><div><b>${(p.aa&&p.aa.spent)||0}</b><span>AA spent</span></div><div><b>${(p.aa&&p.aa.unspent)||0}</b><span>AA unspent</span></div></div>
+    <div class="stats">${statOrder.filter(k=>bs[k]!=null).map(k=>`<div><b>${bs[k]}</b><span>base ${k}</span></div>`).join('')}</div>
+    <h2>Gear</h2><div class="gear">${gear}</div>
+    <p class="mut" style="font-size:13px">Item numbers are the item's own; totals are gear only, not the character's computed stats — those come later.</p>
+    ${discord('Want this updated?')} <p class="mut" style="font-size:13px;margin-top:-20px">Zone, or type <code>/otlp profile</code> in game.</p>
   </div>`;
 }
 function rosterPage(){
@@ -197,7 +232,7 @@ function render(){
   const h=(location.hash||'#raid').slice(1); const [page,arg]=h.split('/');
   document.querySelectorAll('nav a.tab').forEach(a=>a.toggleAttribute('aria-current', a.getAttribute('href')==='#'+page) || (a.getAttribute('href')==='#'+page ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current')));
   const main=document.getElementById('main');
-  main.innerHTML = page==='me' ? mePage(arg?decodeURIComponent(arg):null) : page==='roster' ? rosterPage() : page==='loot' ? lootPage() : raidPage();
+  main.innerHTML = page==='me' ? mePage(arg?decodeURIComponent(arg):null) : page==='char' ? profilePage(arg?decodeURIComponent(arg):'') : page==='roster' ? rosterPage() : page==='loot' ? lootPage() : raidPage();
   if(page==='raid'||page==='me'||!page){ const r=D.raids[page==='me'?0:raidIdx]; if(r && !charts[r.id]) loadCharts(r).then(()=>{ if((location.hash||'#raid').slice(1).split('/')[0]===(page||'raid')) render(); }); }
   window.scrollTo(0,0);
   const filt=(inputId,tableIds)=>{const i=document.getElementById(inputId); if(!i) return; i.addEventListener('input',()=>{const q=i.value.trim().toLowerCase(); tableIds.forEach(t=>document.querySelectorAll('#'+t+' tbody tr:not(.counts)').forEach(tr=>{tr.style.display=!q||tr.textContent.toLowerCase().includes(q)?'':'none';}));});};
@@ -219,7 +254,7 @@ async function boot(){
     ]);
     const login = meRes && (meRes.metadata?.name || meRes.name || meRes.login || null);
     const v=roster.values, H=4;
-    D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, upcoming: site.upcoming||[], items: site.items||{}, login,
+    D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, upcoming: site.upcoming||[], items: site.items||{}, profiles: site.profiles||{}, gear_items: site.gear_items||{}, login,
           me: login && site.members[login] ? site.members[login] : null,
           matrix: { classes: v[0].slice(3,18), header: v[H], rows: v.slice(H+1).filter(r=>r&&r[0]), counts: { total: v[1].slice(3,18), mains: v[2].slice(3,18), m2: v[3].slice(3,18), raid_force: v[3][0] } } };
     const who=document.getElementById('who');
@@ -231,10 +266,12 @@ async function boot(){
 }
 boot();
 const tip=document.createElement('div'); tip.id='tip'; tip.hidden=true; document.body.appendChild(tip);
+function gearTipText(it){ const st=[['AC',it.ac],['HP',it.hp],['Mana',it.mana]].filter(x=>x[1]).map(x=>x[0]+': '+x[1]); const names=['STR','STA','AGI','DEX','WIS','INT','CHA']; (it.stats||[]).forEach((v,i)=>{ if(v) st.push(names[i]+': '+v); }); const rn=['MR','FR','CR','DR','PR']; (it.resists||[]).forEach((v,i)=>{ if(v) st.push(rn[i]+': '+v); }); const fx=[it.click?'Click: '+it.click:'',it.focus?'Focus: '+it.focus:'',it.worn?'Worn: '+it.worn:'',it.proc_effect?'Proc: '+it.proc_effect:''].filter(Boolean); return [it.req_level?'Req level '+it.req_level:'', st.join('  '), fx.join('\n')].filter(Boolean).join('\n'); }
+function showGearTip(id, x, y){ const it=D.gear_items&&D.gear_items[id]; if(!it) return; tip.innerHTML=`<b>${esc(it.name)}</b>${esc(gearTipText(it))}`; tip.hidden=false; const w=tip.offsetWidth,h=tip.offsetHeight; tip.style.left=Math.min(x+14,innerWidth-w-8)+'px'; tip.style.top=(y+18+h>innerHeight? y-h-8 : y+18)+'px'; }
 function showTip(name, x, y){ const it=D.items&&D.items[name]; if(!it) return; tip.innerHTML=`${it.image?`<img src="${esc(it.image)}" alt="">`:''}<b>${esc(name)}</b>${esc(it.data||'No stat block stored for this item.')}`; tip.hidden=false; const w=tip.offsetWidth,h=tip.offsetHeight; tip.style.left=Math.min(x+14,innerWidth-w-8)+'px'; tip.style.top=(y+18+h>innerHeight? y-h-8 : y+18)+'px'; }
-document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-item]'); if(el) showTip(el.dataset.item,e.clientX,e.clientY);});
+document.addEventListener('mouseover',e=>{const g=e.target.closest('[data-gear]'); if(g){ showGearTip(g.dataset.gear,e.clientX,e.clientY); return; } const el=e.target.closest('[data-item]'); if(el) showTip(el.dataset.item,e.clientX,e.clientY);});
 document.addEventListener('mousemove',e=>{ if(!tip.hidden){ const w=tip.offsetWidth,h=tip.offsetHeight; tip.style.left=Math.min(e.clientX+14,innerWidth-w-8)+'px'; tip.style.top=(e.clientY+18+h>innerHeight? e.clientY-h-8 : e.clientY+18)+'px'; }});
-document.addEventListener('mouseout',e=>{ if(e.target.closest&&e.target.closest('[data-item]')) tip.hidden=true; });
+document.addEventListener('mouseout',e=>{ if(e.target.closest&&(e.target.closest('[data-item]')||e.target.closest('[data-gear]'))) tip.hidden=true; });
 function itemModal(name){
   const it=(D.items&&D.items[name])||{}; const hist=it.history||[];
   const m=document.createElement('div'); m.id='modal';
@@ -246,6 +283,6 @@ function itemModal(name){
   m.addEventListener('click',e=>{ if(e.target===m||e.target.closest('.close')) m.remove(); if(e.target.closest('[data-name]')) m.remove(); });
   document.body.appendChild(m);
 }
-document.addEventListener('click',e=>{ if(e.target.closest('[data-toggle-all]')){ showAll=!showAll; render(); return; } const it=e.target.closest('[data-item]'); if(it){ tip.hidden=true; itemModal(it.dataset.item); return; }const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
+document.addEventListener('click',e=>{ if(e.target.closest('[data-toggle-all]')){ showAll=!showAll; render(); return; } const pf=e.target.closest('[data-profile]'); if(pf){ location.hash='#char/'+encodeURIComponent(pf.dataset.profile); return; } const it=e.target.closest('[data-item]'); if(it){ tip.hidden=true; itemModal(it.dataset.item); return; }const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
 window.addEventListener('hashchange',()=>{ if(D) render(); });
 </script>

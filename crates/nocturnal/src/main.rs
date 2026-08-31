@@ -12,6 +12,7 @@ mod driver;
 mod health;
 mod items;
 mod lock;
+mod profiles;
 mod provision;
 mod raidhelper;
 mod roster;

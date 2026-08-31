@@ -369,3 +369,204 @@ mod tests {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// The item mirror: pqdi's item rows, cached on disk forever.
+// ---------------------------------------------------------------------------
+
+/// The parts of an item row the site renders. pqdi's `/api/v1/item/{id}` is
+/// the full EQEmu `items` table row (159 columns); this keeps the ones a gear
+/// page shows and stores the whole row beside it, so a later page can show
+/// more without refetching.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ItemSummary {
+    pub id: i64,
+    pub name: String,
+    pub icon: i64,
+    pub ac: i64,
+    pub hp: i64,
+    pub mana: i64,
+    pub stats: [i64; 7],   // str sta agi dex wis int cha
+    pub resists: [i64; 5], // mr fr cr dr pr
+    pub slots: i64,
+    pub classes: i64,
+    pub races: i64,
+    pub item_type: i64,
+    pub req_level: i64,
+    pub weight: i64,
+    pub damage: i64,
+    pub delay: i64,
+    #[serde(default)]
+    pub click: Option<String>,
+    #[serde(default)]
+    pub focus: Option<String>,
+    #[serde(default)]
+    pub worn: Option<String>,
+    #[serde(default)]
+    pub proc_effect: Option<String>,
+    pub magic: bool,
+    pub lore: bool,
+    pub no_drop: bool,
+}
+
+fn num(v: &serde_json::Value) -> i64 {
+    match v {
+        serde_json::Value::Number(n) => n.as_i64().unwrap_or(0),
+        serde_json::Value::String(s) => s.parse().unwrap_or(0),
+        serde_json::Value::Bool(b) => i64::from(*b),
+        _ => 0,
+    }
+}
+
+fn effect(row: &serde_json::Value, name_key: &str, id_key: &str) -> Option<String> {
+    let id = num(&row[id_key]);
+    if id <= 0 {
+        return None;
+    }
+    match row[name_key].as_str() {
+        Some(n) if !n.trim().is_empty() => Some(n.to_owned()),
+        _ => Some(format!("#{id}")),
+    }
+}
+
+impl ItemSummary {
+    /// From a pqdi row. Pure, and pinned by a test against a captured row.
+    pub fn from_row(row: &serde_json::Value) -> Self {
+        let n = |k: &str| num(&row[k]);
+        ItemSummary {
+            id: n("id"),
+            name: row["Name"].as_str().unwrap_or("").to_owned(),
+            icon: n("icon"),
+            ac: n("ac"),
+            hp: n("hp"),
+            mana: n("mana"),
+            stats: [
+                n("astr"),
+                n("asta"),
+                n("aagi"),
+                n("adex"),
+                n("awis"),
+                n("aint"),
+                n("acha"),
+            ],
+            resists: [n("mr"), n("fr"), n("cr"), n("dr"), n("pr")],
+            slots: n("slots"),
+            classes: n("classes"),
+            races: n("races"),
+            item_type: n("itemtype"),
+            req_level: n("reqlevel"),
+            weight: n("weight"),
+            damage: n("damage"),
+            delay: n("delay"),
+            click: effect(row, "clickname", "clickeffect"),
+            focus: effect(row, "focusname", "focuseffect"),
+            worn: effect(row, "wornname", "worneffect"),
+            proc_effect: effect(row, "procname", "proceffect"),
+            magic: n("magic") != 0,
+            lore: n("lore") != 0 || row["lore"].as_str().is_some_and(|s| s.starts_with('*')),
+            no_drop: n("nodrop") == 0,
+        }
+    }
+}
+
+/// Item rows by id, on disk under `<data>/items/<id>.json`, fetched from pqdi
+/// once and never again: items do not change. Reads are synchronous file
+/// reads; only a miss touches the network, and only from the bot, never
+/// from a page.
+pub struct ItemMirror {
+    dir: std::path::PathBuf,
+    client: reqwest::Client,
+}
+
+impl ItemMirror {
+    pub fn new(data_dir: &std::path::Path) -> Self {
+        ItemMirror {
+            dir: data_dir.join("items"),
+            client: reqwest::Client::builder()
+                .user_agent("nocturnal-dkp-bot")
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .unwrap_or_default(),
+        }
+    }
+
+    fn path(&self, id: i64) -> std::path::PathBuf {
+        self.dir.join(format!("{id}.json"))
+    }
+
+    /// The cached row, if any. Never fetches.
+    pub fn cached(&self, id: i64) -> Option<serde_json::Value> {
+        let text = std::fs::read_to_string(self.path(id)).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    /// The row, fetching and caching on a miss. `None` when pqdi has no such
+    /// item or cannot be reached — the caller renders "unknown item", the
+    /// next render tries again.
+    pub async fn get(&self, id: i64) -> Option<serde_json::Value> {
+        if let Some(row) = self.cached(id) {
+            return Some(row);
+        }
+        let url = format!("https://www.pqdi.cc/api/v1/item/{id}");
+        let resp = self.client.get(&url).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let row: serde_json::Value = resp.json().await.ok()?;
+        row.get("id")?;
+        if std::fs::create_dir_all(&self.dir).is_ok() {
+            let tmp = self.dir.join(format!(".{id}.json.tmp"));
+            if std::fs::write(&tmp, serde_json::to_vec(&row).unwrap_or_default()).is_ok() {
+                let _ = std::fs::rename(&tmp, self.path(id));
+            }
+        }
+        Some(row)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod mirror_tests {
+    use super::*;
+
+    #[test]
+    fn a_pqdi_row_becomes_the_summary_the_site_renders() {
+        let row: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/pqdi_item_30563.json")).unwrap();
+        let s = ItemSummary::from_row(&row);
+        assert_eq!(
+            (s.id, s.name.as_str()),
+            (30563, "Wistful Tunic of the Void")
+        );
+        assert_eq!(
+            (s.ac, s.hp, s.mana, s.req_level, s.icon),
+            (32, 100, 75, 55, 632)
+        );
+        assert_eq!(
+            s.stats,
+            [8, 25, 25, 8, 15, 0, 0],
+            "str sta agi dex wis int cha"
+        );
+        assert_eq!(s.resists, [15, 15, 15, 0, 0], "mr fr cr dr pr");
+        assert!(s.click.is_some(), "the tunic has a click effect");
+        assert!(s.no_drop);
+    }
+
+    #[test]
+    fn the_mirror_reads_what_it_wrote_and_never_fetches_for_a_hit() {
+        let dir = tempfile::tempdir().unwrap();
+        let m = ItemMirror::new(dir.path());
+        assert!(m.cached(30563).is_none());
+        std::fs::create_dir_all(dir.path().join("items")).unwrap();
+        std::fs::write(
+            dir.path().join("items/30563.json"),
+            include_str!("../tests/fixtures/pqdi_item_30563.json"),
+        )
+        .unwrap();
+        let row = m.cached(30563).unwrap();
+        assert_eq!(
+            ItemSummary::from_row(&row).name,
+            "Wistful Tunic of the Void"
+        );
+    }
+}
