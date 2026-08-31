@@ -1,0 +1,213 @@
+<title>Nocturnal Guild</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+:root{--ground:#EEF0F3;--surface:#FFFFFF;--surface-2:#F5F7FA;--line:#D3D8E0;--line-strong:#B8C0CC;--text:#1A2130;--muted:#5B6577;--accent:#2E6FA6;--accent-ink:#fff;--brass:#8C6A1C;--good:#2F7D47;--warn:#9A6B12;--low:#A63D3D;--bar:#DCE3EC;--focus:#2E6FA6;--grid:#E4E8EE}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0F1420;--surface:#171E2E;--surface-2:#1D2536;--line:#2A3347;--line-strong:#3B475F;--text:#E6E2D3;--muted:#8E97AB;--accent:#9CC3E6;--accent-ink:#0F1420;--brass:#D2A94B;--good:#7FBF8A;--warn:#D9A441;--low:#C96B6B;--bar:#243047;--focus:#9CC3E6;--grid:#232D42}}
+:root[data-theme="dark"]{--ground:#0F1420;--surface:#171E2E;--surface-2:#1D2536;--line:#2A3347;--line-strong:#3B475F;--text:#E6E2D3;--muted:#8E97AB;--accent:#9CC3E6;--accent-ink:#0F1420;--brass:#D2A94B;--good:#7FBF8A;--warn:#D9A441;--low:#C96B6B;--bar:#243047;--focus:#9CC3E6;--grid:#232D42}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--text);font:16px/1.55 "Atkinson Hyperlegible",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)} a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+nav{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+nav .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:8px 16px;overflow-x:auto}
+nav .brand{font:600 22px/1 "Cormorant Garamond",Georgia,serif;margin-right:14px;white-space:nowrap;color:var(--text);text-decoration:none}
+nav a.tab{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:6px;white-space:nowrap;font-size:15px}
+nav a.tab[aria-current="page"]{background:var(--surface-2);color:var(--text);font-weight:700}
+nav .who{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+.read{max-width:760px}
+h1{font:600 clamp(30px,5vw,44px)/1.05 "Cormorant Garamond",Georgia,serif;margin:0 0 6px;text-wrap:balance}
+h2{font:600 24px/1.15 "Cormorant Garamond",Georgia,serif;margin:30px 0 10px}
+.eyebrow{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.lede{color:var(--muted);margin:0 0 18px;max-width:60ch}
+.lede b{color:var(--text)}
+.nums{display:flex;flex-wrap:wrap;gap:22px;margin:14px 0 22px}
+.nums div b{display:block;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+.nums div span{font-size:13px;color:var(--muted)}
+.nums .brass b{color:var(--brass)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:0;margin:12px 0;overflow:hidden}
+.panel .ph{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.panel .ph b{font-size:14px} .panel .ph span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.panel .pb{padding:12px 14px}
+.panel .foot{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+svg text{font:12px "Atkinson Hyperlegible",system-ui,sans-serif;fill:var(--text)} svg .mut{fill:var(--muted)} svg .grid{stroke:var(--grid)} 
+.bars .row{display:grid;grid-template-columns:minmax(90px,140px) 1fr 70px;gap:10px;align-items:center;font-size:14px;padding:4px 0}
+.bars .track{height:10px;background:var(--bar);border-radius:5px;overflow:hidden}.bars .fill{height:100%;background:var(--accent);border-radius:5px}
+.bars .row:first-child .fill{background:var(--brass)}
+.bars .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px}
+.chip.me{border-color:var(--accent);color:var(--text);font-weight:700}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line-strong);position:sticky;top:0;background:var(--surface-2)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0} .num{text-align:right}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.brassx{color:var(--brass);font-weight:700}.mut{color:var(--muted)}
+.raidpick{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 16px}
+.raidpick button{background:var(--surface);border:1px solid var(--line-strong);color:var(--muted);border-radius:999px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer}
+.raidpick button[aria-pressed="true"]{border-color:var(--accent);color:var(--text);background:var(--surface-2)}
+.hist li{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.hist{list-style:none;padding:0;margin:0}
+.hist .d{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}.hist .d.neg{color:var(--brass)}.hist .d.pos{color:var(--good)}
+.hist small{display:block;color:var(--muted)}
+.discord{margin-top:34px;padding:14px 16px;border:1px dashed var(--line-strong);border-radius:8px;color:var(--muted);font-size:14px}
+.discord code{background:var(--surface-2);padding:1px 6px;border-radius:4px;color:var(--text)}
+.matrix td.cls{font-size:12px;white-space:nowrap}.matrix td.cls.m{color:var(--brass);font-weight:700}.matrix td.cls.l60{color:var(--text)}.matrix td.cls.low{color:var(--muted)}
+.matrix th.cls{writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 4px;white-space:nowrap}
+.matrix .counts td{background:var(--surface-2);font-weight:700;text-align:center}
+input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;margin:6px 0 12px}
+.namelink{background:none;border:0;padding:0;font:inherit;color:var(--text);cursor:pointer;text-decoration:underline dotted var(--line-strong);text-underline-offset:3px}
+.namelink:hover{color:var(--accent)}
+.empty{color:var(--muted);font-style:italic}
+@media (max-width:600px){.bars .row{grid-template-columns:80px 1fr 60px}}
+</style>
+<nav><div class="in">
+<a class="brand" href="#raid">Nocturnal</a>
+<a class="tab" href="#raid">Raid night</a><a class="tab" href="#me">Me</a><a class="tab" href="#roster">Roster</a><a class="tab" href="#loot">Loot</a>
+<span class="who" id="who"></span>
+</div></nav>
+<main id="main"></main>
+<script>
+let D = null;
+const fmt = new Intl.NumberFormat('en-GB');
+const day = ms => new Date(ms).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+const hm = ms => new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const ago = ms => { const d=Math.floor((D.generated_ms-ms)/86400000); return d<1?'today':d===1?'yesterday':d<14?d+' days ago':d<60?Math.floor(d/7)+' weeks ago':Math.floor(d/30)+' months ago'; };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const discord = (what) => `<div class="discord">${what} — that happens in Discord, not here. This site only looks.</div>`;
+const panel = (title, scope, body, foot) => `<section class="panel"><div class="ph"><b>${title}</b><span>Perses · ${scope}</span></div><div class="pb">${body}</div>${foot?`<div class="foot">${foot}</div>`:''}</section>`;
+const nameBtn = n => `<button class="namelink" data-name="${esc(n)}">${esc(n)}</button>`;
+
+function bars(list, unit){
+  if(!list.length) return '<p class="empty">Nothing reported.</p>';
+  const max=list[0][1];
+  return `<div class="bars">${list.map(([n,v])=>`<div class="row"><span>${esc(n)}</span><div class="track"><div class="fill" style="width:${Math.max(2,v/max*100)}%"></div></div><span class="n">${fmt.format(v)}${unit||''}</span></div>`).join('')}</div>`;
+}
+function lineChart(series){
+  const names=Object.keys(series); if(!names.length) return '<p class="empty">No series.</p>';
+  const all=names.flatMap(n=>series[n]); const xs=all.map(p=>p[0]), ys=all.map(p=>p[1]);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y1=Math.max(...ys)||1; const W=680,H=200,L=44,B=24;
+  const X=t=>L+(t-x0)/(x1-x0||1)*(W-L-8), Y=v=>H-B-(v/y1)*(H-B-12);
+  const cols=['var(--brass)','var(--accent)','var(--good)'];
+  const grid=[0,.5,1].map(f=>`<line class="grid" x1="${L}" x2="${W-8}" y1="${Y(y1*f)}" y2="${Y(y1*f)}" stroke-width="1"/><text class="mut" x="${L-6}" y="${Y(y1*f)+4}" text-anchor="end">${fmt.format(Math.round(y1*f))}</text>`).join('');
+  const paths=names.map((n,i)=>{const pts=series[n]; if(!pts.length) return ''; const d=pts.map((p,j)=>(j?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' '); const last=pts[pts.length-1]; return `<path d="${d}" fill="none" stroke="${cols[i%3]}" stroke-width="2"/><circle cx="${X(last[0])}" cy="${Y(last[1])}" r="3" fill="${cols[i%3]}"/>`;}).join('');
+  const ticks=[x0,(x0+x1)/2,x1].map(t=>`<text class="mut" x="${X(t)}" y="${H-6}" text-anchor="middle">${hm(t*1000)}</text>`).join('');
+  const legend=names.map((n,i)=>`<span style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;font-size:13px"><i style="width:14px;height:3px;background:${cols[i%3]};display:inline-block"></i>${esc(n)}</span>`).join('');
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px;display:block">${grid}${paths}${ticks}</svg></div><div style="margin-top:6px">${legend}</div>`;
+}
+
+let raidIdx=0;
+const charts={};
+async function loadCharts(r){
+  if(charts[r.id]) return charts[r.id];
+  const s=Math.floor(r.start_ms/1000), e=Math.floor(r.end_ms/1000)+900, win=e-s;
+  const q=async (expr,t)=>(await (await fetch('/prom/api/v1/query?'+new URLSearchParams({query:expr,time:t}))).json()).data.result;
+  const qr=async (expr)=>(await (await fetch('/prom/api/v1/query_range?'+new URLSearchParams({query:expr,start:s,end:e,step:60}))).json()).data.result;
+  const out={damage:[],healing:[],dps_series:{},window:{start:s,end:e}};
+  try{
+    const dmg=await q(`sort_desc(sum by (everquest_combat_source) (increase(everquest_combat_damage_total{everquest_combat_direction="outgoing",everquest_combat_source_type="player"}[${win}s])))`,e);
+    out.damage=dmg.slice(0,12).map(x=>[x.metric.everquest_combat_source,Math.round(+x.value[1])]);
+    const heal=await q(`sort_desc(sum by (everquest_combat_source) (increase(everquest_combat_heal_total{everquest_combat_direction="outgoing"}[${win}s])))`,e);
+    out.healing=heal.slice(0,6).map(x=>[x.metric.everquest_combat_source,Math.round(+x.value[1])]).filter(x=>x[1]>0);
+    for(const [n] of out.damage.slice(0,3)){
+      const rr=await qr(`sum(rate(everquest_combat_damage_total{everquest_combat_direction="outgoing",everquest_combat_source="${n}"}[2m]))`);
+      out.dps_series[n]=(rr[0]?rr[0].values:[]).map(([t,v])=>[+t,Math.round(+v*10)/10]);
+    }
+  }catch(err){ out.error=String(err); }
+  charts[r.id]=out; return out;
+}
+function raidPage(){
+  const r=D.raids[raidIdx], isLast=raidIdx===0, m=charts[r.id];
+  const meHere=D.me && r.attendees.includes(D.me.name);
+  const pick=`<div class="raidpick">${D.raids.map((x,i)=>`<button data-raid="${i}" aria-pressed="${i===raidIdx}">${esc(x.name)}<span class="mut"> · ${new Date(x.date_ms).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button>`).join('')}</div>`;
+  const loading='<p class="empty">Loading from Perses…</p>';
+  const dps = panel('Damage', 'everquest / Fights', m ? (m.error?'<p class="empty">Could not load the meter data.</p>':bars(m.damage)) : loading, m&&!m.error ? `Only characters running the DPS meter show up — ${m.damage.length} did this raid. Set yours up with <code>/dpstoken</code> in Discord.` : '');
+  const line = m && Object.keys(m.dps_series).length ? panel('DPS through the night, top three', 'everquest / Fights', lineChart(m.dps_series), `${hm(m.window.start*1000)} – ${hm(m.window.end*1000)}, 2-minute rate`) : '';
+  const heal = m && !m.error ? panel('Healing', 'everquest / Fights', m.healing.length ? bars(m.healing) : '<p class="empty">No healer had the meter running, so there is nothing to show.</p>') : '';
+  const loot = r.loot.length ? `<div class="tablewrap"><table><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>When</th></tr></thead><tbody>${r.loot.map(l=>`<tr><td>${esc(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${hm(l.ts_ms)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing dropped — or nothing was bid on.</p>';
+  return `<div class="read">
+    <div class="eyebrow">${isLast?'Last raid':'Raid night'} · ${day(r.date_ms)}</div>
+    <h1>${esc(r.name)}</h1>
+    <p class="lede">${hm(r.start_ms)} to ${hm(r.end_ms)}. <b>${r.attendees.length} came</b>, ${r.ticks} ticks at ${r.dkp_per_tick} DKP, <b>${r.loot.length} drops</b> for ${fmt.format(r.loot.reduce((a,l)=>a+(l.cost||0),0))} DKP.${D.me?(meHere?' You were there.':' You weren\'t there.'):''}</p>
+    ${pick}
+    ${dps}${line}${heal}
+    <h2>What dropped</h2>${loot}
+    <h2>Who came</h2><div class="chips">${r.attendees.map(a=>`<span class="chip${D.me&&a===D.me.name?' me':''}">${esc(a)}</span>`).join('')}</div>
+    ${discord('Want to bid, or start a raid?')}
+  </div>`;
+}
+function mePage(who){
+  if(!who && !D.me) return `<div class="read"><h1>Who are you?</h1><p class="lede">You are signed in to Perses as <b>${esc(D.login||'?')}</b>, but that name is not on the DKP ledger as someone raiding in the last 90 days.</p>${discord('Think that is wrong?')}</div>`;
+  const s = who ? null : D.me;
+  const name = who || D.me.name;
+  const row = D.matrix.rows.find(r=>r[0].trim().toLowerCase()===name.trim().toLowerCase());
+  const chars = s ? s.characters.map(c=>[c.class, `${c.name} (${c.main==='main'?'M-':c.main==='second'?'M2-':''}${c.level})`]) : (row||[]).slice(3,18).map((c,i)=>[D.matrix.classes[i],c]).filter(x=>x[1]);
+  const last=D.raids[0], m=charts[last.id];
+  const rep = s && m ? m.damage.find(([n])=>chars.some(([,c])=>c.toLowerCase().startsWith(n.toLowerCase()))) : null;
+  const meter = s ? (m ? (rep ? `Your meter reported <b>${esc(rep[0])}</b> in the last raid: ${fmt.format(rep[1])} damage.` : `Your meter did not report any damage in the last raid.`) : 'Loading…') : '';
+  const hist = s && s.history.length ? `<ul class="hist">${s.history.map(h=>`<li><span class="d ${h.dkp<0?'neg':'pos'}">${h.dkp>0?'+':''}${h.dkp}</span><span>${esc(h.item||h.comment)}<small>${h.raid?esc(h.raid)+' · ':''}${ago(h.ts_ms)}</small></span></li>`).join('')}</ul>` : '';
+  return `<div class="read">
+    <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}</h1>
+    ${s?`<div class="nums"><div class="brass"><b>${fmt.format(s.dkp)}</b><span>DKP</span></div><div><b>${s.attendance}%</b><span>attendance, 90 days</span></div><div><b>${s.raids_attended}<span style="font-size:16px;font-weight:400;color:var(--muted)"> / ${D.raids.length}</span></b><span>of the last ${D.raids.length} raids</span></div></div>`:(row?`<div class="nums"><div class="brass"><b>${esc(row[1])}</b><span>DKP</span></div><div><b>${esc(row[2])}</b><span>attendance</span></div></div>`:'<p class="lede">Not on the roster.</p>')}
+    <h2>Characters</h2>${chars.length?`<div class="chips">${chars.map(([k,c])=>`<span class="chip">${esc(c)} <span class="mut">${esc(k)}</span></span>`).join('')}</div>`:'<p class="empty">Nothing on the roster yet — <code>/roster add</code> in Discord.</p>'}
+    ${s?`<h2>Your meter</h2><p>${meter}</p>`:''}
+    ${s?`<h2>Recent ledger</h2>${hist||'<p class="empty">Nothing yet.</p>'}`:''}
+    ${discord(s?'Need a meter token, or want to register a character?':'Want to award or take DKP?')}
+  </div>`;
+}
+function rosterPage(){
+  const M=D.matrix; const cls=M.classes;
+  const cellClass = v => !v?'':/M2?-/.test(v)?'cls m':/\(60\)/.test(v)?'cls l60':'cls low';
+  const head=`<tr><th>Member</th><th class="num">DKP</th><th class="num">RA</th>${cls.map(c=>`<th class="cls">${esc(c)}</th>`).join('')}<th>Role</th><th>Active</th></tr>`;
+  const counts=(label,arr)=>`<tr class="counts"><td colspan="3" style="text-align:left">${label}</td>${arr.map(x=>`<td>${x||''}</td>`).join('')}<td></td><td></td></tr>`;
+  const rows=M.rows.map(r=>`<tr><td>${nameBtn(r[0])}</td><td class="num brassx">${esc(r[1])}</td><td class="num">${esc(r[2])}</td>${cls.map((c,i)=>`<td class="${cellClass(r[3+i])}">${esc(r[3+i]||'')}</td>`).join('')}<td class="mut">${esc(r[18]||'')}</td><td class="mut">${esc(r[19]||'')}</td></tr>`).join('');
+  return `<div class="eyebrow">Who can we field</div><h1>Roster</h1><p class="lede"><b>${esc(M.counts.raid_force)}</b> · level-60 mains with 20%+ attendance. The matrix the guild already uses.</p>
+  <input type="search" id="rq" placeholder="Filter by member or character" aria-label="Filter roster">
+  <div class="tablewrap matrix"><table id="rt"><thead>${head}</thead><tbody>${counts('Characters',M.counts.total)}${counts('Active 60 mains',M.counts.mains)}${counts('Second mains',M.counts.m2)}${rows}</tbody></table></div>
+  ${discord('Add or change a character?')}`;
+}
+function lootPage(){
+  const loot=D.raids.flatMap(r=>r.loot.map(l=>({...l, raid:r.name, date_ms:r.date_ms}))).sort((a,b)=>b.ts_ms-a.ts_ms);
+  return `<div class="eyebrow">What dropped lately</div><h1>Loot</h1>
+  <p class="lede">Every drop from the last ${D.raids.length} raids and what it went for. It is a record, not a price guide — there is deliberately no "what things usually cost" here.</p>
+  <input type="search" id="lq" placeholder="Find an item or a member" aria-label="Find">
+  <div class="tablewrap"><table id="lt"><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>Raid</th></tr></thead><tbody>${loot.map(l=>`<tr><td>${esc(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${esc(l.raid)} · ${ago(l.date_ms)}</td></tr>`).join('')}</tbody></table></div>
+  ${discord('Disputing a line? Officers use <code>/searchlogs</code>')}`;
+}
+function render(){
+  const h=(location.hash||'#raid').slice(1); const [page,arg]=h.split('/');
+  document.querySelectorAll('nav a.tab').forEach(a=>a.toggleAttribute('aria-current', a.getAttribute('href')==='#'+page) || (a.getAttribute('href')==='#'+page ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current')));
+  const main=document.getElementById('main');
+  main.innerHTML = page==='me' ? mePage(arg?decodeURIComponent(arg):null) : page==='roster' ? rosterPage() : page==='loot' ? lootPage() : raidPage();
+  if(page==='raid'||page==='me'||!page){ const r=D.raids[page==='me'?0:raidIdx]; if(r && !charts[r.id]) loadCharts(r).then(()=>{ if((location.hash||'#raid').slice(1).split('/')[0]===(page||'raid')) render(); }); }
+  window.scrollTo(0,0);
+  const filt=(inputId,tableIds)=>{const i=document.getElementById(inputId); if(!i) return; i.addEventListener('input',()=>{const q=i.value.trim().toLowerCase(); tableIds.forEach(t=>document.querySelectorAll('#'+t+' tbody tr:not(.counts)').forEach(tr=>{tr.style.display=!q||tr.textContent.toLowerCase().includes(q)?'':'none';}));});};
+  filt('rq',['rt']); filt('lq',['lt']);
+}
+async function boot(){
+  const main=document.getElementById('main'); main.innerHTML='<p class="empty">Loading…</p>';
+  try{
+    const siteRes = await fetch('/data/site.json');
+    if(siteRes.status===401){
+      main.innerHTML=`<div class="read"><div class="eyebrow">Nocturnal</div><h1>Sign in first</h1><p class="lede">This site shows the guild's raids, your own standing and the roster, so it sits behind the same Discord login as the dashboards.</p><p><a href="/" style="display:inline-block;background:var(--accent);color:var(--accent-ink);padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700">Sign in with Discord</a> <span class="mut">— then come back to this page.</span></p></div>`;
+      document.getElementById('who').textContent='not signed in';
+      return;
+    }
+    const [site, roster, meRes] = await Promise.all([
+      siteRes.json(),
+      fetch('/data/data.json').then(r=>r.json()),
+      fetch('/api/v1/users/me').then(r=>r.ok?r.json():null).catch(()=>null),
+    ]);
+    const login = meRes && (meRes.metadata?.name || meRes.name || meRes.login || null);
+    const v=roster.values, H=4;
+    D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, login,
+          me: login && site.members[login] ? site.members[login] : null,
+          matrix: { classes: v[0].slice(3,18), header: v[H], rows: v.slice(H+1).filter(r=>r&&r[0]), counts: { total: v[1].slice(3,18), mains: v[2].slice(3,18), m2: v[3].slice(3,18), raid_force: v[3][0] } } };
+    document.getElementById('who').textContent = D.me ? 'you are '+D.me.name : (login ? 'signed in as '+login : 'not signed in');
+    render();
+  }catch(e){ main.innerHTML='<div class="read"><h1>Could not load</h1><p class="lede">'+esc(String(e))+'</p></div>'; }
+}
+boot();
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
+window.addEventListener('hashchange',()=>{ if(D) render(); });
+</script>
