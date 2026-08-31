@@ -751,15 +751,33 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                 }
                 // The roster page is derived state too: render it on boot so
                 // a restart (or a fresh import) is reflected without waiting
-                // for the next /roster command.
-                crate::roster_page::rematerialize(
-                    ctx.http.as_ref(),
-                    guild_id,
-                    &driver,
-                    framework.user_data().await,
-                    data_guild.map_or(guild_id, |(_, to)| to),
-                )
-                .await;
+                // for the next /roster command. Spawned, not awaited: the
+                // first render resolves every member with one Discord call
+                // each, which is minutes for the whole guild, and nothing
+                // else in this setup should wait behind it.
+                //
+                // And never via `framework.user_data()` from inside setup:
+                // that value exists only once setup returns, so awaiting it
+                // here deadlocks the framework — commands are then never
+                // dispatched while the bot looks perfectly alive. Found on
+                // the live box on 2026-08-31, after 12 minutes of silence.
+                if let Some(out) = roster_output.clone() {
+                    let http = ctx.http.clone();
+                    let driver = driver.clone();
+                    let members = members.clone();
+                    let ledger_guild = data_guild.map_or(guild_id, |(_, to)| to);
+                    tokio::spawn(async move {
+                        crate::roster_page::rematerialize(
+                            http.as_ref(),
+                            guild_id,
+                            &driver,
+                            &out,
+                            &members,
+                            ledger_guild,
+                        )
+                        .await;
+                    });
+                }
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
                 crate::auctions::repost_open_auctions(

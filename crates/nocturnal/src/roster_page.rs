@@ -30,7 +30,6 @@ use nocturnal_telemetry::attr;
 use poise::serenity_prelude as serenity;
 use serde::Deserialize;
 
-use crate::discord::Data;
 use crate::driver::DriverHandle;
 
 /// What the page needs to know about a Discord member. Kept by player id.
@@ -414,12 +413,10 @@ pub async fn rematerialize(
     http: &serenity::Http,
     discord_guild: u64,
     driver: &DriverHandle,
-    data: &Data,
+    out: &Path,
+    members_cache: &std::sync::Mutex<HashMap<u64, MemberInfo>>,
     ledger_guild: GuildId,
 ) {
-    let Some(out) = data.roster_output.clone() else {
-        return;
-    };
     let now = crate::discord::chrono_now_ms();
     let ids: Vec<PlayerId> = driver
         .query(move |l| {
@@ -433,11 +430,11 @@ pub async fn rematerialize(
     resolve_members(
         http,
         serenity::GuildId::new(discord_guild),
-        &data.members,
+        members_cache,
         &ids,
     )
     .await;
-    let members = data.members.lock().map(|m| m.clone()).unwrap_or_default();
+    let members = members_cache.lock().map(|m| m.clone()).unwrap_or_default();
     let json = driver
         .query(move |l| {
             l.state()
@@ -450,7 +447,7 @@ pub async fn rematerialize(
     };
     match serde_json::to_vec(&json)
         .map_err(std::io::Error::other)
-        .and_then(|b| write_atomic(&out, &b))
+        .and_then(|b| write_atomic(out, &b))
     {
         Ok(()) => tracing::info!(
             { attr::NOCTURNAL_ROSTER_ROWS } = json["values"]

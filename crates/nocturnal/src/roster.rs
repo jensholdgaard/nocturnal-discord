@@ -235,14 +235,17 @@ async fn upsert(
                 describe(&character)
             ))
             .await?;
-            crate::roster_page::rematerialize(
-                ctx.serenity_context().http.as_ref(),
-                ctx.guild_id().map_or(0, |g| g.get()),
-                &ctx.data().driver,
-                ctx.data(),
-                ledger_guild,
-            )
-            .await;
+            if let Some(out) = &ctx.data().roster_output {
+                crate::roster_page::rematerialize(
+                    ctx.serenity_context().http.as_ref(),
+                    ctx.guild_id().map_or(0, |g| g.get()),
+                    &ctx.data().driver,
+                    out,
+                    &ctx.data().members,
+                    ledger_guild,
+                )
+                .await;
+            }
         }
         Err(e) => {
             ctx.say(rejection_text(&e)).await?;
@@ -341,14 +344,17 @@ pub async fn remove(
         Ok(_) => {
             ctx.say(format!("Removed **{name}** from your row."))
                 .await?;
-            crate::roster_page::rematerialize(
-                ctx.serenity_context().http.as_ref(),
-                ctx.guild_id().map_or(0, |g| g.get()),
-                &ctx.data().driver,
-                ctx.data(),
-                ledger_guild,
-            )
-            .await;
+            if let Some(out) = &ctx.data().roster_output {
+                crate::roster_page::rematerialize(
+                    ctx.serenity_context().http.as_ref(),
+                    ctx.guild_id().map_or(0, |g| g.get()),
+                    &ctx.data().driver,
+                    out,
+                    &ctx.data().members,
+                    ledger_guild,
+                )
+                .await;
+            }
         }
         Err(e) => {
             ctx.say(rejection_text(&e)).await?;
