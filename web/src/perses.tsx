@@ -8,7 +8,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ChartsProvider, generateChartsTheme, getTheme, SnackbarProvider } from '@perses-dev/components';
 import {
   DataQueriesProvider,
-  dynamicImportPluginLoader,
   PluginModuleResource,
   PluginRegistry,
   TimeRangeProvider,
@@ -43,12 +42,51 @@ const datasourceApi: DatasourceApi = {
 } as DatasourceApi;
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
-const pluginLoader = dynamicImportPluginLoader([
-  { resource: prometheusPlugin.getPluginModule() as PluginModuleResource, importPlugin: () => Promise.resolve(prometheusPlugin) },
-  { resource: timeseriesChartPlugin.getPluginModule() as PluginModuleResource, importPlugin: () => Promise.resolve(timeseriesChartPlugin) },
-  { resource: barChartPlugin.getPluginModule() as PluginModuleResource, importPlugin: () => Promise.resolve(barChartPlugin) },
-  { resource: statChartPlugin.getPluginModule() as PluginModuleResource, importPlugin: () => Promise.resolve(statChartPlugin) },
-]);
+// The registry resolves a plugin by `kind:name:registry:version` and then
+// reads *that key* off the loaded module. The npm packages export plugins by
+// plain name (`TimeSeriesChart`), and their getPluginModule() reads a
+// package.json the bundler does not inline - so the doc's loader registers
+// nothing. This loader declares each package's plugins (from its package.json
+// `perses` block, versions pinned to the server's) and exposes every plugin
+// under the compound key the registry will ask for.
+type PluginDecl = { kind: string; name: string };
+type Package = { name: string; version: string; plugins: PluginDecl[]; module: Record<string, unknown> };
+
+const PACKAGES: Package[] = [
+  { name: '@perses-dev/timeseries-chart-plugin', version: '0.13.0', plugins: [{ kind: 'Panel', name: 'TimeSeriesChart' }], module: timeseriesChartPlugin as unknown as Record<string, unknown> },
+  { name: '@perses-dev/bar-chart-plugin', version: '0.13.0', plugins: [{ kind: 'Panel', name: 'BarChart' }], module: barChartPlugin as unknown as Record<string, unknown> },
+  { name: '@perses-dev/stat-chart-plugin', version: '0.13.0', plugins: [{ kind: 'Panel', name: 'StatChart' }], module: statChartPlugin as unknown as Record<string, unknown> },
+  {
+    name: '@perses-dev/prometheus-plugin', version: '0.58.0',
+    plugins: [
+      { kind: 'Datasource', name: 'PrometheusDatasource' },
+      { kind: 'TimeSeriesQuery', name: 'PrometheusTimeSeriesQuery' },
+      { kind: 'Variable', name: 'PrometheusLabelValuesVariable' },
+      { kind: 'Variable', name: 'PrometheusLabelNamesVariable' },
+      { kind: 'Variable', name: 'PrometheusPromQLVariable' },
+    ],
+    module: prometheusPlugin as unknown as Record<string, unknown>,
+  },
+];
+
+const compoundKey = (kind: string, name: string, version: string) => `${kind}:${name}::${version}`;
+
+const resources: PluginModuleResource[] = PACKAGES.map((p) => ({
+  kind: 'PluginModule',
+  metadata: { name: p.name, version: p.version },
+  spec: { plugins: p.plugins.map((d) => ({ kind: d.kind, spec: { name: d.name, display: { name: d.name } } })) },
+} as unknown as PluginModuleResource));
+
+const pluginLoader = {
+  getInstalledPlugins: () => Promise.resolve(resources),
+  importPluginModule: (resource: PluginModuleResource) => {
+    const pkg = PACKAGES.find((p) => p.name === resource.metadata.name);
+    if (!pkg) return Promise.reject(new Error(`unknown plugin package ${resource.metadata.name}`));
+    const keyed: Record<string, unknown> = {};
+    for (const d of pkg.plugins) keyed[compoundKey(d.kind, d.name, pkg.version)] = pkg.module[d.name];
+    return Promise.resolve(keyed);
+  },
+};
 
 const emptyDashboard: DashboardResource = {
   kind: 'Dashboard',
