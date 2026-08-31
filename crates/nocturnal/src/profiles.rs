@@ -41,6 +41,10 @@ pub struct Profile {
     /// When the client sent it (ms since epoch).
     #[serde(default)]
     pub reported_ms: i64,
+    /// The Discord username the gateway stamped on the event — the member
+    /// behind the bearer token, a fact rather than a claim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reporter: Option<String>,
 }
 
 /// The body of a profile event, as Zeal builds it. Everything but the
@@ -71,6 +75,20 @@ struct Record {
     time_unix_nano: serde_json::Value,
     #[serde(default)]
     body: serde_json::Value,
+    #[serde(default)]
+    attributes: serde_json::Value,
+}
+
+/// One string attribute out of Ourios' `[{key, value: {stringValue}}]` list.
+fn string_attr(attrs: &serde_json::Value, key: &str) -> Option<String> {
+    attrs.as_array()?.iter().find_map(|a| {
+        (a["key"].as_str() == Some(key)).then(|| {
+            a["value"]["stringValue"]
+                .as_str()
+                .or_else(|| a["value"].as_str())
+                .map(String::from)
+        })?
+    })
 }
 
 fn body_text(v: &serde_json::Value) -> Option<String> {
@@ -124,11 +142,68 @@ pub fn latest_per_character(records: &[serde_json::Value]) -> HashMap<String, Pr
                     aa: b.aa,
                     equipment: b.equipment,
                     reported_ms,
+                    reporter: string_attr(&rec.attributes, "everquest.reporter"),
                 },
             );
         }
     }
     out
+}
+
+/// EverQuest class ids as the client reports them, to the roster's names.
+pub fn class_name(id: i64) -> Option<&'static str> {
+    Some(match id {
+        1 => "Warrior",
+        2 => "Cleric",
+        3 => "Paladin",
+        4 => "Ranger",
+        5 => "Shadow Knight",
+        6 => "Druid",
+        7 => "Monk",
+        8 => "Bard",
+        9 => "Rogue",
+        10 => "Shaman",
+        11 => "Necromancer",
+        12 => "Wizard",
+        13 => "Magician",
+        14 => "Enchanter",
+        15 => "Beastlord",
+        _ => return None,
+    })
+}
+
+/// What the roster should record for a profile, given what it holds now.
+/// `None` when nothing would change — the ledger must not fill with
+/// identical events every half hour. Manual fields (main, access, link)
+/// are carried over untouched: the game does not know them.
+pub fn roster_update(
+    profile: &Profile,
+    existing: Option<&nocturnal_core::RosterCharacter>,
+) -> Option<(nocturnal_core::RosterCharacter, bool)> {
+    let class = class_name(profile.class)?.to_owned();
+    let level = u8::try_from(profile.level)
+        .ok()
+        .filter(|l| (1..=65).contains(l))?;
+    let aa = profile
+        .aa
+        .get("spent")
+        .copied()
+        .and_then(|a| u16::try_from(a).ok())
+        .filter(|a| *a >= 1);
+    let next = nocturnal_core::RosterCharacter {
+        name: profile.name.clone(),
+        class,
+        level,
+        aa: aa.or(existing.and_then(|e| e.aa)),
+        profile_url: existing.and_then(|e| e.profile_url.clone()),
+        access: existing.map(|e| e.access.clone()).unwrap_or_default(),
+        main: existing.and_then(|e| e.main),
+    };
+    match existing {
+        Some(e) if *e == next => None,
+        Some(_) => Some((next, true)),
+        None => Some((next, false)),
+    }
 }
 
 /// Ask Ourios for recent profile events. Failure is an empty map and a
@@ -162,6 +237,61 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Pr
     };
     let records = body["records"].as_array().cloned().unwrap_or_default();
     latest_per_character(&records)
+}
+
+/// Write what the clients reported into the roster: a character the member
+/// never added appears, a level that moved is updated, and nothing else is
+/// touched. `players` maps reporter username → player id; profiles whose
+/// reporter is unknown are left alone rather than guessed.
+pub async fn sync_roster(
+    driver: &crate::driver::DriverHandle,
+    ledger_guild: u64,
+    profiles: &HashMap<String, Profile>,
+    players: &HashMap<String, u64>,
+) -> usize {
+    use nocturnal_core::{Actor, Command};
+    let mut written = 0;
+    for p in profiles.values() {
+        let Some(player) = p
+            .reporter
+            .as_ref()
+            .and_then(|r| players.get(&r.to_lowercase()))
+            .copied()
+        else {
+            continue;
+        };
+        let key = p.name.to_lowercase();
+        let existing = driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .and_then(|g| g.roster.get(&player))
+                    .and_then(|cs| cs.get(&key))
+                    .cloned()
+            })
+            .await;
+        let Some((character, replace)) = roster_update(p, existing.as_ref()) else {
+            continue;
+        };
+        match driver
+            .execute(
+                ledger_guild,
+                Actor::System,
+                Command::SetRosterCharacter {
+                    player,
+                    character,
+                    replace,
+                },
+            )
+            .await
+        {
+            Ok(_) => written += 1,
+            Err(e) => {
+                tracing::debug!(error = %e, character = %p.name, "profile not applied to the roster")
+            }
+        }
+    }
+    written
 }
 
 /// Profiles with their items resolved, as the site payload wants them:
@@ -222,6 +352,47 @@ mod tests {
         assert_eq!(s.equipment[0].id, Some(30563));
         assert_eq!(s.equipment[1].id, None, "an empty slot is still a slot");
         assert_eq!(s.aa["spent"], 40);
+    }
+
+    #[test]
+    fn the_reporter_is_read_from_the_attribute_list() {
+        let mut r = rec("Shaku", 60, 10);
+        r["attributes"] = serde_json::json!([
+            {"key": "everquest.reporter", "value": {"stringValue": "bisben_"}},
+            {"key": "everquest.character.level", "value": {"stringValue": "60"}}
+        ]);
+        let m = latest_per_character(&[r]);
+        assert_eq!(m["shaku"].reporter.as_deref(), Some("bisben_"));
+    }
+
+    #[test]
+    fn the_roster_changes_only_when_the_game_says_something_new() {
+        let m = latest_per_character(&[rec("Shaku", 60, 10)]);
+        let p = &m["shaku"];
+        // New character: added, as reported.
+        let (c, replace) = roster_update(p, None).unwrap();
+        assert_eq!(
+            (c.class.as_str(), c.level, c.aa, replace),
+            ("Shaman", 60, Some(40), false)
+        );
+        // Same again: nothing to write.
+        assert!(roster_update(p, Some(&c)).is_none());
+        // Level moved: an edit, and the manual fields survive.
+        let mut had = c.clone();
+        had.level = 59;
+        had.main = Some(nocturnal_core::MainRank::Main);
+        had.access = vec!["VP".into()];
+        had.profile_url = Some("https://quarmy.com/c/shaku".into());
+        let (c2, replace) = roster_update(p, Some(&had)).unwrap();
+        assert!(replace);
+        assert_eq!(
+            (c2.level, c2.main, c2.access.len(), c2.profile_url.is_some()),
+            (60, Some(nocturnal_core::MainRank::Main), 1, true)
+        );
+        // An unknown class id is not a roster entry.
+        let mut weird = p.clone();
+        weird.class = 99;
+        assert!(roster_update(&weird, None).is_none());
     }
 
     #[test]

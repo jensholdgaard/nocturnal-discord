@@ -269,7 +269,15 @@ doesn't care where it runs). Paths and the dashboard URL are config
     into the sheet by an officer; and the roster page is rendered by the bot
     from the ledger — the sheet, the Apps Script, the Drive relay and the
     roster bot retire. Discord IDs no longer appear in the page payload.
-18. `/configure` refuses values that used to be accepted and break later: a
+18. The roster updates itself from the game (2026-08-31). A member running
+    the meter sends a character profile on zone-in; the bot records the
+    character, its class, level and AA on that member's roster row as
+    ordinary `roster.character.set` events (actor: system). A character
+    nobody typed in appears; a level that moved is updated; nothing else is
+    touched — main/second, access flags and the Quarmy link stay as set.
+    Members without the meter keep `/roster add`. Latency is Ourios' flush
+    plus the half-hourly render, so within the hour.
+19. `/configure` refuses values that used to be accepted and break later: a
     tick duration of zero, a deprecation window of zero, a bid time outside
     30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
     channel equal to the first (which would double everyone's tick). Nothing

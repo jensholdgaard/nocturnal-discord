@@ -707,6 +707,44 @@ pub async fn rematerialize(
         }
         None => Vec::new(),
     };
+    // Character profiles from members' clients. Fetched first, because what
+    // they say becomes roster events before the page is rendered from it.
+    let mut profile_payload: Option<serde_json::Value> = None;
+    if let Some((url, tenant)) = ourios {
+        let profiles = crate::profiles::fetch_profiles(url, tenant).await;
+        if !profiles.is_empty() {
+            // Reporter username -> player id: from the members we know, and
+            // Discord's member search for a reporter we have never rendered.
+            let mut by_username: HashMap<String, u64> = members
+                .iter()
+                .map(|(id, m)| (m.username.to_lowercase(), *id))
+                .collect();
+            let guild = serenity::GuildId::new(discord_guild);
+            for reporter in profiles.values().filter_map(|p| p.reporter.clone()) {
+                let key = reporter.to_lowercase();
+                if by_username.contains_key(&key) {
+                    continue;
+                }
+                if let Ok(found) = guild.search_members(http, &reporter, Some(5)).await {
+                    if let Some(m) = found
+                        .iter()
+                        .find(|m| m.user.name.eq_ignore_ascii_case(&reporter))
+                    {
+                        by_username.insert(key, m.user.id.get());
+                    }
+                }
+            }
+            let written =
+                crate::profiles::sync_roster(driver, ledger_guild, &profiles, &by_username).await;
+            if written > 0 {
+                tracing::info!(
+                    { attr::NOCTURNAL_ROSTER_ROWS } = written,
+                    "roster updated from character profiles"
+                );
+            }
+        }
+        profile_payload = Some(crate::profiles::render(&profiles, items).await);
+    }
     let both = driver
         .query(move |l| {
             l.state().guild(ledger_guild).map(|g| {
@@ -720,14 +758,9 @@ pub async fn rematerialize(
     let Some((json, mut site)) = both else {
         return;
     };
-    // Character profiles from members' clients, with their gear resolved.
-    if let Some((url, tenant)) = ourios {
-        let profiles = crate::profiles::fetch_profiles(url, tenant).await;
-        let rendered = crate::profiles::render(&profiles, items).await;
-        if let serde_json::Value::Object(ref mut o) = site {
-            o.insert("profiles".into(), rendered["profiles"].clone());
-            o.insert("gear_items".into(), rendered["gear_items"].clone());
-        }
+    if let (Some(rendered), serde_json::Value::Object(o)) = (profile_payload, &mut site) {
+        o.insert("profiles".into(), rendered["profiles"].clone());
+        o.insert("gear_items".into(), rendered["gear_items"].clone());
     }
     let site_path = out.with_file_name("site.json");
     if let Err(e) = serde_json::to_vec(&site)
