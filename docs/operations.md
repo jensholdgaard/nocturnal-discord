@@ -415,3 +415,18 @@ GitHub Actions:
   per `(kind, v)` (events.md) — additive forever; the binary always reads all
   historical versions. `nocturnal --version` prints build info + newest event
   schema versions.
+
+## URLs on the VM (2026-08-31)
+
+| URL | What |
+|---|---|
+| `https://dps.nocturnal-guild.de/` | The guild site (`deploy/site/index.html`). Shell is public; its data is behind the Perses login. |
+| `…/perses/` | Perses (`api_prefix: /perses`). The Discord OAuth callback stays registered at `…/api/auth/providers/oauth/discord/callback`; Caddy rewrites it onto the prefix. |
+| `…/data/{data,site}.json` | Bot-written site data, gated by `forward_auth` → `/perses/api/v1/user/whoami` (not `/users/me`, which 403s for members). |
+| `…/prom/*` | Read-only Prometheus for the site's charts, same gate. |
+| `…/roster/` | Zig's roster page, public, reading `/roster/data.json`. |
+| `…/otlp/*` | Telemetry ingest (bearer token → gateway collector). |
+
+Sign-in from the site: `/perses/api/auth/providers/oauth/discord/login?rd=%2F` — Perses does the Discord round-trip and returns to `/`.
+
+Moving to `nocturnal-guild.de`: the apex is a Hetzner webhosting package carrying the guild's mail (MX, `autoconfig`); repointing `@`/`www` A+AAAA to the VM leaves mail alone but needs the owner's say-so. Perses' session cookie is host-scoped, so the site and Perses move together, and one new redirect URI must be registered in the Discord app. DNS is in the Hetzner Cloud API (`/v1/zones`), reachable with the cloud token.
