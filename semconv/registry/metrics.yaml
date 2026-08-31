@@ -116,6 +116,21 @@ groups:
       see averaged. One series per guild, no player identity.
     instrument: gauge
     unit: "%"
+  - id: metric.nocturnal.raid.active
+    type: metric
+    metric_name: nocturnal.raid.active
+    stability: development
+    brief: >
+      1 while the raid is running, 0 in the minutes after it ends, then the
+      series goes stale. An info-style series: one per raid night, from the
+      bot, so dashboards can pick a raid by id and scope any query to its
+      duration with `and on() (nocturnal_raid_active{...} == 1)`. Bounded
+      cardinality — one series per raid, never per player.
+    instrument: gauge
+    unit: "1"
+    attributes:
+      - ref: nocturnal.raid.id
+      - ref: nocturnal.raid.name
   - id: metric.nocturnal.scheduler.drift
     type: metric
     metric_name: nocturnal.scheduler.drift

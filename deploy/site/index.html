@@ -106,11 +106,11 @@ function lineChart(series){
   return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px;display:block">${grid}${paths}${ticks}</svg></div><div style="margin-top:6px">${legend}</div>`;
 }
 
-let raidIdx=0;
+let raidIdx=0, showAll=false;
 const charts={};
 async function loadCharts(r){
   if(charts[r.id]) return charts[r.id];
-  const s=Math.floor(r.start_ms/1000), e=Math.floor(r.end_ms/1000)+900, win=e-s;
+  const s=Math.floor(r.start_ms/1000), e=Math.floor(r.end_ms/1000)+(r.exact?0:900), win=e-s;
   const q=async (expr,t)=>(await (await fetch('/prom/api/v1/query?'+new URLSearchParams({query:expr,time:t}))).json()).data.result;
   const qr=async (expr)=>(await (await fetch('/prom/api/v1/query_range?'+new URLSearchParams({query:expr,start:s,end:e,step:60}))).json()).data.result;
   const out={damage:[],healing:[],dps_series:{},window:{start:s,end:e}};
@@ -131,14 +131,19 @@ function raidPage(){
   const meHere=D.me && r.attendees.includes(D.me.name);
   const pick=`<div class="raidpick">${D.raids.map((x,i)=>`<button data-raid="${i}" aria-pressed="${i===raidIdx}">${esc(x.name)}<span class="mut"> · ${new Date(x.date_ms).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button>`).join('')}</div>`;
   const loading='<p class="empty">Loading from Perses…</p>';
-  const dps = panel('Damage', 'everquest / Fights', m ? (m.error?'<p class="empty">Could not load the meter data.</p>':bars(m.damage)) : loading, m&&!m.error ? `Only characters running the DPS meter show up — ${m.damage.length} did this raid. Set yours up with <code>/dpstoken</code> in Discord.` : '');
+  const ours = new Set(r.attendee_characters||[]);
+  const inRaid = m ? m.damage.filter(([n])=>ours.has(n.toLowerCase())) : [];
+  const others = m ? m.damage.length - inRaid.length : 0;
+  const shown = showAll || !ours.size ? (m?m.damage:[]) : inRaid;
+  const dps = panel('Damage', 'everquest / Fights', m ? (m.error?'<p class="empty">Could not load the meter data.</p>':bars(shown)) : loading,
+    m&&!m.error ? `${ours.size?`Characters on the roster of people who attended. `:''}${others>0&&ours.size?`<button class="namelink" data-toggle-all="1">${showAll?'Hide':'Show'} ${others} other${others===1?'':'s'} reporting during the window</button>. `:''}Only characters running the DPS meter show up — set yours up with <code>/dpstoken</code> in Discord.` : '');
   const line = m && Object.keys(m.dps_series).length ? panel('DPS through the night, top three', 'everquest / Fights', lineChart(m.dps_series), `${hm(m.window.start*1000)} – ${hm(m.window.end*1000)}, 2-minute rate`) : '';
   const heal = m && !m.error ? panel('Healing', 'everquest / Fights', m.healing.length ? bars(m.healing) : '<p class="empty">No healer had the meter running, so there is nothing to show.</p>') : '';
   const loot = r.loot.length ? `<div class="tablewrap"><table><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>When</th></tr></thead><tbody>${r.loot.map(l=>`<tr><td>${itemEl(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${hm(l.ts_ms)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing dropped — or nothing was bid on.</p>';
   return `<div class="read">
     <div class="eyebrow">${isLast?'Last raid':'Raid night'} · ${day(r.date_ms)}</div>
     <h1>${esc(r.name)}</h1>
-    <p class="lede">${hm(r.start_ms)} to ${hm(r.end_ms)}. <b>${r.attendees.length} came</b>, ${r.ticks} ticks at ${r.dkp_per_tick} DKP, <b>${r.loot.length} drops</b> for ${fmt.format(r.loot.reduce((a,l)=>a+(l.cost||0),0))} DKP.${D.me?(meHere?' You were there.':' You weren\'t there.'):''}</p>
+    <p class="lede">${hm(r.start_ms)} to ${hm(r.end_ms)}${r.exact?'':' <span class="mut">(last tick — this raid predates exact end times)</span>'}. <b>${r.attendees.length} came</b>, ${r.ticks} ticks at ${r.dkp_per_tick} DKP, <b>${r.loot.length} drops</b> for ${fmt.format(r.loot.reduce((a,l)=>a+(l.cost||0),0))} DKP.${D.me?(meHere?' You were there.':' You weren\'t there.'):''}</p>
     ${pick}
     ${dps}${line}${heal}
     <h2>What dropped</h2>${loot}
@@ -235,6 +240,6 @@ function itemModal(name){
   m.addEventListener('click',e=>{ if(e.target===m||e.target.closest('.close')) m.remove(); if(e.target.closest('[data-name]')) m.remove(); });
   document.body.appendChild(m);
 }
-document.addEventListener('click',e=>{ const it=e.target.closest('[data-item]'); if(it){ tip.hidden=true; itemModal(it.dataset.item); return; }const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
+document.addEventListener('click',e=>{ if(e.target.closest('[data-toggle-all]')){ showAll=!showAll; render(); return; } const it=e.target.closest('[data-item]'); if(it){ tip.hidden=true; itemModal(it.dataset.item); return; }const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
 window.addEventListener('hashchange',()=>{ if(D) render(); });
 </script>

@@ -84,6 +84,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     tick_no: 0,
                     event_id: event_id.clone(),
                     entries: Vec::new(),
+                    ended_ms: None,
                 },
             );
             g.active_raid = Some(raid_id.clone());
@@ -110,6 +111,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
         Event::RaidEnded { raid_id, .. } => {
             if let Some(r) = g.raids.get_mut(raid_id) {
                 r.active = false;
+                r.ended_ms = Some(env.ts_ms);
             }
             if g.active_raid.as_deref() == Some(raid_id) {
                 g.active_raid = None;
@@ -134,6 +136,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     dkp_per_tick: *dkp_per_tick,
                     active: false,
                     tick_no: entries.len() as u32,
+                    ended_ms: None,
                     event_id: event_id.clone(),
                     entries: entries
                         .iter()

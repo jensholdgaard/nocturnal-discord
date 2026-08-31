@@ -89,6 +89,7 @@ pub mod metric {
     pub const NOCTURNAL_LEDGER_EVENTS: &str = "nocturnal.ledger.events";
     pub const NOCTURNAL_LEDGER_SEQ: &str = "nocturnal.ledger.seq";
     pub const NOCTURNAL_PROVISION_OPERATIONS: &str = "nocturnal.provision.operations";
+    pub const NOCTURNAL_RAID_ACTIVE: &str = "nocturnal.raid.active";
     pub const NOCTURNAL_RAID_ATTENDANCE: &str = "nocturnal.raid.attendance";
     pub const NOCTURNAL_RAIDS_ACTIVE: &str = "nocturnal.raids.active";
     pub const NOCTURNAL_SCHEDULER_DRIFT: &str = "nocturnal.scheduler.drift";

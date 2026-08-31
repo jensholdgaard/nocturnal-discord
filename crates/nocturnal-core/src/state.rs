@@ -48,6 +48,10 @@ pub struct Raid {
     pub tick_no: u32,
     pub event_id: Option<String>,
     pub entries: Vec<AttendanceEntry>,
+    /// When `/endraid` happened (the envelope's timestamp), so a raid's
+    /// window is start-to-end, not first-tick-to-last-tick-plus-a-guess.
+    /// `None` for imported raids and while active.
+    pub ended_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

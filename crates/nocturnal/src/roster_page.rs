@@ -423,7 +423,18 @@ pub fn render_site(
             serde_json::json!({
                 "id": id, "name": r.name, "date_ms": r.date_ms,
                 "start_ms": r.entries.first().map_or(r.date_ms, |e| e.ts_ms),
-                "end_ms": r.entries.last().map_or(r.date_ms, |e| e.ts_ms),
+                // /endraid's timestamp when the ledger has it; the last tick
+                // otherwise (imported raids). `exact` tells the page which.
+                "end_ms": r.ended_ms.unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms)),
+                "exact": r.ended_ms.is_some(),
+                // Characters on the roster of everyone who attended, so the
+                // page can count only this raid's people — a boxed alt or a
+                // non-attendee reporting during the window drops out.
+                "attendee_characters": attendees
+                    .iter()
+                    .filter_map(|id| g.roster.get(id))
+                    .flat_map(|cs| cs.values().map(|c| c.name.to_lowercase()))
+                    .collect::<Vec<_>>(),
                 "ticks": r.entries.iter().filter(|e| e.comment == "Tick" || e.comment == "Start").count(),
                 "dkp_per_tick": r.dkp_per_tick,
                 "attendees": attendees.iter().map(name).collect::<Vec<_>>(),

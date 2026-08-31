@@ -176,6 +176,28 @@ fn sample_gauges(store: &nocturnal_store::Store, ledger: &Ledger, metrics: &Metr
                     .record(last.players.len() as u64, &[]);
             }
         }
+        // The raid info series: 1 for the running raid, 0 for a few minutes
+        // after one ends so the last sample is a clean zero, then stale. One
+        // series per raid night, keyed by id and name — what lets Perses
+        // offer a raid picker and scope any query to a raid's duration.
+        for (rid, raid) in &guild.raids {
+            let value = if raid.active {
+                Some(1u64)
+            } else if raid.ended_ms.is_some_and(|t| now - t < 10 * 60 * 1000) {
+                Some(0)
+            } else {
+                None
+            };
+            if let Some(v) = value {
+                metrics.raid_active.record(
+                    v,
+                    &[
+                        opentelemetry::KeyValue::new(attr::NOCTURNAL_RAID_ID, rid.clone()),
+                        opentelemetry::KeyValue::new(attr::NOCTURNAL_RAID_NAME, raid.name.clone()),
+                    ],
+                );
+            }
+        }
         // One definition of "the raiders", owned by the ledger, shared with
         // /listplayersdkps — so the gauge and the command cannot disagree.
         if let Some(mean) = guild.average_attendance(now) {
