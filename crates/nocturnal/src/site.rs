@@ -44,6 +44,8 @@ pub struct CharacterView {
     pub name: String,
     pub class: String,
     pub level: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aa: Option<u16>,
     pub main: Option<MainRank>,
 }
 
@@ -173,6 +175,7 @@ fn characters_of(g: &GuildState, id: PlayerId) -> Vec<CharacterView> {
                     name: c.name.clone(),
                     class: c.class.clone(),
                     level: c.level,
+                    aa: c.aa,
                     main: c.main,
                 })
                 .collect()

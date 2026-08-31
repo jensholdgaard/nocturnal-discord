@@ -322,10 +322,10 @@ fn characters_chips(data: &SiteData, chars: &[crate::site::CharacterView]) -> Ma
         div class="chips" { @for c in chars {
             @let key = c.name.to_lowercase();
             @let rank = match c.main { Some(nocturnal_core::MainRank::Main) => "M-", Some(nocturnal_core::MainRank::Second) => "M2-", None => "" };
-            span class="chip" {
+            span class="chip" data-tip=[c.aa.map(|aa| format!("{aa} AA"))] {
                 @if data.profiles.contains_key(&key) { a class="namelink" href={ "/char/" (enc(&c.name)) } { (c.name) " (" (rank) (c.level) ")" } }
                 @else { (c.name) " (" (rank) (c.level) ")" }
-                " " span class="mut" { (c.class) }
+                " " span class="mut" { (c.class) @if let Some(aa) = c.aa { " · " (aa) " AA" } }
             }
         } }
     }

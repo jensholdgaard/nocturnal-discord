@@ -171,6 +171,7 @@ mod tests {
                     name: "Controels".into(),
                     class: "Bard".into(),
                     level: 60,
+                    aa: None,
                     main: Some(nocturnal_core::MainRank::Main),
                 }],
             },
