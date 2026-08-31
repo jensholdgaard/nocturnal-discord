@@ -13,7 +13,7 @@ nav .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:6px;p
 nav .brand{font:600 22px/1 "Cormorant Garamond",Georgia,serif;margin-right:14px;white-space:nowrap;color:var(--text);text-decoration:none}
 nav a.tab{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:6px;white-space:nowrap;font-size:15px}
 nav a.tab[aria-current="page"]{background:var(--surface-2);color:var(--text);font-weight:700}
-nav .who{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}
+nav .who{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}nav .who b{color:var(--text)}
 main{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
 .read{max-width:760px}
 h1{font:600 clamp(30px,5vw,44px)/1.05 "Cormorant Garamond",Georgia,serif;margin:0 0 6px;text-wrap:balance}
@@ -222,7 +222,10 @@ async function boot(){
     D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, upcoming: site.upcoming||[], items: site.items||{}, login,
           me: login && site.members[login] ? site.members[login] : null,
           matrix: { classes: v[0].slice(3,18), header: v[H], rows: v.slice(H+1).filter(r=>r&&r[0]), counts: { total: v[1].slice(3,18), mains: v[2].slice(3,18), m2: v[3].slice(3,18), raid_force: v[3][0] } } };
-    document.getElementById('who').textContent = D.me ? 'you are '+D.me.name : (login ? 'signed in as '+login : 'not signed in');
+    const who=document.getElementById('who');
+    who.innerHTML = (D.me ? 'signed in as <b>'+esc(D.me.name)+'</b>' : (login ? 'signed in as <b>'+esc(login)+'</b>' : 'not signed in'))
+      + (login ? ' · <button class="namelink" id="signout">sign out</button>' : '');
+    const so=document.getElementById('signout'); if(so) so.addEventListener('click', async ()=>{ try{ await fetch('/perses/api/auth/logout',{credentials:'include'}); }catch(e){} location.reload(); });
     render();
   }catch(e){ main.innerHTML='<div class="read"><h1>Could not load</h1><p class="lede">'+esc(String(e))+'</p></div>'; }
 }
