@@ -188,9 +188,26 @@ fn panel(
     height: u32,
     island: bool,
 ) -> Markup {
+    // Each panel plugin validates its spec; an empty one is not "defaults".
+    let spec = match kind {
+        "BarChart" => serde_json::json!({
+            "calculation": "last-number",
+            "format": { "unit": "decimal", "shortValues": true },
+            "sort": "desc",
+            "mode": "value"
+        }),
+        "StatChart" => serde_json::json!({
+            "calculation": "last-number",
+            "format": { "unit": "decimal", "shortValues": true }
+        }),
+        _ => serde_json::json!({
+            "legend": { "position": "right", "mode": "list" },
+            "visual": { "lineWidth": 1.5, "areaOpacity": 0.05 }
+        }),
+    };
     let desc = serde_json::json!({
         "kind": kind, "title": title, "query": query, "seriesNameFormat": series_name,
-        "start": start_ms, "end": end_ms, "height": height,
+        "start": start_ms, "end": end_ms, "height": height, "spec": spec,
     })
     .to_string();
     html! {
