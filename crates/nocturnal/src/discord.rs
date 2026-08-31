@@ -569,7 +569,31 @@ async fn on_event(
                 { attr::NOCTURNAL_DISCORD_USER_ID } = modal.user.id.get(),
                 "modal submitted"
             );
-            if let Err(e) = crate::auctions::handle_modal(ctx, modal, data).await {
+            if modal.data.custom_id == crate::provision::TOKEN_MODAL_ID {
+                // Submitting the token modal: acknowledge with the rest of
+                // the setup — everything but the secret.
+                let steps = data
+                    .provisioning
+                    .as_ref()
+                    .map(|p| crate::provision::setup_steps(&p.dashboard_url))
+                    .unwrap_or_else(|| "You're set.".to_owned());
+                if let Err(e) = modal
+                    .create_response(
+                        ctx,
+                        serenity::CreateInteractionResponse::Message(
+                            serenity::CreateInteractionResponseMessage::new()
+                                .content(steps)
+                                .ephemeral(true),
+                        ),
+                    )
+                    .await
+                {
+                    tracing::warn!(
+                        { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                        "token modal ack failed"
+                    );
+                }
+            } else if let Err(e) = crate::auctions::handle_modal(ctx, modal, data).await {
                 tracing::warn!(
                     { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
                     "bid modal handler failed"

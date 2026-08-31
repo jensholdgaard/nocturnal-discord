@@ -164,11 +164,65 @@ fn record(operation: &'static str, outcome: &'static str) {
 }
 
 /// The DM the member receives, byte-for-byte the legacy template.
+/// The modal that hands the token over: three pre-filled inputs the member
+/// copies straight into the game. Same trick as the bid modal, inverted —
+/// it carries text out instead of in. Nothing lands in any message history;
+/// closing the modal is the end of the secret's visible life.
+pub fn token_modal(token: &str) -> serenity::CreateModal {
+    let line = |label: &str, id: &str, value: String| {
+        serenity::CreateActionRow::InputText(
+            serenity::CreateInputText::new(serenity::InputTextStyle::Short, label, id)
+                .value(value)
+                .required(false),
+        )
+    };
+    serenity::CreateModal::new(TOKEN_MODAL_ID, "Copy these 3 lines, then Submit").components(vec![
+        line(
+            "1) in game: endpoint",
+            "l1",
+            "/otlp endpoint https://dps.nocturnal-guild.de/otlp".to_owned(),
+        ),
+        line(
+            "2) in game: your token (keep it private!)",
+            "l2",
+            format!("/otlp token {token}"),
+        ),
+        line("3) in game: turn it on", "l3", "/otlp on".to_owned()),
+    ])
+}
+
+/// Custom id the token modal's submit comes back under.
+pub const TOKEN_MODAL_ID: &str = "dpstoken:copy";
+
+/// The rest of the setup, shown after the modal closes — everything **but**
+/// the secret, so this reply is safe to sit in the (ephemeral) history.
+pub fn setup_steps(dashboard: &str) -> String {
+    format!(
+        "**Got your three lines? Here's the rest.**\n\n\
+         **1.** Latest Zeal: \
+         https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview — drop `Zeal.asi` \
+         into your EverQuest folder, replacing the one there (keep a copy of the old one; you \
+         still need your normal Zeal install).\n\
+         **2.** Start EverQuest and paste the three lines from the popup, one at a time, in \
+         order.\n\
+         **3.** `/otlp status` should show `token: set (ends ...)` and `last HTTP status: 200` \
+         with the payload count going up. A `401` means the server refused the token — tell an \
+         officer, that is not you doing it wrong.\n\n\
+         The token is stored encrypted and tied to your Windows account; it is never shown \
+         again. **Don't paste the `/otlp token` line in a public channel**, and note chat is \
+         written to your `eqlog` file when logging is on.\n\
+         Dashboard: {dashboard} (log in with Discord — access is already set up).\n\
+         Lost the token? Ask an officer to `/dpsrevoke` you, then run `/dpstoken` again.\n\
+         Bonus: `/magelo` in game puts your gear on the guild site."
+    )
+}
+
 /// The DM a member gets with their token.
 ///
 /// Setup used to be a PowerShell one-liner that installed a local collector, because the collector
 /// was the only thing that could attach the bearer token. Zeal does that itself now, so this is
 /// three lines typed in game and nothing left running in the background.
+#[allow(dead_code)]
 fn dm_body(token: &str, dashboard: &str) -> String {
     format!(
         "Your personal DPS meter token — **keep it private, it is yours alone**:\n\
@@ -294,7 +348,8 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     };
     let ledger_guild = crate::discord::require_guild(&ctx)?;
-    ack_ephemeral(&ctx).await?;
+    // No defer: Discord only accepts a modal as the interaction's *first*
+    // response, and everything we do before it is milliseconds.
 
     let user = ctx.author().name.clone();
     if !valid_username(&user) {
@@ -348,13 +403,15 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
                 },
             )
             .await;
-        rematerialize(&ctx.data().driver, &p, ledger_guild).await;
         record("refresh", "accepted");
         ctx.say(format!(
             "You already have a token — refreshed your dashboard access to `{role}`. \
              Lost the token? Ask an officer to `/dpsrevoke` you first."
         ))
         .await?;
+        // After the reply: rematerializing can take seconds and the 3s
+        // interaction deadline no longer protects us.
+        rematerialize(&ctx.data().driver, &p, ledger_guild).await;
         return Ok(());
     }
 
@@ -395,31 +452,36 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
             return Ok(());
         }
     }
-    rematerialize(&ctx.data().driver, &p, ledger_guild).await;
     record("issue", "accepted");
 
-    let dm = ctx
-        .author()
-        .direct_message(
-            ctx.serenity_context(),
-            serenity::CreateMessage::new().content(dm_body(&token, &p.dashboard_url)),
-        )
-        .await;
-    match dm {
-        Ok(_) => {
-            ctx.say("Sent — check your DMs. 📨").await?;
-        }
-        // DMs closed: the legacy fallback puts the token in a spoiler, in a
-        // reply only the caller can see.
-        Err(_) => {
-            ctx.say(format!(
-                "Couldn't DM you (privacy settings). Only you can see this:\n||{token}||\n\
-                 Setup guide: {} → see #announcements or the repo README.",
-                p.dashboard_url
-            ))
-            .await?;
-        }
+    // Hand the token over in a modal: the member copies the pre-filled lines
+    // in place, and the secret never enters any message history — not DMs,
+    // not ephemerals. Submit comes back as `TOKEN_MODAL_ID` and gets the
+    // token-free setup steps.
+    let shown = match &ctx {
+        poise::Context::Application(app) => app
+            .interaction
+            .create_response(
+                ctx.serenity_context(),
+                serenity::CreateInteractionResponse::Modal(token_modal(&token)),
+            )
+            .await
+            .is_ok(),
+        poise::Context::Prefix(_) => false,
+    };
+    if !shown {
+        // Fallback when a modal can't be raised: the legacy ephemeral
+        // spoiler, only the caller can see it.
+        ctx.say(format!(
+            "Couldn't open the popup — only you can see this:\n||/otlp token {token}||\n\n{}",
+            setup_steps(&p.dashboard_url)
+        ))
+        .await?;
     }
+    // The site rebuild can take seconds; nothing about it is on the
+    // interaction's critical path any more.
+    let (driver, p2) = (ctx.data().driver.clone(), p.clone());
+    tokio::spawn(async move { rematerialize(&driver, &p2, ledger_guild).await });
     Ok(())
 }
 
