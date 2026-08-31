@@ -218,13 +218,16 @@ pub fn roster_update(
 /// debug line: the site keeps whatever it rendered last time.
 pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Profile> {
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(45))
         .build()
     {
         Ok(c) => c,
         Err(_) => return HashMap::new(),
     };
-    let query = r#"event_name == "everquest.character.profile" | range(-30d, now) | limit 2000"#;
+    // Seven days, not thirty: every extra day is more S3 row groups the
+    // querier reads cold, and a profile older than a week is refreshed the
+    // moment its owner zones anyway. The 45s timeout rides out a flush.
+    let query = r#"event_name == "everquest.character.profile" | range(-7d, now) | limit 2000"#;
     let resp = client
         .post(query_url)
         .header("content-type", "application/json")
