@@ -296,21 +296,29 @@ pub fn raid(data: &SiteData, id: Option<&str>, island: bool) -> String {
         }
         div class="read" {
             p class="mut" style="font-size:13px" { "Only characters running the DPS meter show up — set yours up with " code { "/dpstoken" } " in Discord." }
-            h2 { "What dropped" }
-            @if r.loot.is_empty() { p class="empty" { "Nothing dropped — or nothing was bid on." } } @else {
-                div class="tablewrap" { table {
-                    thead { tr { th { "Item" } th { "Went to" } th class="num" { "DKP" } th { "When" } } }
-                    tbody { @for l in &r.loot { tr { td { (item_link(data, &l.item)) } td { (name_link(&l.winner)) } td class="num brassx" { (l.cost) } td class="mut" { (hm(l.ts_ms)) } } } }
-                } }
-            }
-            @if is_last {
-                h2 { "Next raid" }
-                @if data.upcoming.is_empty() { p class="empty" { "Nothing scheduled in RaidHelper for the next two weeks." } } @else {
-                    div class="next" { @for e in &data.upcoming { div class="ev" { span { b { (e.title) } small { (day(e.start_ms)) " · " (hm(e.start_ms)) } } span class="mut" { (e.signups) " signed up" } } } }
+        }
+        div class="columns" {
+            div class="col" {
+                h2 { "What dropped" }
+                @if r.loot.is_empty() { p class="empty" { "Nothing dropped — or nothing was bid on." } } @else {
+                    div class="tablewrap" { table {
+                        thead { tr { th { "Item" } th { "Went to" } th class="num" { "DKP" } th { "When" } } }
+                        tbody { @for l in &r.loot { tr { td { (item_link(data, &l.item)) } td { (name_link(&l.winner)) } td class="num brassx" { (l.cost) } td class="mut" { (hm(l.ts_ms)) } } } }
+                    } }
                 }
             }
-            h2 { "Who came" }
-            div class="chips" { @for a in &r.attendees { span class="chip" { (name_link(a)) } } }
+            div class="col" {
+                @if is_last {
+                    h2 { "Next raid" }
+                    @if data.upcoming.is_empty() { p class="empty" { "Nothing scheduled in RaidHelper for the next two weeks." } } @else {
+                        div class="next" { @for e in &data.upcoming { div class="ev" { span { b { (e.title) } small { (day(e.start_ms)) " · " (hm(e.start_ms)) } } span class="mut" { (e.signups) " signed up" } } } }
+                    }
+                }
+                h2 { "Who came" }
+                div class="chips" { @for a in &r.attendees { span class="chip" { (name_link(a)) } } }
+            }
+        }
+        div class="read" {
             (discord_box("Want to bid, or start a raid?"))
         }
     };
@@ -352,18 +360,21 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
                     div { b { (format!("{:.2}", m.attendance)) "%" } span { "attendance, 90 days" } }
                     div { b { (m.raids_attended) span style="font-size:16px;font-weight:400;color:var(--muted)" { " / " (data.raids.len()) } } span { "of the last " (data.raids.len()) " raids" } }
                 }
+    }
+        div class="columns" {
+            div class="col" {
                 h2 { "Characters" }
                 @if m.characters.is_empty() { p class="empty" { "Nothing on the roster yet — " code { "/roster add" } " in Discord, or run the meter and zone." } }
                 @else { (characters_chips(data, &m.characters)) }
                 @if m.characters.iter().any(|c| data.profiles.contains_key(&c.name.to_lowercase())) { p class="mut" style="font-size:13px" { "Underlined characters have a gear profile from the meter — click one." } }
                 @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/otlp profile" } " in game sends one, and every zone-in after that keeps it current." } }
-    }
+            }
+            div class="col" {
             div class="panels" {
                             (panel("Your damage, last 7 days", "TimeSeriesChart",
                     &format!("sum by (everquest_combat_source) (rate(everquest_combat_damage_total{{everquest_combat_direction=\"outgoing\",everquest_reporter=\"{}\"}}[5m]))", login.replace('"', "")),
                     "{{everquest_combat_source}}", now - 7 * 86_400_000, now, 300, island))
             }
-            div class="read" {
                 h2 { "Recent ledger" }
                 @if m.history.is_empty() { p class="empty" { "Nothing yet." } } @else {
                     ul class="hist" { @for h in &m.history {
@@ -379,8 +390,11 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
                         }
                     } }
                 }
-                (discord_box("Need a meter token, or want to register a character?"))
             }
+        }
+        div class="read" {
+            (discord_box("Need a meter token, or want to register a character?"))
+        }
         };
     layout(&m.name, "me", body, island)
 }

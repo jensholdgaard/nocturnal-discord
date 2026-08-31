@@ -17,6 +17,8 @@ main.wide .tablewrap{max-height:calc(100vh - 260px);overflow-y:auto}
 .read{margin:0 auto}
 .panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px;max-width:1500px;margin:14px auto}
 .wide-block{max-width:1280px;margin:0 auto}
+.columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:8px 40px;max-width:1500px;margin:0 auto;align-items:start}
+.columns .col{min-width:0}
 .read{max-width:760px}
 h1{font:600 clamp(30px,5vw,44px)/1.05 "Cormorant Garamond",Georgia,serif;margin:0 0 6px;text-wrap:balance}
 h2{font:600 24px/1.15 "Cormorant Garamond",Georgia,serif;margin:30px 0 10px}
