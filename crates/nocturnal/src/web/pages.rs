@@ -72,9 +72,9 @@ fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: boo
     doc.into_string()
 }
 
-/// The common case: a reading-width page.
+/// Every page is wide now; prose constrains itself with .read.
 fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
-    layout_full(title, current, body, island, false)
+    layout_full(title, current, body, island, true)
 }
 
 // --- small helpers -------------------------------------------------------------------------
@@ -285,12 +285,16 @@ pub fn raid(data: &SiteData, id: Option<&str>, island: bool) -> String {
                     a href={ "/raid/" (enc(&x.id)) } { button type="button" aria-pressed=(x.id == r.id) { (x.name) span class="mut" { " · " (day(x.date_ms).split(' ').skip(1).take(2).collect::<Vec<_>>().join(" ")) } } }
                 }
             }
+        }
+        div class="panels" {
             (panel("Damage, by character", "BarChart",
                 &format!("sort_desc(sum by (everquest_combat_source) (increase(everquest_combat_damage_total{{everquest_combat_direction=\"outgoing\",everquest_combat_source_type=\"player\"}}[{}s])))", ((end - r.start_ms) / 1000).max(60)),
                 "{{everquest_combat_source}}", r.start_ms, end, 320, island))
             (panel("DPS through the night", "TimeSeriesChart",
                 "sum by (everquest_combat_source) (rate(everquest_combat_damage_total{everquest_combat_direction=\"outgoing\",everquest_combat_source_type=\"player\"}[2m]))",
-                "{{everquest_combat_source}}", r.start_ms, end, 280, island))
+                "{{everquest_combat_source}}", r.start_ms, end, 320, island))
+        }
+        div class="read" {
             p class="mut" style="font-size:13px" { "Only characters running the DPS meter show up — set yours up with " code { "/dpstoken" } " in Discord." }
             h2 { "What dropped" }
             @if r.loot.is_empty() { p class="empty" { "Nothing dropped — or nothing was bid on." } } @else {
@@ -340,40 +344,44 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
     };
     let now = data.generated_ms;
     let body = html! {
-        div class="read" {
-            div class="eyebrow" { "You" }
-            h1 { (m.name) @if m.discord != m.name { " " span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (m.discord) " on Discord" } } }
-            div class="nums" {
-                div class="brass" { b { (fmt(m.dkp)) } span { "DKP" } }
-                div { b { (format!("{:.2}", m.attendance)) "%" } span { "attendance, 90 days" } }
-                div { b { (m.raids_attended) span style="font-size:16px;font-weight:400;color:var(--muted)" { " / " (data.raids.len()) } } span { "of the last " (data.raids.len()) " raids" } }
+            div class="read" {
+                div class="eyebrow" { "You" }
+                h1 { (m.name) @if m.discord != m.name { " " span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (m.discord) " on Discord" } } }
+                div class="nums" {
+                    div class="brass" { b { (fmt(m.dkp)) } span { "DKP" } }
+                    div { b { (format!("{:.2}", m.attendance)) "%" } span { "attendance, 90 days" } }
+                    div { b { (m.raids_attended) span style="font-size:16px;font-weight:400;color:var(--muted)" { " / " (data.raids.len()) } } span { "of the last " (data.raids.len()) " raids" } }
+                }
+                h2 { "Characters" }
+                @if m.characters.is_empty() { p class="empty" { "Nothing on the roster yet — " code { "/roster add" } " in Discord, or run the meter and zone." } }
+                @else { (characters_chips(data, &m.characters)) }
+                @if m.characters.iter().any(|c| data.profiles.contains_key(&c.name.to_lowercase())) { p class="mut" style="font-size:13px" { "Underlined characters have a gear profile from the meter — click one." } }
+                @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/otlp profile" } " in game sends one, and every zone-in after that keeps it current." } }
+    }
+            div class="panels" {
+                            (panel("Your damage, last 7 days", "TimeSeriesChart",
+                    &format!("sum by (everquest_combat_source) (rate(everquest_combat_damage_total{{everquest_combat_direction=\"outgoing\",everquest_reporter=\"{}\"}}[5m]))", login.replace('"', "")),
+                    "{{everquest_combat_source}}", now - 7 * 86_400_000, now, 300, island))
             }
-            h2 { "Characters" }
-            @if m.characters.is_empty() { p class="empty" { "Nothing on the roster yet — " code { "/roster add" } " in Discord, or run the meter and zone." } }
-            @else { (characters_chips(data, &m.characters)) }
-            @if m.characters.iter().any(|c| data.profiles.contains_key(&c.name.to_lowercase())) { p class="mut" style="font-size:13px" { "Underlined characters have a gear profile from the meter — click one." } }
-            @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/otlp profile" } " in game sends one, and every zone-in after that keeps it current." } }
-            (panel("Your damage, last 7 days", "TimeSeriesChart",
-                &format!("sum by (everquest_combat_source) (rate(everquest_combat_damage_total{{everquest_combat_direction=\"outgoing\",everquest_reporter=\"{}\"}}[5m]))", login.replace('"', "")),
-                "{{everquest_combat_source}}", now - 7 * 86_400_000, now, 240, island))
-            h2 { "Recent ledger" }
-            @if m.history.is_empty() { p class="empty" { "Nothing yet." } } @else {
-                ul class="hist" { @for h in &m.history {
-                    @let dkp = h["dkp"].as_i64().unwrap_or(0);
-                    li {
-                        span class={ "d " (if dkp < 0 { "neg" } else { "pos" }) } { (if dkp > 0 { "+" } else { "" }) (dkp) }
-                        span {
-                            @if h["kind"] == "raid" { (h["raid"].as_str().unwrap_or("Raid")) " " span class="mut" { "· " (h["ticks"].as_i64().unwrap_or(0)) " ticks" } }
-                            @else if h["kind"] == "loot" { (item_link(data, h["item"].as_str().unwrap_or(""))) }
-                            @else { (h["comment"].as_str().unwrap_or("")) }
-                            small { @if h["kind"] != "raid" { @if let Some(rn) = h["raid"].as_str() { (rn) " · " } } (ago(now, h["ts_ms"].as_i64().unwrap_or(0))) }
+            div class="read" {
+                h2 { "Recent ledger" }
+                @if m.history.is_empty() { p class="empty" { "Nothing yet." } } @else {
+                    ul class="hist" { @for h in &m.history {
+                        @let dkp = h["dkp"].as_i64().unwrap_or(0);
+                        li {
+                            span class={ "d " (if dkp < 0 { "neg" } else { "pos" }) } { (if dkp > 0 { "+" } else { "" }) (dkp) }
+                            span {
+                                @if h["kind"] == "raid" { (h["raid"].as_str().unwrap_or("Raid")) " " span class="mut" { "· " (h["ticks"].as_i64().unwrap_or(0)) " ticks" } }
+                                @else if h["kind"] == "loot" { (item_link(data, h["item"].as_str().unwrap_or(""))) }
+                                @else { (h["comment"].as_str().unwrap_or("")) }
+                                small { @if h["kind"] != "raid" { @if let Some(rn) = h["raid"].as_str() { (rn) " · " } } (ago(now, h["ts_ms"].as_i64().unwrap_or(0))) }
+                            }
                         }
-                    }
-                } }
+                    } }
+                }
+                (discord_box("Need a meter token, or want to register a character?"))
             }
-            (discord_box("Need a meter token, or want to register a character?"))
-        }
-    };
+        };
     layout(&m.name, "me", body, island)
 }
 
@@ -515,6 +523,8 @@ pub fn character(data: &SiteData, name: &str) -> String {
                 div { b { (p.aa.get("unspent").copied().unwrap_or(0)) } span { "AA unspent" } }
             }
             div class="stats" { @for k in ["str", "sta", "agi", "dex", "wis", "int", "cha"] { @if let Some(v) = p.base_stats.get(k) { div { b { (v) } span { "base " (k) } } } } }
+        }
+        div class="wide-block" {
             h2 { "Gear" }
             div class="gear" { @for s in &slots {
                 @match s.id.and_then(gear_of) {
@@ -522,6 +532,8 @@ pub fn character(data: &SiteData, name: &str) -> String {
                     None => @if let Some(n) = &s.name { div class="g" { div class="s" { (s.slot) } div class="n" { (n) } } } @else { div class="g empty" { div class="s" { (s.slot) } div class="n mut" { "—" } } },
                 }
             } }
+        }
+        div class="read" {
             p class="mut" style="font-size:13px" { "Item numbers are the item's own; totals are gear only, not the character's computed stats — those come later." }
             (discord_box("Want this updated? Zone, or type /otlp profile in game."))
         }

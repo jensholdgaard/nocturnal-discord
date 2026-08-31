@@ -5,14 +5,18 @@
 body{margin:0;background:var(--ground);color:var(--text);font:16px/1.55 "Atkinson Hyperlegible",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:var(--accent)} a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 nav{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
-nav .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:8px 16px;overflow-x:auto}
+nav .in{max-width:1520px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:8px 16px;overflow-x:auto}
 nav .brand{font:600 22px/1 "Cormorant Garamond",Georgia,serif;margin-right:14px;white-space:nowrap;color:var(--text);text-decoration:none}
 nav a.tab{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:6px;white-space:nowrap;font-size:15px}
 nav a.tab[aria-current="page"]{background:var(--surface-2);color:var(--text);font-weight:700}
 nav .who{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}nav .who b{color:var(--text)}
-main{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
-main.wide{max-width:none;padding:20px 24px 60px}
+main{max-width:1520px;margin:0 auto;padding:20px 24px 60px}
+main.wide{max-width:none}
 main.wide .tablewrap{max-height:calc(100vh - 260px);overflow-y:auto}
+/* Prose stays at reading width, centered; wide things escape it. */
+.read{margin:0 auto}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px;max-width:1500px;margin:14px auto}
+.wide-block{max-width:1280px;margin:0 auto}
 .read{max-width:760px}
 h1{font:600 clamp(30px,5vw,44px)/1.05 "Cormorant Garamond",Georgia,serif;margin:0 0 6px;text-wrap:balance}
 h2{font:600 24px/1.15 "Cormorant Garamond",Georgia,serif;margin:30px 0 10px}
