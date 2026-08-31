@@ -127,7 +127,11 @@ groups:
       duration with `and on() (nocturnal_raid_active{...} == 1)`. Bounded
       cardinality — one series per raid, never per player.
     instrument: gauge
-    unit: "1"
+    # "{raid}", not "1": Prometheus' OTLP translation appends `_ratio` to a
+    # unit-"1" gauge, and the first raid night's series landed under
+    # nocturnal_raid_active_ratio while every dashboard queried the bare
+    # name. Annotation units add no suffix.
+    unit: "{raid}"
     attributes:
       - ref: nocturnal.raid.id
       - ref: nocturnal.raid.name

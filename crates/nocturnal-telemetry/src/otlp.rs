@@ -426,7 +426,7 @@ impl Metrics {
                 .build(),
             raid_active: meter
                 .u64_gauge(metric::NOCTURNAL_RAID_ACTIVE)
-                .with_unit("1")
+                .with_unit("{raid}")
                 .build(),
             guild_attendance_average: meter
                 .f64_gauge(metric::NOCTURNAL_GUILD_ATTENDANCE_AVERAGE)
