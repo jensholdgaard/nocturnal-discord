@@ -36,6 +36,9 @@ use crate::driver::DriverHandle;
 #[derive(Debug, Clone)]
 pub struct MemberInfo {
     pub display_name: String,
+    /// The Discord username — what Perses' login reports as the viewer, so
+    /// the site can find "me" in site.json.
+    pub username: String,
     /// "Guild Leader" / "Officer" / "Member" / "" (not in the guild).
     pub guild_role: String,
     pub in_guild: bool,
@@ -333,6 +336,109 @@ pub fn render(
     })
 }
 
+/// The site's data: the last raids with who came and what dropped (with what
+/// it cost — the guild keeps its loot history), and each member's own standing
+/// keyed by Discord username so the page shows the viewer theirs. Behind the
+/// login. What is deliberately absent is any per-item price aggregate: that
+/// is a bidding guide, and the guild does not want one.
+pub fn render_site(
+    g: &GuildState,
+    members: &HashMap<u64, MemberInfo>,
+    now_ms: i64,
+) -> serde_json::Value {
+    let name = |id: &PlayerId| {
+        members
+            .get(id)
+            .map(|m| m.display_name.clone())
+            .unwrap_or_else(|| "unknown".to_owned())
+    };
+    let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> = g.raids.iter().collect();
+    raids.sort_by_key(|(_, r)| std::cmp::Reverse(r.date_ms));
+    let raids: Vec<serde_json::Value> = raids
+        .iter()
+        .take(8)
+        .map(|(id, r)| {
+            let mut loot: Vec<(i64, String, String, i64)> = Vec::new();
+            for (pid, p) in &g.players {
+                for e in &p.log {
+                    if e.dkp < 0 && e.raid.as_ref().map(|x| &x.raid_id) == Some(*id) {
+                        let item = e
+                            .item
+                            .as_ref()
+                            .map(|i| i.name.clone())
+                            .unwrap_or_else(|| e.comment.clone());
+                        loot.push((e.ts_ms, item, name(pid), -e.dkp));
+                    }
+                }
+            }
+            loot.sort();
+            let attendees: std::collections::BTreeSet<PlayerId> =
+                r.entries.iter().flat_map(|e| e.players.iter().copied()).collect();
+            serde_json::json!({
+                "id": id, "name": r.name, "date_ms": r.date_ms,
+                "start_ms": r.entries.first().map_or(r.date_ms, |e| e.ts_ms),
+                "end_ms": r.entries.last().map_or(r.date_ms, |e| e.ts_ms),
+                "ticks": r.entries.iter().filter(|e| e.comment == "Tick" || e.comment == "Start").count(),
+                "dkp_per_tick": r.dkp_per_tick,
+                "attendees": attendees.iter().map(name).collect::<Vec<_>>(),
+                "loot": loot.into_iter().map(|(ts, item, winner, cost)| serde_json::json!({"ts_ms": ts, "item": item, "winner": winner, "cost": cost})).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let recent: Vec<String> = raids
+        .iter()
+        .filter_map(|r| r["id"].as_str().map(String::from))
+        .collect();
+    let mut me = serde_json::Map::new();
+    for (id, p) in g.raiding_players(now_ms) {
+        let Some(m) = members.get(&id) else { continue };
+        let attended = recent
+            .iter()
+            .filter(|rid| {
+                g.raids
+                    .get(*rid)
+                    .is_some_and(|r| r.entries.iter().any(|e| e.players.contains(&id)))
+            })
+            .count();
+        let history: Vec<serde_json::Value> = p
+            .log
+            .iter()
+            .rev()
+            .take(12)
+            .map(|e| {
+                serde_json::json!({
+                    "dkp": e.dkp, "comment": e.comment, "ts_ms": e.ts_ms,
+                    "raid": e.raid.as_ref().map(|r| r.name.clone()),
+                    "item": e.item.as_ref().map(|i| i.name.clone()),
+                })
+            })
+            .collect();
+        let chars: Vec<serde_json::Value> = g
+            .roster
+            .get(&id)
+            .map(|cs| {
+                cs.values()
+                    .map(|c| serde_json::json!({"name": c.name, "class": c.class, "level": c.level, "main": c.main}))
+                    .collect()
+            })
+            .unwrap_or_default();
+        me.insert(
+            m.username.clone(),
+            serde_json::json!({
+                "name": m.display_name, "dkp": p.balance, "attendance": g.attendance_pct(id, now_ms),
+                "raids_attended": attended, "last_active_ms": p.log.last().map_or(0, |e| e.ts_ms),
+                "history": history, "characters": chars,
+            }),
+        );
+    }
+    serde_json::json!({
+        "generatedAt": now_ms,
+        "avgAttendance": g.average_attendance(now_ms),
+        "raids": raids,
+        "members": me,
+    })
+}
+
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write as _;
     use std::os::unix::fs::PermissionsExt as _;
@@ -387,13 +493,15 @@ async fn resolve_members(
                 };
                 MemberInfo {
                     display_name: m.display_name().to_string(),
+                    username: m.user.name.clone(),
                     guild_role: guild_role.to_owned(),
                     in_guild: true,
                 }
             }
             Err(_) => match serenity::UserId::new(id).to_user(http).await {
                 Ok(u) => MemberInfo {
-                    display_name: u.global_name.unwrap_or(u.name),
+                    display_name: u.global_name.clone().unwrap_or_else(|| u.name.clone()),
+                    username: u.name,
                     guild_role: String::new(),
                     in_guild: false,
                 },
@@ -435,16 +543,23 @@ pub async fn rematerialize(
     )
     .await;
     let members = members_cache.lock().map(|m| m.clone()).unwrap_or_default();
-    let json = driver
+    let both = driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
-                .map(|g| render(g, &members, now))
+                .map(|g| (render(g, &members, now), render_site(g, &members, now)))
         })
         .await;
-    let Some(json) = json else {
+    let Some((json, site)) = both else {
         return;
     };
+    let site_path = out.with_file_name("site.json");
+    if let Err(e) = serde_json::to_vec(&site)
+        .map_err(std::io::Error::other)
+        .and_then(|b| write_atomic(&site_path, &b))
+    {
+        tracing::warn!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "site.json not written");
+    }
     match serde_json::to_vec(&json)
         .map_err(std::io::Error::other)
         .and_then(|b| write_atomic(out, &b))
@@ -517,6 +632,7 @@ mod tests {
             7,
             MemberInfo {
                 display_name: "Asberdies".into(),
+                username: "asberdies".into(),
                 guild_role: "Officer".into(),
                 in_guild: true,
             },
