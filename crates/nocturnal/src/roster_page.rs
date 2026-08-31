@@ -628,17 +628,28 @@ pub async fn rematerialize(
         })
         .await;
     let upcoming: Vec<serde_json::Value> = match api_key {
-        Some(key) => match crate::raidhelper::upcoming_events(&key, discord_guild, now, 14 * 86_400_000).await {
-            Ok(evs) => evs
-                .iter()
-                .take(5)
-                .map(|e| serde_json::json!({"title": e.title, "start_ms": e.start_time * 1000, "signups": crate::raidhelper::attending(e), "id": e.id}))
-                .collect(),
-            Err(e) => {
-                tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "raid-helper upcoming unavailable");
-                Vec::new()
+        Some(key) => {
+            match crate::raidhelper::upcoming_events(&key, discord_guild, now, 14 * 86_400_000)
+                .await
+            {
+                Ok(evs) => {
+                    // The listing carries no sign-ups; the per-event endpoint does.
+                    let mut out = Vec::new();
+                    for e in evs.iter().take(5) {
+                        let signups = match crate::raidhelper::fetch_event(&e.id).await {
+                            Ok(full) => crate::raidhelper::attending(&full),
+                            Err(_) => crate::raidhelper::attending(e),
+                        };
+                        out.push(serde_json::json!({"title": e.title, "start_ms": e.start_time * 1000, "signups": signups, "id": e.id}));
+                    }
+                    out
+                }
+                Err(e) => {
+                    tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "raid-helper upcoming unavailable");
+                    Vec::new()
+                }
             }
-        },
+        }
         None => Vec::new(),
     };
     let both = driver
