@@ -762,6 +762,78 @@ mod tests {
 
     /// The page reads the layout by fixed indices, so every row must be
     /// exactly COLS wide and the header must sit at row 4.
+    /// A person on the site is their roster main; the Discord name rides
+    /// along but is not the key. A player with no roster entry falls back
+    /// to the Discord name, so nobody becomes "unknown" for lack of a main.
+    #[test]
+    fn people_are_named_by_roster_main_not_discord() {
+        use nocturnal_core::{Actor, Command, Ctx, Ledger};
+        let mut l = Ledger::new();
+        let now = 1_787_853_613_551;
+        let ctx = Ctx {
+            guild: 1,
+            actor: Actor::User(7),
+            now_ms: now,
+        };
+        for (name, main) in [("Eklavdra", None), ("Shaku", Some(MainRank::Main))] {
+            let c = RosterCharacter {
+                name: name.into(),
+                class: "Shaman".into(),
+                level: 60,
+                aa: None,
+                profile_url: None,
+                access: vec![],
+                main,
+            };
+            let envs = l
+                .propose(
+                    &ctx,
+                    &Command::SetRosterCharacter {
+                        player: 7,
+                        character: c,
+                        replace: false,
+                    },
+                )
+                .unwrap();
+            l.commit(&envs);
+        }
+        let mut members = HashMap::new();
+        members.insert(
+            7,
+            MemberInfo {
+                display_name: "Asberdies / Shaku".into(),
+                username: "asberdies".into(),
+                guild_role: "Member".into(),
+                in_guild: true,
+            },
+        );
+        members.insert(
+            8,
+            MemberInfo {
+                display_name: "Nomain".into(),
+                username: "nomain".into(),
+                guild_role: "Member".into(),
+                in_guild: true,
+            },
+        );
+        let site = render_site(l.state().guild(1).unwrap(), &members, now, &[]);
+        assert_eq!(
+            site["people"]["Shaku"]["discord"], "Asberdies / Shaku",
+            "main wins over the other character"
+        );
+        assert!(
+            site["people"].get("Asberdies / Shaku").is_none(),
+            "the Discord name is not a key"
+        );
+        assert_eq!(
+            site["people"]["Shaku"]["characters"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
     #[test]
     fn the_payload_has_the_shape_the_page_expects() {
         use nocturnal_core::{Actor, Command, Ctx, Ledger};
