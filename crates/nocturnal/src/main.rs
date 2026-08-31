@@ -14,6 +14,8 @@ mod items;
 mod lock;
 mod provision;
 mod raidhelper;
+mod roster;
+mod roster_page;
 mod scheduler;
 
 use anyhow::Context as _;
@@ -27,6 +29,7 @@ fn main() -> anyhow::Result<()> {
     let mut mode_print = false;
     let mut offline = false;
     let mut import_provisioning = false;
+    let mut import_roster: Option<String> = None;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -35,6 +38,7 @@ fn main() -> anyhow::Result<()> {
             "--print-config" => mode_print = true,
             "--offline" => offline = true,
             "--import-provisioning" => import_provisioning = true,
+            "--import-roster" => import_roster = it.next().cloned(),
             "--bell-test" => {
                 // Diagnostic: connect, join a voice channel, play the bell,
                 // report, exit. No ledger, no lock — just the voice path.
@@ -46,7 +50,7 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             other => anyhow::bail!(
-                "unknown argument {other:?} (known: --config <path>, --check, --print-config, --offline, --import-provisioning, --version)"
+                "unknown argument {other:?} (known: --config <path>, --check, --print-config, --offline, --import-provisioning, --import-roster <payload.json>, --version)"
             ),
         }
     }
@@ -156,6 +160,48 @@ fn main() -> anyhow::Result<()> {
                      refusing to call this migration verified"
                 )
             }
+        });
+    }
+
+    // One-time M9 migration: the roster bot's Google Sheet (as the page
+    // payload its Apps Script served) becomes roster.character.* events.
+    if let Some(path) = import_roster {
+        let raw = std::fs::read_to_string(&path).with_context(|| format!("reading {path}"))?;
+        let payload: roster::SheetPayload =
+            serde_json::from_str(&raw).context("parsing the sheet payload")?;
+        let discord_guild = cfg
+            .discord
+            .guild_id
+            .context("--import-roster needs discord.guild_id")?;
+        let ledger_guild = cfg.discord.data_guild_id.unwrap_or(discord_guild);
+        let token = Config::discord_token()?;
+        return rt.block_on(async move {
+            let http = poise::serenity_prelude::Http::new(&token);
+            let r = roster::import_sheet(
+                &driver,
+                &http,
+                poise::serenity_prelude::GuildId::new(discord_guild),
+                ledger_guild,
+                &payload,
+            )
+            .await?;
+            println!(
+                "rows {} · matched {} · characters imported {} · already present {}",
+                r.rows, r.matched, r.characters_imported, r.characters_skipped
+            );
+            for x in &r.refused {
+                println!("refused: {x}");
+            }
+            if !r.unmatched.is_empty() {
+                println!(
+                    "unmatched ({}) — these members can /roster add themselves:",
+                    r.unmatched.len()
+                );
+                for n in &r.unmatched {
+                    println!("  {n}");
+                }
+            }
+            Ok(())
         });
     }
 

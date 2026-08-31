@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::event::{ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef, Secret};
+use crate::event::{
+    ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef, RosterCharacter, Secret,
+};
 
 /// One line of a player's history (mirrors the legacy log shape).
 #[derive(Debug, Clone, PartialEq)]
@@ -194,6 +196,10 @@ pub struct GuildState {
     /// them), so "rewrite from the projection" is only safe when the writer
     /// can tell *its* lines from everyone else's. This set is that answer.
     pub telemetry_managed: BTreeSet<String>,
+    /// The guild roster: each member's characters, keyed by lowercase name
+    /// so `Shaku` and `shaku` are one character. Absorbed from the roster
+    /// bot, whose store was a Google Sheet.
+    pub roster: BTreeMap<PlayerId, BTreeMap<String, RosterCharacter>>,
 }
 
 /// The whole projected world.

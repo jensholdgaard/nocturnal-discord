@@ -1664,6 +1664,9 @@ mod tests {
             data_guild: None,
             items: std::sync::Arc::new(crate::items::ItemSearch::new().expect("item search")),
             provisioning: None,
+            roster_access_labels: Vec::new(),
+            roster_output: None,
+            members: Default::default(),
         };
 
         driver

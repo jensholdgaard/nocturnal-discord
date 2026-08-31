@@ -270,6 +270,22 @@ pub fn apply(state: &mut State, env: &Envelope) {
             }
         }
 
+        Event::RosterCharacterSet { player, character } => {
+            g.roster
+                .entry(*player)
+                .or_default()
+                .insert(character.name.to_lowercase(), character.clone());
+        }
+
+        Event::RosterCharacterRemoved { player, name } => {
+            if let Some(chars) = g.roster.get_mut(player) {
+                chars.remove(&name.to_lowercase());
+                if chars.is_empty() {
+                    g.roster.remove(player);
+                }
+            }
+        }
+
         Event::ConfigUpdated { patch } => {
             g.config.apply_patch(patch);
         }

@@ -27,6 +27,15 @@ pub struct Data {
     pub items: std::sync::Arc<crate::items::ItemSearch>,
     /// Telemetry provisioning paths; `None` disables /dpstoken and /dpsrevoke.
     pub provisioning: Option<crate::provision::Provisioning>,
+    /// Raid-access labels `/roster` accepts (config).
+    pub roster_access_labels: Vec<String>,
+    /// Where the roster page payload is written; `None` = not materialized.
+    pub roster_output: Option<std::path::PathBuf>,
+    /// Discord display names and roles by player id, filled lazily by the
+    /// page materializer. Presentation state: lost on restart, refilled.
+    pub members: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<u64, crate::roster_page::MemberInfo>>,
+    >,
 }
 
 pub type Error = anyhow::Error;
@@ -636,6 +645,9 @@ async fn provisioning_client(
                         crate::items::ItemSearch::new().expect("item search client"),
                     ),
                     provisioning: Some(provisioning),
+                    roster_access_labels: Vec::new(),
+                    roster_output: None,
+                    members: Default::default(),
                 })
             })
         })
@@ -674,6 +686,7 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     commands.extend(crate::auctions::commands());
     commands.extend(crate::provision::commands());
     commands.extend(crate::backup::commands());
+    commands.extend(crate::roster::commands());
     // A test server can share the bot application with other deployments by
     // prefixing every command name (e.g. /controels-playerdkp).
     if !cfg.discord.command_prefix.is_empty() {
@@ -690,6 +703,11 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
     // Cloned before the DKP framework's setup closure consumes it: the second
     // identity talks to the same ledger through the same writer.
     let provision_driver = driver.clone();
+    let roster_labels = cfg.roster.access_labels.clone();
+    let roster_output = cfg.roster.output_path.clone();
+    let members: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<u64, crate::roster_page::MemberInfo>>,
+    > = Default::default();
     let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
     let bell_cfg = cfg.bell.clone();
     let provisioning = crate::provision::Provisioning::from_config(&cfg.provision);
@@ -731,6 +749,17 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                     )
                     .await;
                 }
+                // The roster page is derived state too: render it on boot so
+                // a restart (or a fresh import) is reflected without waiting
+                // for the next /roster command.
+                crate::roster_page::rematerialize(
+                    ctx.http.as_ref(),
+                    guild_id,
+                    &driver,
+                    framework.user_data().await,
+                    data_guild.map_or(guild_id, |(_, to)| to),
+                )
+                .await;
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
                 crate::auctions::repost_open_auctions(
@@ -756,6 +785,9 @@ pub async fn run(cfg: &Config, driver: DriverHandle, readiness: Readiness) -> an
                         crate::items::ItemSearch::new().expect("item search client"),
                     ),
                     provisioning,
+                    roster_access_labels: roster_labels.clone(),
+                    roster_output: roster_output.clone(),
+                    members: members.clone(),
                 })
             })
         })
@@ -1069,6 +1101,15 @@ pub fn rejection_text(e: &ExecError) -> String {
         R::NotProvisioned { username } => format!(":no_entry: {username} has no token"),
         R::InvalidConfig { setting, reason } => {
             format!(":no_entry: `{setting}` {reason} — nothing was changed")
+        }
+        R::RosterCharacterMissing { name } => {
+            format!(":no_entry: **{name}** is not on your row — use `/roster add`")
+        }
+        R::RosterCharacterExists { name } => {
+            format!(":no_entry: **{name}** is already on your row — use `/roster edit`")
+        }
+        R::InvalidRosterEntry { field, reason } => {
+            format!(":no_entry: `{field}` {reason}")
         }
     }
 }

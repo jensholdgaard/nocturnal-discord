@@ -311,6 +311,11 @@ groups:
         stability: development
         brief: Events replayed from the store at boot.
         examples: [13686]
+      - id: nocturnal.roster.rows
+        type: int
+        stability: development
+        brief: Member rows in the roster page payload just written (preamble and header excluded).
+        examples: [74, 144]
       - id: nocturnal.replay.duration
         type: string
         stability: development

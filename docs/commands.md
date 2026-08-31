@@ -182,6 +182,10 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 
 | Command | Access | Behaviour |
 |---|---|---|
+| `/roster add name class level [aa] [quarmy_link] [access] [main]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot) |
+| `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
+| `/roster remove name` | all | Remove a character from your row |
+| `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
 
@@ -256,7 +260,16 @@ doesn't care where it runs). Paths and the dashboard URL are config
 16. The item stat block is trimmed: leading and trailing padding gone, runs of
     spaces collapsed, blank rows dropped, and the 56-dash rule slimmed. It is
     read on a phone during a raid.
-17. `/configure` refuses values that used to be accepted and break later: a
+17. The guild roster lives in the ledger (2026-08-31), not a Google Sheet.
+    `/roster add|edit|remove` are the roster bot's commands with the same
+    options, ranges and refusals. Three deliberate differences: raid-access
+    flags are a typed option (`access: VP, ST`, checked against the
+    configured labels) instead of a second interactive menu; the main / second
+    marker is set by the member (`main: main|second|alt`) rather than typed
+    into the sheet by an officer; and the roster page is rendered by the bot
+    from the ledger — the sheet, the Apps Script, the Drive relay and the
+    roster bot retire. Discord IDs no longer appear in the page payload.
+18. `/configure` refuses values that used to be accepted and break later: a
     tick duration of zero, a deprecation window of zero, a bid time outside
     30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
     channel equal to the first (which would double everyone's tick). Nothing

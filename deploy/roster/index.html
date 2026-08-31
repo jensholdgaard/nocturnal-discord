@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- No <base target="_top"> here to allow external hosting flexibility. -->
+    <meta charset="UTF-8">
+    <!-- Pinch-zoom stays enabled: cell text is small and truncated, users need to zoom. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <title>Nocturnal Roster</title>
+    <style>
+      /* --- GLOBAL STYLES --- */
+      html, body {
+        margin: 0; padding: 0;
+        width: 100%; height: 100%;
+        font-family: 'Roboto', arial, sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        display: flex; flex-direction: column;
+        overflow: hidden; /* Prevent body scroll, scrolling is handled by .table-container */
+      }
+
+      /* --- LOADER COMPONENT --- */
+      #loader {
+        position: fixed; inset: 0;
+        background: #121212; z-index: 9999;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        color: #888; font-size: 14px;
+        transition: opacity 0.3s;
+      }
+      
+      /* PRIMARY LOADER: ROTATING GNOME (For External Mode) */
+      .gnome-spinner {
+        width: 80px; 
+        height: 80px;
+        margin-bottom: 20px;
+        animation: spin 2s linear infinite; /* Slow rotation for the image */
+        border-radius: 50%; 
+        object-fit: contain;
+        display: block; /* Visible by default */
+      }
+
+      /* FALLBACK LOADER: CSS SPINNER (For Internal/GAS Mode) */
+      /* This is hidden by default and shown only if the image fails to load */
+      .fallback-spinner {
+        width: 30px; height: 30px;
+        border: 3px solid #333; border-top: 3px solid #d4af37;
+        border-radius: 50%; 
+        animation: spin 0.8s linear infinite; /* Faster rotation for CSS spinner */
+        margin-bottom: 15px;
+        display: none; /* Hidden by default */
+      }
+      
+      @keyframes spin { 
+        0% { transform: rotate(0deg); } 
+        100% { transform: rotate(360deg); } 
+      }
+
+      /* --- TABLE CONTAINER (SCROLLABLE AREA) --- */
+      .table-container {
+        flex: 1;
+        width: 100%;
+        overflow: auto; /* Internal scrolling only */
+        position: relative;
+        opacity: 0; /* Hidden during initial layout calculation */
+        transition: opacity 0.2s;
+        scrollbar-width: thin;
+        scrollbar-color: #444 #1a1a1a;
+      }
+
+      table {
+        border-collapse: separate; 
+        border-spacing: 0;
+        margin: 0;
+        width: 100%;
+        table-layout: auto; /* Initial state: auto to measure content */
+      }
+
+      th, td {
+        padding: 0 4px;
+        box-sizing: border-box;
+        border: none !important;
+        text-overflow: clip;
+        background-clip: padding-box;
+        z-index: 1;
+        height: 24px; line-height: 24px;
+        
+        /* TEXT TRUNCATION BEHAVIOR */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        
+        /* Default minimum width */
+        min-width: 60px; 
+      }
+
+      /* Specific column overrides (e.g., Level/Class columns) */
+      th:nth-child(2), td:nth-child(2),
+      th:nth-child(3), td:nth-child(3) {
+        min-width: 42px !important;
+      }
+
+      /* --- STICKY POSITIONING CLASSES --- */
+      /* Z-indexes ensure corners overlap rows/cols correctly */
+      .sticky-col { position: sticky !important; z-index: 10; }
+      .sticky-row { position: sticky !important; z-index: 20; }
+      .sticky-corner { position: sticky !important; z-index: 30; }
+
+      /* --- INTERACTIVITY --- */
+      .matrix-cell:hover {
+        box-shadow: inset 0 0 0 2px #d4af37 !important;
+        cursor: crosshair;
+      }
+
+      .sort-header { 
+        cursor: pointer; 
+        position: relative; 
+      }
+      .sort-header:hover { filter: brightness(1.2); }
+      
+      .sort-icon {
+        font-size: 10px; margin-left: 4px; opacity: 0.3; display: inline-block;
+      }
+      .sort-header.active-sort .sort-icon { opacity: 1; color: #d4af37; }
+      .sort-header:focus-visible { outline: 2px solid #d4af37; outline-offset: -2px; }
+
+      /* --- PLAYER FILTER (lives inside the frozen top-left corner of the table) --- */
+      #filter-box {
+        display: flex; align-items: center;
+        position: relative;
+        width: 100%;
+      }
+      /* The count overlays the right side of the input (out of the flex flow), so its
+         appearance never resizes or shifts the field. Same background as the input to
+         cleanly mask text scrolling underneath. */
+      #filter-count {
+        position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+        color: #888; font-size: 10px; white-space: nowrap;
+        background: #111; padding-left: 4px;
+        pointer-events: none;
+      }
+      #filter-input {
+        flex: 1; min-width: 0;
+        height: 16px; padding: 1px 6px;
+        background: #111; border: 1px solid #444; border-radius: 3px;
+        color: #e0e0e0; font-size: 11px;
+      }
+      #filter-input::placeholder { color: #666; }
+      #filter-input:focus { outline: none; border-color: #d4af37; }
+
+      /* --- LINK CELLS (HYPERLINK formulas in the sheet) --- */
+      td a, th a {
+        color: inherit;
+        text-decoration: none;
+      }
+      td a:hover, th a:hover {
+        text-decoration: underline;
+        color: #6cf; /* Quarmy blue — matches the profile corner indicator */
+      }
+
+      /* --- CELL CORNER INDICATORS --- */
+      /* Anchor the corner triangles to the cell itself. Without this, non-sticky
+         cells are position:static and the pseudo-elements resolve against the
+         scroll container instead. (Sticky cells keep position:sticky via !important.) */
+      .has-note, .has-quarmy { position: relative; }
+      /* Note indicator: yellow, top-right */
+      .has-note::after {
+        content: ''; position: absolute; top: 0; right: 0;
+        border-width: 0 5px 5px 0; border-style: solid;
+        border-color: transparent #f1c40f transparent transparent;
+      }
+      /* Quarmy profile indicator: Quarmy brand blue (--accent-blue on quarmy.com), top-left */
+      .has-quarmy::before {
+        content: ''; position: absolute; top: 0; left: 0;
+        border-width: 5px 5px 0 0; border-style: solid;
+        border-color: #6cf transparent transparent transparent;
+      }
+      #tooltip {
+        position: fixed; display: none;
+        background: #222; border: 1px solid #555;
+        color: #fff; padding: 6px 10px;
+        font-size: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        z-index: 10000; pointer-events: none;
+        max-width: 300px; white-space: pre-wrap;
+      }
+      
+      /* --- SETUP OVERLAY (EXTERNAL HOSTING) --- */
+      #setup-overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000;
+          display: none; flex-direction: column; justify-content: center; align-items: center;
+          padding: 20px; text-align: center;
+      }
+      .setup-box {
+          background: #222; padding: 20px; border: 1px solid #444; border-radius: 8px; max-width: 500px;
+      }
+      input[type="text"] {
+          width: 100%; padding: 8px; margin: 10px 0; background: #111; border: 1px solid #555; color: white;
+      }
+      button {
+          padding: 8px 16px; background: #d4af37; border: none; cursor: pointer; color: black; font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- LOADING SCREEN -->
+    <div id="loader">
+      <!-- 
+        LOADER LOGIC:
+        1. Try to show the Gnome image (External mode).
+        2. If image fails (Internal mode), 'onerror' hides image and shows the fallback CSS spinner.
+      -->
+      <img 
+        src="gnome_small_web.webp" 
+        alt="Loading..." 
+        class="gnome-spinner" 
+        onerror="this.style.display='none'; document.querySelector('.fallback-spinner').style.display='block';"
+      >
+      <!-- Fallback CSS Spinner (Hidden by default) -->
+      <div class="fallback-spinner"></div>
+      
+      <div id="loading-text">Initializing...</div>
+    </div>
+
+    <!-- SETUP OVERLAY (Triggered if no script URL is found in external mode) -->
+    <div id="setup-overlay">
+        <div class="setup-box">
+            <h3 style="color:#d4af37; margin-top:0">Roster Connection</h3>
+            <p style="font-size:0.9em; color:#ccc;">
+                To remove the Google banner, this file is running in external mode.<br>
+                Please paste your Google Apps Script Web App URL below:
+            </p>
+            <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/..../exec">
+            <button onclick="saveUrlAndReload()">Load Data</button>
+            <p style="font-size:0.8em; color:#888; margin-top:10px">This URL will be saved locally in your browser.</p>
+        </div>
+    </div>
+
+    <!-- PLAYER FILTER: a persistent node that renderTable installs into the frozen
+         top-left corner of the table (row FILTER_ROW). Starts here, hidden by the
+         full-screen loader until the first render moves it into place. -->
+    <div id="filter-box">
+      <input type="search" id="filter-input" placeholder="Filter…" aria-label="Filter players" autocomplete="off">
+      <span id="filter-count"></span>
+    </div>
+
+    <!-- MAIN DATA CONTAINER -->
+    <div class="table-container" id="container">
+      <table id="rosterTable"></table>
+    </div>
+    
+    <!-- TOOLTIP ELEMENT -->
+    <div id="tooltip"></div>
+
+    <script>
+      /**
+       * --- APP CONFIGURATION ---
+       */
+      
+      // OPTIONAL: Hardcode your script URL here to avoid the setup screen for users.
+      // Example: "https://script.google.com/macros/s/AKfycbx.../exec"
+      const SCRIPT_URL = "/roster/data.json"; // served by the bot from the ledger; see deploy/roster/README.md
+      
+      // Table Structure Constants
+      const HEADER_IDX = 4;    // Index of the header row (0-based)
+      const FROZEN_ROWS = 5;   // Number of rows to freeze at the top
+      const FROZEN_COLS = 3;   // Number of columns to freeze at the left
+      const MATRIX_START = 3;  // Matrix start column index (e.g., Col D)
+      const MATRIX_END = 17;   // Matrix end column index (e.g., Col R)
+      const FILTER_ROW = 2;    // Frozen-corner row hosting the filter box (the empty
+                               // row between the sheet title and "Raid force")
+
+      // State Management
+      let rawData = null;      // Stores data fetched from backend
+      let sortConfig = { col: -1, asc: true };
+      let sourceWidths = null; // Caches initial column widths for resizing logic
+      let externalUrl = null;  // Set in external mode; enables visibility-based refresh
+      let lastVisibilityRefresh = 0; // Throttles the visibilitychange refetch
+      let filterBox = null, filterInput = null; // Persistent filter widget (set at onload).
+      // Kept as JS references: renderTable wipes the table (innerHTML=''), which would
+      // destroy the widget — we rescue the same node and re-install it after each build,
+      // so the typed value and listeners survive re-renders.
+
+      // Local cache key: lets us render the table instantly on the next visit,
+      // while the fresh data loads in the background. Versioned: bump the suffix
+      // whenever the payload shape changes so stale caches are discarded, not rendered.
+      const LOCAL_DATA_KEY = "roster_data_cache_v2";
+
+      // The backend returns HTTP 200 + {error:...} on failure, and an old cache may
+      // predate the current payload shape — validate everything the renderer
+      // dereferences before caching or rendering.
+      function isValidPayload(d) {
+        return !!d && !d.error
+            && Array.isArray(d.values) && d.values.length > HEADER_IDX
+            && Array.isArray(d.notes) && Array.isArray(d.styleDict)
+            && Array.isArray(d.styleIndex) && Array.isArray(d.headerHeights);
+      }
+
+      function loadLocalData() {
+        try {
+          const txt = localStorage.getItem(LOCAL_DATA_KEY);
+          const data = txt ? JSON.parse(txt) : null;
+          if (data && !isValidPayload(data)) {
+            localStorage.removeItem(LOCAL_DATA_KEY); // poisoned/stale cache: self-heal
+            return null;
+          }
+          return data;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      /**
+       * --- ENTRY POINT ---
+       * Handles Hybrid Logic:
+       * 1. If running inside Google (iframe), use `google.script.run`.
+       * 2. If running externally (headless), use `fetch` API.
+       */
+      window.onload = function() {
+        console.log("App Ready.");
+
+        // Drop the pre-v2 cache key so it doesn't linger in storage.
+        try { localStorage.removeItem('roster_data_cache'); } catch (e) {}
+
+        // Recompute sticky headers on resize (registered once).
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(() => freezeTableDimensions(false));
+        });
+
+        // Long-lived tabs go stale: refresh silently when the tab becomes visible
+        // again (throttled — the backend cache makes this a cheap ~2s HIT).
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible' || !externalUrl || !rawData) return;
+            if (Date.now() - lastVisibilityRefresh < 60000) return;
+            lastVisibilityRefresh = Date.now();
+            fetchFromExternal(externalUrl, true);
+        });
+
+        // Player filter box (persistent node, re-installed into the table by renderTable).
+        filterBox = document.getElementById('filter-box');
+        filterInput = document.getElementById('filter-input');
+        filterInput.addEventListener('input', applyFilter);
+        filterInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { filterInput.value = ''; applyFilter(); filterInput.blur(); }
+        });
+
+        // Scenario 1: Running inside Google Apps Script environment
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            document.getElementById('loading-text').innerText = "Loading via Google Script...";
+            google.script.run
+                .withSuccessHandler(initApp)
+                .withFailureHandler(e => showError(e.message))
+                .getRosterData();
+        }
+        // Scenario 2: Running Externally (Localhost, Netlify, etc.)
+        else {
+            // Priority: 1. Hardcoded URL, 2. LocalStorage, 3. User Input
+            const targetUrl = SCRIPT_URL || localStorage.getItem('roster_script_url');
+
+            if (targetUrl) {
+                externalUrl = targetUrl; // enables the visibilitychange refresh
+                // Repeat visit: render the cached table immediately,
+                // then refresh silently in the background.
+                const cached = loadLocalData();
+                if (cached) {
+                    initApp(cached, false);             // table shown right away
+                    fetchFromExternal(targetUrl, true);  // silent background update
+                } else {
+                    fetchFromExternal(targetUrl, false); // first visit: normal loader
+                }
+            } else {
+                // No URL found: Show setup overlay
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('setup-overlay').style.display = 'flex';
+            }
+        }
+      };
+
+      /**
+       * Fetches data from the Google Apps Script Web App via GET request.
+       * Requires the script to serve JSON via ContentService.
+       * * UPDATED: Appends "?mode=json" to the URL so the hybrid doGet
+       * knows to return JSON instead of HTML.
+       * * @param {string} url - The Web App URL.
+       */
+      function fetchFromExternal(url, silent) {
+          // In silent mode the cached table is already shown: don't touch the loader.
+          if (!silent) {
+              document.getElementById('loading-text').innerText = "Fetching data...";
+              document.getElementById('loader').style.display = 'flex';
+          }
+
+          // INTELLIGENT FETCH URL CONSTRUCTION
+          // We assume the user pastes the main app URL (ending in /exec)
+          // We append ?mode=json so the GAS doGet knows to return data, not the UI.
+          let fetchUrl = url.trim();
+          if (fetchUrl.includes('?')) {
+              fetchUrl += '&mode=json';
+          } else {
+              fetchUrl += '?mode=json';
+          }
+
+          console.log("Fetching from:", fetchUrl, silent ? "(silent)" : "");
+
+          fetch(fetchUrl)
+            .then(response => {
+                if (!response.ok) throw new Error("Network response was not ok");
+                return response.text();
+            })
+            .then(text => {
+                const data = JSON.parse(text);
+                // Backend soft error (HTTP 200 + {error:...}) or truncated payload:
+                // never cache it, never render it.
+                if (!isValidPayload(data)) {
+                    if (!silent) showRetry(url, (data && (data.details || data.error)) || "invalid data");
+                    return;
+                }
+                let prev = null;
+                try {
+                    prev = localStorage.getItem(LOCAL_DATA_KEY);
+                    localStorage.setItem(LOCAL_DATA_KEY, text);
+                } catch (e) {} // storage unavailable (private mode/quota): still render
+
+                if (silent) {
+                    // Only re-render if the data actually changed.
+                    if (text !== prev) initApp(data, true);
+                } else {
+                    initApp(data, false);
+                }
+            })
+            .catch(e => {
+                console.error(e);
+                // In silent mode, just keep the local cache view.
+                if (!silent) showRetry(url, e.message);
+            });
+      }
+
+      /**
+       * Saves the user-provided URL to LocalStorage and triggers a reload.
+       */
+      function saveUrlAndReload() {
+          const url = document.getElementById('script-url-input').value.trim();
+          if (url) {
+              localStorage.setItem('roster_script_url', url);
+              document.getElementById('setup-overlay').style.display = 'none';
+              fetchFromExternal(url);
+          }
+      }
+
+      function showError(msg) {
+          document.getElementById('loading-text').innerText = "Error: " + msg;
+          document.getElementById('loading-text').style.color = "red";
+      }
+
+      /**
+       * Friendly failure state with a click-to-retry — guild members must never
+       * land on the developer setup overlay because of a transient network error.
+       */
+      function showRetry(url, msg) {
+          const lt = document.getElementById('loading-text');
+          lt.innerText = "Connection failed" + (msg ? " (" + msg + ")" : "") + " — click here to retry";
+          lt.style.color = "#e74c3c";
+          lt.style.cursor = "pointer";
+          lt.onclick = () => {
+              lt.onclick = null;
+              lt.style.color = "";
+              lt.style.cursor = "";
+              fetchFromExternal(url, false);
+          };
+          document.getElementById('loader').style.display = 'flex';
+      }
+
+      /**
+       * Hides tbody rows that don't match the filter query (matches anywhere in
+       * the row, so typing a character name finds its player's row). Re-applied
+       * after every render since re-renders rebuild the rows.
+       */
+      function applyFilter() {
+        const tbody = document.getElementById('tbody');
+        if (!tbody || !filterInput) return;
+        const q = filterInput.value.trim().toLowerCase();
+        let shown = 0;
+        for (const row of tbody.rows) {
+            const match = !q || row.textContent.toLowerCase().includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) shown++;
+        }
+        filterBox.querySelector('#filter-count').textContent =
+            q ? shown + " / " + tbody.rows.length : "";
+      }
+
+      /**
+       * --- CORE APP LOGIC ---
+       * Initializes the application once data is received.
+       * @param {Object} data - The JSON data object from the backend.
+       */
+      function initApp(data, silent) {
+        // Guards the google.script.run path too — the fetch paths pre-validate.
+        if (!isValidPayload(data)) {
+            if (!silent) showError("Invalid data received");
+            return;
+        }
+        rawData = data;
+
+        // Silent refresh (data updated in the background): re-render in place,
+        // without the loader, preserving the user's scroll position and sort.
+        if (silent) {
+            const c = document.getElementById('container');
+            const sx = c.scrollLeft, sy = c.scrollTop;
+            renderTable();
+            // renderTable rebuilds in sheet order: re-apply the user's active sort.
+            if (sortConfig.col >= 0) {
+                if (sortConfig.col < rawData.values[HEADER_IDX].length) applySort();
+                else sortConfig = { col: -1, asc: true }; // sorted column disappeared
+            }
+            requestAnimationFrame(() => {
+                try { freezeTableDimensions(false); }
+                finally {
+                    c.scrollLeft = sx;
+                    c.scrollTop = sy;
+                    // Defensive: if a previous render had stranded the UI, un-strand it.
+                    c.style.opacity = '1';
+                    document.getElementById('loader').style.display = 'none';
+                }
+            });
+            return;
+        }
+
+        document.getElementById('loading-text').innerText = "Building table...";
+
+        // Use setTimeout to allow UI to update (show "Building...") before heavy DOM ops
+        setTimeout(() => {
+            try {
+                renderTable();
+
+                // Wait for next frame to ensure DOM is painted, then calculate dimensions
+                requestAnimationFrame(() => {
+                    // Reveal in a finally: a layout failure must never strand the spinner.
+                    try { freezeTableDimensions(true); }
+                    finally {
+                        document.getElementById('container').style.opacity = '1';
+                        document.getElementById('loader').style.display = 'none';
+                    }
+                });
+            } catch (e) {
+                console.error(e);
+                showError(e.message); // render crash: show it instead of an endless spinner
+            }
+        }, 50);
+      }
+
+      /**
+       * Renders the HTML table from raw data.
+       * Uses document fragments/elements for better performance than innerHTML.
+       */
+      function renderTable() {
+        // Invalidate the width cache: fresh data may change column count/widths.
+        // (The resize path never re-renders, so it keeps benefiting from the cache.)
+        sourceWidths = null;
+        // The filter widget lives inside the table: remember focus before the wipe
+        // (the node itself survives — we hold a JS reference and re-install it below).
+        const hadFilterFocus = filterInput && document.activeElement === filterInput;
+        const table = document.getElementById('rosterTable');
+        table.innerHTML = '';
+        table.style.width = 'auto';
+        table.style.tableLayout = 'auto'; // Auto layout first to determine natural widths
+        
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+        tbody.id = 'tbody';
+
+        rawData.values.forEach((rowVals, rIdx) => {
+            const tr = document.createElement('tr');
+            
+            // Apply custom row heights for header rows
+            if (rIdx < rawData.headerHeights.length) {
+                tr.style.height = rawData.headerHeights[rIdx] + 'px';
+            }
+
+            rowVals.forEach((val, cIdx) => {
+                const isHeaderRow = (rIdx === HEADER_IDX);
+                const el = document.createElement(isHeaderRow ? 'th' : 'td');
+                
+                // Header construction with sort icon
+                if (isHeaderRow) {
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = val;
+                    el.appendChild(textSpan);
+                    const iconSpan = document.createElement('span');
+                    iconSpan.className = 'sort-icon';
+                    iconSpan.textContent = '↕';
+                    el.appendChild(iconSpan);
+                } else {
+                    const link = rawData.links && rawData.links[rIdx] && rawData.links[rIdx][cIdx];
+                    if (link && val) {
+                        const a = document.createElement('a');
+                        a.href = link;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.textContent = val;
+                        el.appendChild(a);
+                    } else {
+                        el.textContent = val;
+                    }
+                }
+
+                applyStyles(el, rIdx, cIdx);
+                setupCellLogic(el, rIdx, cIdx, isHeaderRow);
+                tr.appendChild(el);
+            });
+
+            // Split into THEAD and TBODY based on frozen row configuration
+            if (rIdx < FROZEN_ROWS) thead.appendChild(tr);
+            else tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+
+        // Install the filter widget into the frozen corner, restore focus if the
+        // user was typing, and re-apply the active filter to the fresh rows.
+        installFilterBox(table);
+        if (hadFilterFocus) filterInput.focus();
+        applyFilter();
+      }
+
+      /**
+       * Hosts the filter widget in the frozen top-left corner: merges the three
+       * frozen cells of row FILTER_ROW (empty in the sheet, between the title and
+       * "Raid force") into one cell and moves the persistent #filter-box into it.
+       * The host keeps its sticky-corner class and dataset.c=0, so sticky offsets
+       * keep working. Re-run after every rebuild.
+       */
+      function installFilterBox(table) {
+        if (!filterBox) return;
+        const row = table.rows[FILTER_ROW];
+        if (!row || !row.cells.length) return;
+        const host = row.cells[0];
+        // The host cell may hold INVISIBLE flavor text (same font and background
+        // color — the sheet's hidden-motto easter egg). Covering that loses nothing;
+        // real visible content must never be overwritten.
+        const st = rawData.styleDict[rawData.styleIndex[FILTER_ROW][0]];
+        const hostText = host.textContent.trim();
+        if (hostText !== '' && st.fc !== st.bg) return; // visible content: don't touch
+        if (hostText) filterBox.title = hostText;       // keep the easter egg as a tooltip
+        host.textContent = '';
+        // Column A only: keeps the widget aligned with the title above it.
+        host.appendChild(filterBox);
+      }
+
+      /**
+       * Applies visual styles (background, font, etc.) from data to the cell.
+       */
+      function applyStyles(el, r, c) {
+        const s = rawData.styleDict[rawData.styleIndex[r][c]];
+        let bg = s.bg;
+        // Normalize background colors
+        if (!bg || bg === '#000000' || bg === 'transparent') {
+            bg = (r < FROZEN_ROWS) ? '#222' : '#121212';
+        }
+        el.style.backgroundColor = bg;
+        el.style.color = s.fc;
+        el.style.fontWeight = s.fw;
+        el.style.fontStyle = s.fs;
+        el.style.fontSize = s.sz + 'pt';
+        el.style.textAlign = s.ha;
+        el.style.verticalAlign = s.va;
+
+        if (s.fl === 'underline') {
+            el.style.textDecoration = 'underline';
+        }
+      }
+
+      /**
+       * Sets up interactivity (sorting, tooltips) and sticky classes.
+       */
+      function setupCellLogic(el, r, c, isSortRow) {
+        // Assign sticky classes based on position
+        if (r < FROZEN_ROWS && c < FROZEN_COLS) {
+            el.className = 'sticky-corner'; // Top-Left intersection
+            el.dataset.r = r; el.dataset.c = c;
+        } else if (r < FROZEN_ROWS) {
+            el.className = 'sticky-row';    // Top Header
+            el.dataset.r = r;
+        } else if (c < FROZEN_COLS) {
+            el.className = 'sticky-col';    // Left Sidebar
+            el.dataset.c = c;
+        }
+
+        // Header click logic (also reachable by keyboard: Tab + Enter/Space)
+        if (isSortRow) {
+            el.classList.add('sort-header');
+            el.dataset.colidx = c;
+            el.onclick = () => sortData(c);
+            el.tabIndex = 0;
+            el.onkeydown = (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortData(c); }
+            };
+        }
+
+        // Matrix area specific class
+        if (r > HEADER_IDX && c >= MATRIX_START && c <= MATRIX_END) {
+            el.classList.add('matrix-cell');
+        }
+
+        // Custom Tooltip (Note) logic. Native title only when there is NO note,
+        // so note cells don't show two overlapping tooltips at once.
+        const note = rawData.notes[r][c];
+        if (note) {
+            el.classList.add('has-note');
+            el.dataset.note = note;
+            el.onmouseenter = showTooltip;
+            el.onmouseleave = hideTooltip;
+        } else {
+            el.title = el.textContent; // native tooltip for truncated cells
+        }
+
+        // Quarmy profile indicator: blue top-left corner when the cell links
+        // to a quarmy.com profile (opposite corner from the note triangle).
+        const cellLink = rawData.links && rawData.links[r] && rawData.links[r][c];
+        if (cellLink && /quarmy\.com/i.test(cellLink)) {
+            el.classList.add('has-quarmy');
+        }
+      }
+
+      /**
+       * CRITICAL FUNCTION: Handles the "Frozen" layout logic.
+       * 1. Measures natural widths of columns.
+       * 2. Calculates optimal layout based on available viewport width.
+       * 3. Switches table to `table-layout: fixed`.
+       * 4. Calculates `top` and `left` offsets for sticky elements.
+       */
+      function freezeTableDimensions(isFirstRun = false) {
+        const table = document.getElementById('rosterTable');
+        const rows = table.rows;
+        // Need the header row to measure — also protects the resize listener
+        // against degenerate tables (fewer rows than HEADER_IDX+1).
+        if (rows.length <= HEADER_IDX) return;
+
+        // 1. Capture Source Widths (First run only)
+        // We rely on the browser's "auto" layout to tell us how wide columns want to be.
+        if (!sourceWidths) {
+            const tempWidths = [];
+            const firstRowCells = rows[HEADER_IDX].cells;
+            for (let i = 0; i < firstRowCells.length; i++) {
+                tempWidths.push(firstRowCells[i].getBoundingClientRect().width);
+            }
+            sourceWidths = tempWidths;
+        }
+
+        // 2. Calculate optimal widths
+        const containerWidth = document.getElementById('container').clientWidth;
+        let totalMinWidth = 0;
+        
+		let w0_Name = Math.min(sourceWidths[0], 120);
+        
+        // Level & Class: Fixed small width
+        let w1_Level = Math.min(sourceWidths[1], 42); 
+        let w2_Class = Math.min(sourceWidths[2], 42); 
+
+        totalMinWidth += w0_Name + w1_Level + w2_Class;
+
+        const lastIdx = sourceWidths.length - 1;
+        const secondLastIdx = sourceWidths.length - 2;
+
+        // Iterate through remaining columns
+        for (let i = 3; i < sourceWidths.length; i++) {
+             // Last 2 columns get full natural width
+             if (i >= secondLastIdx) totalMinWidth += sourceWidths[i];
+             // Matrix columns get a fixed minimum of 60px
+             else totalMinWidth += 60;
+        }
+
+        // 3. Generate Colgroup for Fixed Layout
+        let colgroup = table.querySelector('colgroup');
+        if (!colgroup) {
+            colgroup = document.createElement('colgroup');
+            table.prepend(colgroup);
+        }
+        
+        let colHtml = '';
+        colHtml += `<col style="width: ${w0_Name}px">`;
+        colHtml += `<col style="width: ${w1_Level}px">`;
+        colHtml += `<col style="width: ${w2_Class}px">`;
+        
+        for(let i = 3; i < sourceWidths.length; i++) {
+            if (i >= secondLastIdx) colHtml += `<col style="width: ${sourceWidths[i]}px">`;
+            else colHtml += `<col style="width: auto">`;
+        }
+        colgroup.innerHTML = colHtml;
+
+        // 4. Apply Table Width & Fixed Layout
+        if (totalMinWidth > containerWidth) table.style.width = totalMinWidth + 'px';
+        else table.style.width = '100%';
+        table.style.tableLayout = 'fixed';
+
+        // 5. Calculate Sticky Offsets
+        // We must re-measure rendered widths because `col` widths might slightly differ due to rendering
+        const renderedWidths = [];
+        const firstRowCells = rows[HEADER_IDX].cells;
+        for (let i = 0; i < firstRowCells.length; i++) {
+            renderedWidths.push(firstRowCells[i].getBoundingClientRect().width);
+        }
+        const heights = [];
+        for (let i = 0; i < FROZEN_ROWS; i++) {
+            if(rows[i]) heights.push(rows[i].getBoundingClientRect().height);
+        }
+        applyStickyOffsets(renderedWidths, heights);
+      }
+
+      /**
+       * Applies calculated `top` and `left` CSS values to sticky cells.
+       * Uses accumulation loops to stack headers/columns correctly.
+       */
+      function applyStickyOffsets(widths, heights) {
+        let lefts = [0];
+        for (let i = 0; i < FROZEN_COLS; i++) lefts[i+1] = lefts[i] + widths[i];
+        let tops = [0];
+        for (let i = 0; i < FROZEN_ROWS; i++) tops[i+1] = tops[i] + heights[i];
+
+        document.querySelectorAll('.sticky-col').forEach(el => {
+            el.style.left = lefts[el.dataset.c] + 'px';
+        });
+        document.querySelectorAll('.sticky-row').forEach(el => {
+            el.style.top = tops[el.dataset.r] + 'px';
+        });
+        document.querySelectorAll('.sticky-corner').forEach(el => {
+            el.style.left = lefts[el.dataset.c] + 'px';
+            el.style.top = tops[el.dataset.r] + 'px';
+        });
+      }
+
+      // --- HELPERS & SORTING ---
+
+      /**
+       * Helper to extract numeric rank from custom strings.
+       * Used for sorting matrix columns.
+       */
+      function getCustomRank(val) {
+          if (!val) return 5; 
+          const v = val.toUpperCase();
+          if (v.includes("M-60")) return 1;  
+          if (v.includes("M2-60")) return 2; 
+          if (v.includes("60")) return 3;    
+          return 4; 
+      }
+
+      /**
+       * Helper to parse date-like strings (e.g., "2023-01-01").
+       */
+      function parseDateValue(val) {
+          if (!val) return 0;
+          const str = String(val).trim();
+          const clean = str.replace(/-/g, '');
+          const n = parseInt(clean, 10);
+          return isNaN(n) ? 0 : n;
+      }
+
+      /**
+       * Sorts the table data based on the clicked column.
+       * Handles alphanumeric, numeric, and date sorting.
+       */
+      function sortData(colIdx) {
+        // Toggle sort direction
+        if (sortConfig.col === colIdx) sortConfig.asc = !sortConfig.asc;
+        else { sortConfig.col = colIdx; sortConfig.asc = true; }
+        applySort();
+      }
+
+      /**
+       * Applies the current sortConfig to the tbody rows (no direction toggle).
+       * Called by header clicks and after a silent re-render to preserve the sort.
+       */
+      function applySort() {
+        const colIdx = sortConfig.col;
+        updateHeaderIcons();
+
+        const tbody = document.getElementById('tbody');
+        const rows = Array.from(tbody.rows);
+        const m = sortConfig.asc ? 1 : -1;
+        const lastColIdx = rawData.values[0].length - 1;
+
+        rows.sort((rA, rB) => {
+            let vA = rA.cells[colIdx].textContent.trim();
+            let vB = rB.cells[colIdx].textContent.trim();
+            
+            // Special Sort: Last Column (Date)
+            if (colIdx === lastColIdx) {
+                let dA = parseDateValue(vA);
+                let dB = parseDateValue(vB);
+                if (dA !== dB) return (dA - dB) * m;
+                return 0; 
+            }
+            // Special Sort: Matrix Columns (Custom Rank)
+            if (colIdx >= MATRIX_START && colIdx <= MATRIX_END) {
+                let rankA = getCustomRank(vA);
+                let rankB = getCustomRank(vB);
+                if (rankA !== rankB) return (rankA - rankB) * m;
+                return 0; 
+            }
+            
+            // Default Sort: Mixed Alphanumeric
+            let cleanA = vA.toLowerCase().replace('%','');
+            let cleanB = vB.toLowerCase().replace('%','');
+            
+            // Empty Handling
+            if (!vA && !vB) return 0; if (!vA) return 1; if (!vB) return -1;
+            
+            // Numeric Try
+            let nA = parseFloat(cleanA); let nB = parseFloat(cleanB);
+            if (!isNaN(nA) && !isNaN(nB) && !isNaN(cleanA.slice(-1))) return (nA - nB) * m;
+            
+            // String Compare
+            return cleanA.localeCompare(cleanB) * m;
+        });
+        
+        // Append sorted rows back to tbody
+        rows.forEach(r => tbody.appendChild(r));
+      }
+
+      function updateHeaderIcons() {
+          const headers = document.querySelectorAll('.sort-header');
+          headers.forEach(th => {
+              const icon = th.querySelector('.sort-icon');
+              if (!icon) return;
+              if (parseInt(th.dataset.colidx) === sortConfig.col) {
+                  th.classList.add('active-sort');
+                  th.setAttribute('aria-sort', sortConfig.asc ? 'ascending' : 'descending');
+                  icon.textContent = sortConfig.asc ? ' ▲' : ' ▼';
+              } else {
+                  th.classList.remove('active-sort');
+                  th.removeAttribute('aria-sort');
+                  icon.textContent = '↕';
+              }
+          });
+      }
+
+      // --- TOOLTIP LOGIC ---
+      const tip = document.getElementById('tooltip');
+      
+      function showTooltip(e) {
+        tip.innerText = e.target.dataset.note;
+        tip.style.display = 'block';
+
+        // Position, clamped to the viewport (measured width — no hardcoded guess,
+        // and never pushed off-screen left on narrow mobile viewports).
+        let x = e.clientX + 15;
+        let y = e.clientY + 15;
+
+        if (x + tip.offsetWidth > window.innerWidth) x = Math.max(4, window.innerWidth - tip.offsetWidth - 4);
+        if (y + tip.offsetHeight > window.innerHeight) y = Math.max(4, y - tip.offsetHeight - 30);
+
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+      }
+      
+      function hideTooltip() { tip.style.display = 'none'; }
+
+    </script>
+  </body>
+</html>

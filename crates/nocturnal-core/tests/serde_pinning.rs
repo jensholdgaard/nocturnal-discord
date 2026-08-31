@@ -124,6 +124,22 @@ fn samples() -> Vec<Event> {
             auction_id: "a".into(),
             reason: "officer".into(),
         },
+        Event::RosterCharacterSet {
+            player: 1,
+            character: nocturnal_core::RosterCharacter {
+                name: "Shaku".into(),
+                class: "Shaman".into(),
+                level: 60,
+                aa: Some(120),
+                profile_url: Some("https://quarmy.com/character/shaku".into()),
+                access: vec!["VP".into(), "ST".into()],
+                main: Some(nocturnal_core::MainRank::Main),
+            },
+        },
+        Event::RosterCharacterRemoved {
+            player: 1,
+            name: "Shaku".into(),
+        },
         Event::ConfigUpdated {
             patch: ConfigPatch {
                 min_bid: Some(5),
@@ -161,6 +177,8 @@ const PINNED_KINDS: &[&str] = &[
     "auction.closed",
     "auction.finalized",
     "auction.cancelled",
+    "roster.character.set",
+    "roster.character.removed",
     "config.updated",
     "telemetry.token.issued",
     "telemetry.access.updated",

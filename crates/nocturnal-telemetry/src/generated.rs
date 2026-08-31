@@ -56,6 +56,7 @@ pub mod attr {
     pub const NOCTURNAL_RAID_TICK_PLAYER_COUNT: &str = "nocturnal.raid.tick.player.count";
     pub const NOCTURNAL_REPLAY_DURATION: &str = "nocturnal.replay.duration";
     pub const NOCTURNAL_REPLAY_EVENT_COUNT: &str = "nocturnal.replay.event.count";
+    pub const NOCTURNAL_ROSTER_ROWS: &str = "nocturnal.roster.rows";
     pub const NOCTURNAL_STRESSTEST_ACCEPTED_COUNT: &str = "nocturnal.stresstest.accepted.count";
     pub const NOCTURNAL_STRESSTEST_AUCTION_COUNT: &str = "nocturnal.stresstest.auction.count";
     pub const NOCTURNAL_STRESSTEST_BIDDER_COUNT: &str = "nocturnal.stresstest.bidder.count";

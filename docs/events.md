@@ -106,6 +106,8 @@ did not store is a secret that cannot leak from a backup.
 ### Config & ops
 | Kind | Payload | Notes |
 |---|---|---|
+| `roster.character.set` | player, character{name, class, level, aa?, profile_url?, access[], main?} | The whole record, not a patch: replay never merges. Absorbed from nocturnal-roster-bot 2026-08-31 |
+| `roster.character.removed` | player, name | |
 | `config.updated` | key, value | Admin roles, defaults, tick settings — replaces the 1 h Mongo polling loop |
 | `ops.note` | text | Officer-visible annotation ("corrected per dispute…"), keeps the log the single narrative |
 

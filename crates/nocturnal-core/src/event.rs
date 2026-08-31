@@ -103,6 +103,38 @@ impl std::fmt::Debug for Secret {
     }
 }
 
+/// Which of a member's characters this one is, for raid planning. Legacy
+/// kept this as an "M-"/"M2-" prefix that officers typed into the sheet by
+/// hand; here the member sets it (deliberate change, see commands.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MainRank {
+    Main,
+    Second,
+}
+
+/// One character on the guild roster, as the member last described it. The
+/// event carries the whole record rather than a patch, so replay never has
+/// to merge and an `edit` that leaves a field out means "as before" only at
+/// the command layer, never in the log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RosterCharacter {
+    pub name: String,
+    pub class: String,
+    pub level: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aa: Option<u16>,
+    /// A quarmy.com character page. Validated at the command layer; stored
+    /// as given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_url: Option<String>,
+    /// Raid-access flags (VP, ST, Emp, VT…) from the guild's configured list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub access: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main: Option<MainRank>,
+}
+
 /// Patch to per-guild behavioural config (`/configure`). Absent = unchanged.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConfigPatch {
@@ -264,6 +296,15 @@ pub enum Event {
     #[serde(rename = "auction.cancelled")]
     AuctionCancelled { auction_id: String, reason: String },
 
+    // -- roster (absorbed from nocturnal-roster-bot, 2026-08-31) --------------
+    #[serde(rename = "roster.character.set")]
+    RosterCharacterSet {
+        player: PlayerId,
+        character: RosterCharacter,
+    },
+    #[serde(rename = "roster.character.removed")]
+    RosterCharacterRemoved { player: PlayerId, name: String },
+
     // -- config & telemetry provisioning -------------------------------------
     #[serde(rename = "config.updated")]
     ConfigUpdated { patch: ConfigPatch },
@@ -333,6 +374,8 @@ impl Event {
             Event::AuctionClosed { .. } => "auction.closed",
             Event::AuctionFinalized { .. } => "auction.finalized",
             Event::AuctionCancelled { .. } => "auction.cancelled",
+            Event::RosterCharacterSet { .. } => "roster.character.set",
+            Event::RosterCharacterRemoved { .. } => "roster.character.removed",
             Event::ConfigUpdated { .. } => "config.updated",
             Event::TelemetryTokenIssued { .. } => "telemetry.token.issued",
             Event::TelemetryAccessUpdated { .. } => "telemetry.access.updated",

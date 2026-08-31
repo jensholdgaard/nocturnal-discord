@@ -312,6 +312,51 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
+        Command::SetRosterCharacter {
+            player,
+            character,
+            replace,
+        } => {
+            validate_roster_character(character)?;
+            let key = character.name.to_lowercase();
+            let exists = g
+                .roster
+                .get(player)
+                .is_some_and(|chars| chars.contains_key(&key));
+            match (exists, *replace) {
+                (true, false) => {
+                    return Err(Rejection::RosterCharacterExists {
+                        name: character.name.clone(),
+                    })
+                }
+                (false, true) => {
+                    return Err(Rejection::RosterCharacterMissing {
+                        name: character.name.clone(),
+                    })
+                }
+                _ => {}
+            }
+            Ok(vec![Event::RosterCharacterSet {
+                player: *player,
+                character: character.clone(),
+            }])
+        }
+
+        Command::RemoveRosterCharacter { player, name } => {
+            let key = name.to_lowercase();
+            let exists = g
+                .roster
+                .get(player)
+                .is_some_and(|chars| chars.contains_key(&key));
+            if !exists {
+                return Err(Rejection::RosterCharacterMissing { name: name.clone() });
+            }
+            Ok(vec![Event::RosterCharacterRemoved {
+                player: *player,
+                name: name.clone(),
+            }])
+        }
+
         Command::IssueToken {
             username,
             token_fp,
@@ -456,6 +501,69 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
                 "must be a different channel from the raid channel",
             ));
         }
+    }
+    Ok(())
+}
+
+/// The classes a character can be, in the order the roster shows them. The
+/// materializer's column order and this list are the same list.
+pub const CLASSES: [&str; 15] = [
+    "Bard",
+    "Cleric",
+    "Druid",
+    "Enchanter",
+    "Magician",
+    "Monk",
+    "Necromancer",
+    "Paladin",
+    "Ranger",
+    "Rogue",
+    "Shadow Knight",
+    "Shaman",
+    "Warrior",
+    "Wizard",
+    "Beastlord",
+];
+
+/// Guard the values `/roster` writes, the way `validate_config` guards
+/// `/configure`: here, not at the slash-command options, so the sheet import
+/// is held to the same rules as a member typing.
+fn validate_roster_character(c: &crate::event::RosterCharacter) -> Result<(), Rejection> {
+    let bad = |field, reason: String| Rejection::InvalidRosterEntry { field, reason };
+    let name = c.name.trim();
+    if name.is_empty() || name.len() > 64 || name.chars().any(char::is_control) {
+        return Err(bad("name", "must be 1–64 printable characters".into()));
+    }
+    if !CLASSES.contains(&c.class.as_str()) {
+        return Err(bad(
+            "class",
+            format!("{} is not an EverQuest class", c.class),
+        ));
+    }
+    if !(1..=65).contains(&c.level) {
+        return Err(bad("level", "must be 1–65".into()));
+    }
+    if c.aa.is_some_and(|aa| !(1..=1000).contains(&aa)) {
+        return Err(bad("aa", "must be 1–1000".into()));
+    }
+    if let Some(url) = &c.profile_url {
+        // Strict host equality, as the legacy bot did: a startsWith check
+        // would pass quarmy.com.malicious.tld.
+        let rest = url
+            .strip_prefix("https://quarmy.com/")
+            .or_else(|| (url == "https://quarmy.com").then_some(""));
+        if rest.is_none() {
+            return Err(bad(
+                "quarmy_link",
+                "must be a page under https://quarmy.com/".into(),
+            ));
+        }
+    }
+    if c.access.len() > 25 || c.access.iter().any(|a| a.trim().is_empty() || a.len() > 32) {
+        return Err(bad(
+            "access",
+            "at most 25 labels of up to 32 characters".into(),
+        ));
     }
     Ok(())
 }

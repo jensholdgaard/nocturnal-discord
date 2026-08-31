@@ -327,6 +327,24 @@ exists; the Python dpsbot retires when this ships.
       has to give back (`tickDuration`, `dkpsPerTick`, `eventId`, the Mongo
       `_id`). Additive, so existing logs replay unchanged.
 
+## M9 — Roster absorbed *(2026-08-31)*
+
+`nocturnal-roster-bot` kept the guild roster in a Google Sheet, fed DKP into
+it from `/backup` via a Drive relay and an Apps Script, and served a page that
+mirrors the sheet cell for cell. All of that collapses into the ledger:
+
+- [x] `roster.character.*` events, projection, decide-step validation (class,
+      level 1–65, AA 1–1000, quarmy.com-only link, ≤25 access labels).
+- [x] `/roster add|edit|remove|export` under NocturnalGuild, same options and
+      refusals as the roster bot; access as a typed option, main/second set by
+      the member (deliberate changes #17).
+- [x] The page payload rendered from the ledger in the exact shape the
+      existing `index.html` renders — values, notes, links, a captured style
+      theme (`deploy/roster-theme.json`), header at row 4 — so the page changes
+      one constant and keeps its matrix view.
+- [ ] One-time import of the live sheet (`--import-roster`), served behind
+      Caddy, page repointed, roster bot and Apps Script retired.
+
 **Exit:** `/dpstoken` on the real VM issues a working token; `kill -9` between
 event and file write heals on restart; dpsbot's systemd unit disabled.
 *(Unit disabled and the files verified byte-identical on 2026-08-29. Still

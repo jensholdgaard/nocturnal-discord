@@ -92,6 +92,18 @@ pub enum Command {
     UpdateConfig {
         patch: ConfigPatch,
     },
+    /// `/roster add` and `/roster edit`. `replace` distinguishes them: an edit
+    /// of a character the player does not have is a refusal, and an add of
+    /// one they do is a refusal too, exactly as the legacy bot behaved.
+    SetRosterCharacter {
+        player: PlayerId,
+        character: crate::event::RosterCharacter,
+        replace: bool,
+    },
+    RemoveRosterCharacter {
+        player: PlayerId,
+        name: String,
+    },
     // -- telemetry provisioning (M8) --
     IssueToken {
         username: String,
@@ -144,6 +156,8 @@ impl Command {
             Command::FinalizeAuction { .. } => "finalize_auction",
             Command::CancelAuction { .. } => "cancel_auction",
             Command::UpdateConfig { .. } => "update_config",
+            Command::SetRosterCharacter { .. } => "set_roster_character",
+            Command::RemoveRosterCharacter { .. } => "remove_roster_character",
             Command::IssueToken { .. } => "issue_token",
             Command::RefreshAccess { .. } => "refresh_access",
             Command::RevokeToken { .. } => "revoke_token",

@@ -26,6 +26,34 @@ pub struct Config {
     pub provision: ProvisionConfig,
     #[serde(default)]
     pub compaction: CompactionConfig,
+    #[serde(default)]
+    pub roster: RosterConfig,
+}
+
+/// The guild roster, absorbed from the roster bot.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RosterConfig {
+    /// Raid-access flags members may attach to a character (the roster
+    /// bot's `access.txt`). Order is display order.
+    #[serde(default = "default_access_labels")]
+    pub access_labels: Vec<String>,
+    /// Where the rendered roster payload is written for the web page to read.
+    /// Unset = the page is not materialized.
+    pub output_path: Option<PathBuf>,
+}
+
+fn default_access_labels() -> Vec<String> {
+    ["VP", "ST", "Emp", "VT"].map(String::from).to_vec()
+}
+
+impl Default for RosterConfig {
+    fn default() -> Self {
+        RosterConfig {
+            access_labels: default_access_labels(),
+            output_path: None,
+        }
+    }
 }
 
 /// Rolling sealed WAL segments into month-partitioned Parquet.

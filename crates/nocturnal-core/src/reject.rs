@@ -40,6 +40,20 @@ pub enum Rejection {
     NotProvisioned {
         username: String,
     },
+    /// `/roster edit` or `remove` for a character the player has not added,
+    /// or `/roster add` for one they already have — the name is the key.
+    RosterCharacterMissing {
+        name: String,
+    },
+    RosterCharacterExists {
+        name: String,
+    },
+    /// A roster value the ledger refuses: unknown class, level or AA out of
+    /// range, a profile link that is not a quarmy.com page.
+    InvalidRosterEntry {
+        field: &'static str,
+        reason: String,
+    },
     /// A `/configure` value the ledger refuses to hold. Carries the option
     /// name so the officer is told which one, not just that something was
     /// wrong.
@@ -70,6 +84,9 @@ impl Rejection {
             Rejection::AlreadyProvisioned { .. } => "already_provisioned",
             Rejection::NotProvisioned { .. } => "not_provisioned",
             Rejection::InvalidConfig { .. } => "invalid_config",
+            Rejection::RosterCharacterMissing { .. } => "roster_character_missing",
+            Rejection::RosterCharacterExists { .. } => "roster_character_exists",
+            Rejection::InvalidRosterEntry { .. } => "invalid_roster_entry",
         }
     }
 }
