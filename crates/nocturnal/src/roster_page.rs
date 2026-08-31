@@ -448,6 +448,25 @@ pub async fn rematerialize(
     site_handle: &crate::site::SiteHandle,
 ) {
     let now = crate::discord::chrono_now_ms();
+    // First, a snapshot from what the ledger already knows, so the site is
+    // never "warming up" for more than a replay: the site's names are roster
+    // mains by rule, and only the Discord-name fallbacks and roles wait on
+    // the member lookups below, which can take minutes after a restart.
+    {
+        let members = members_cache.lock().map(|m| m.clone()).unwrap_or_default();
+        let early = driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .map(|g| crate::site::SiteData::build(g, &members, now, Vec::new()))
+            })
+            .await;
+        if let (Some(data), Ok(mut slot)) = (early, site_handle.write()) {
+            if slot.is_none() {
+                *slot = Some(std::sync::Arc::new(data));
+            }
+        }
+    }
     let ids: Vec<PlayerId> = driver
         .query(move |l| {
             l.state().guild(ledger_guild).map_or(Vec::new(), |g| {
