@@ -258,6 +258,13 @@ pub async fn sync_roster(
             .and_then(|r| players.get(&r.to_lowercase()))
             .copied()
         else {
+            // Not silent: a profile that maps to nobody is the thing an
+            // operator needs to see, and at boot the member cache is cold.
+            tracing::info!(
+                character = %p.name,
+                reporter = p.reporter.as_deref().unwrap_or("<none>"),
+                "profile has no matching member yet; the next render retries"
+            );
             continue;
         };
         let key = p.name.to_lowercase();
