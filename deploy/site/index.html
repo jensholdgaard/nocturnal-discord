@@ -60,6 +60,15 @@ input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid 
 .namelink:hover{color:var(--accent)}
 .empty{color:var(--muted);font-style:italic}
 @media (max-width:600px){.bars .row{grid-template-columns:80px 1fr 60px}}
+.item{cursor:pointer;text-decoration:underline dotted var(--line-strong);text-underline-offset:3px}.item:hover{color:var(--accent)}
+#tip{position:fixed;z-index:20;max-width:340px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none;white-space:pre-wrap}
+#tip img{float:right;width:40px;height:40px;margin:0 0 6px 8px;border-radius:4px}
+#tip b{display:block;margin-bottom:4px;font-size:14px}
+#modal{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+#modal .box{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;max-width:640px;width:100%;padding:18px 20px}
+#modal .box h2{margin-top:0}#modal .close{float:right;background:none;border:0;color:var(--muted);font:inherit;font-size:22px;cursor:pointer}
+.next{display:grid;gap:8px}.next .ev{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.next .ev b{font-size:16px}.next .ev small{display:block;color:var(--muted)}
 </style>
 <nav><div class="in">
 <a class="brand" href="#raid">Nocturnal</a>
@@ -77,6 +86,7 @@ const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const discord = (what) => `<div class="discord">${what} — that happens in Discord, not here. This site only looks.</div>`;
 const panel = (title, scope, body, foot) => `<section class="panel"><div class="ph"><b>${title}</b><span>Perses · ${scope}</span></div><div class="pb">${body}</div>${foot?`<div class="foot">${foot}</div>`:''}</section>`;
 const nameBtn = n => `<button class="namelink" data-name="${esc(n)}">${esc(n)}</button>`;
+const itemEl = n => `<span class="item" data-item="${esc(n)}">${esc(n)}</span>`;
 
 function bars(list, unit){
   if(!list.length) return '<p class="empty">Nothing reported.</p>';
@@ -124,7 +134,7 @@ function raidPage(){
   const dps = panel('Damage', 'everquest / Fights', m ? (m.error?'<p class="empty">Could not load the meter data.</p>':bars(m.damage)) : loading, m&&!m.error ? `Only characters running the DPS meter show up — ${m.damage.length} did this raid. Set yours up with <code>/dpstoken</code> in Discord.` : '');
   const line = m && Object.keys(m.dps_series).length ? panel('DPS through the night, top three', 'everquest / Fights', lineChart(m.dps_series), `${hm(m.window.start*1000)} – ${hm(m.window.end*1000)}, 2-minute rate`) : '';
   const heal = m && !m.error ? panel('Healing', 'everquest / Fights', m.healing.length ? bars(m.healing) : '<p class="empty">No healer had the meter running, so there is nothing to show.</p>') : '';
-  const loot = r.loot.length ? `<div class="tablewrap"><table><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>When</th></tr></thead><tbody>${r.loot.map(l=>`<tr><td>${esc(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${hm(l.ts_ms)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing dropped — or nothing was bid on.</p>';
+  const loot = r.loot.length ? `<div class="tablewrap"><table><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>When</th></tr></thead><tbody>${r.loot.map(l=>`<tr><td>${itemEl(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${hm(l.ts_ms)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">Nothing dropped — or nothing was bid on.</p>';
   return `<div class="read">
     <div class="eyebrow">${isLast?'Last raid':'Raid night'} · ${day(r.date_ms)}</div>
     <h1>${esc(r.name)}</h1>
@@ -132,6 +142,7 @@ function raidPage(){
     ${pick}
     ${dps}${line}${heal}
     <h2>What dropped</h2>${loot}
+    ${isLast?`<h2>Next raid</h2>${D.upcoming&&D.upcoming.length?`<div class="next">${D.upcoming.map(e=>`<div class="ev"><span><b>${esc(e.title)}</b><small>${day(e.start_ms)} · ${hm(e.start_ms)}</small></span><span class="mut">${e.signups} signed up</span></div>`).join('')}</div>`:'<p class="empty">Nothing scheduled in RaidHelper for the next two weeks.</p>'}`:''}
     <h2>Who came</h2><div class="chips">${r.attendees.map(a=>`<span class="chip${D.me&&a===D.me.name?' me':''}">${esc(a)}</span>`).join('')}</div>
     ${discord('Want to bid, or start a raid?')}
   </div>`;
@@ -145,7 +156,7 @@ function mePage(who){
   const last=D.raids[0], m=charts[last.id];
   const rep = s && m ? m.damage.find(([n])=>chars.some(([,c])=>c.toLowerCase().startsWith(n.toLowerCase()))) : null;
   const meter = s ? (m ? (rep ? `Your meter reported <b>${esc(rep[0])}</b> in the last raid: ${fmt.format(rep[1])} damage.` : `Your meter did not report any damage in the last raid.`) : 'Loading…') : '';
-  const hist = s && s.history.length ? `<ul class="hist">${s.history.map(h=>`<li><span class="d ${h.dkp<0?'neg':'pos'}">${h.dkp>0?'+':''}${h.dkp}</span><span>${esc(h.item||h.comment)}<small>${h.raid?esc(h.raid)+' · ':''}${ago(h.ts_ms)}</small></span></li>`).join('')}</ul>` : '';
+  const hist = s && s.history.length ? `<ul class="hist">${s.history.map(h=>`<li><span class="d ${h.dkp<0?'neg':'pos'}">${h.dkp>0?'+':''}${h.dkp}</span><span>${h.kind==='raid'?esc(h.raid||'Raid')+` <span class="mut">· ${h.ticks} tick${h.ticks===1?'':'s'}</span>`:h.kind==='loot'?itemEl(h.item):esc(h.comment)}<small>${h.kind!=='raid'&&h.raid?esc(h.raid)+' · ':''}${ago(h.ts_ms)}</small></span></li>`).join('')}</ul>` : '';
   return `<div class="read">
     <div class="eyebrow">${s?'You':'Member'}</div><h1>${esc(name)}</h1>
     ${s?`<div class="nums"><div class="brass"><b>${fmt.format(s.dkp)}</b><span>DKP</span></div><div><b>${s.attendance}%</b><span>attendance, 90 days</span></div><div><b>${s.raids_attended}<span style="font-size:16px;font-weight:400;color:var(--muted)"> / ${D.raids.length}</span></b><span>of the last ${D.raids.length} raids</span></div></div>`:(row?`<div class="nums"><div class="brass"><b>${esc(row[1])}</b><span>DKP</span></div><div><b>${esc(row[2])}</b><span>attendance</span></div></div>`:'<p class="lede">Not on the roster.</p>')}
@@ -171,7 +182,7 @@ function lootPage(){
   return `<div class="eyebrow">What dropped lately</div><h1>Loot</h1>
   <p class="lede">Every drop from the last ${D.raids.length} raids and what it went for. It is a record, not a price guide — there is deliberately no "what things usually cost" here.</p>
   <input type="search" id="lq" placeholder="Find an item or a member" aria-label="Find">
-  <div class="tablewrap"><table id="lt"><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>Raid</th></tr></thead><tbody>${loot.map(l=>`<tr><td>${esc(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${esc(l.raid)} · ${ago(l.date_ms)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="tablewrap"><table id="lt"><thead><tr><th>Item</th><th>Went to</th><th class="num">DKP</th><th>Raid</th></tr></thead><tbody>${loot.map(l=>`<tr><td>${itemEl(l.item)}</td><td>${nameBtn(l.winner)}</td><td class="num brassx">${l.cost}</td><td class="mut">${esc(l.raid)} · ${ago(l.date_ms)}</td></tr>`).join('')}</tbody></table></div>
   ${discord('Disputing a line? Officers use <code>/searchlogs</code>')}`;
 }
 function render(){
@@ -200,7 +211,7 @@ async function boot(){
     ]);
     const login = meRes && (meRes.metadata?.name || meRes.name || meRes.login || null);
     const v=roster.values, H=4;
-    D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, login,
+    D = { generated_ms: site.generatedAt, avg_attendance: site.avgAttendance, raids: site.raids, upcoming: site.upcoming||[], items: site.items||{}, login,
           me: login && site.members[login] ? site.members[login] : null,
           matrix: { classes: v[0].slice(3,18), header: v[H], rows: v.slice(H+1).filter(r=>r&&r[0]), counts: { total: v[1].slice(3,18), mains: v[2].slice(3,18), m2: v[3].slice(3,18), raid_force: v[3][0] } } };
     document.getElementById('who').textContent = D.me ? 'you are '+D.me.name : (login ? 'signed in as '+login : 'not signed in');
@@ -208,6 +219,22 @@ async function boot(){
   }catch(e){ main.innerHTML='<div class="read"><h1>Could not load</h1><p class="lede">'+esc(String(e))+'</p></div>'; }
 }
 boot();
-document.addEventListener('click',e=>{const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
+const tip=document.createElement('div'); tip.id='tip'; tip.hidden=true; document.body.appendChild(tip);
+function showTip(name, x, y){ const it=D.items&&D.items[name]; if(!it) return; tip.innerHTML=`${it.image?`<img src="${esc(it.image)}" alt="">`:''}<b>${esc(name)}</b>${esc(it.data||'No stat block stored for this item.')}`; tip.hidden=false; const w=tip.offsetWidth,h=tip.offsetHeight; tip.style.left=Math.min(x+14,innerWidth-w-8)+'px'; tip.style.top=(y+18+h>innerHeight? y-h-8 : y+18)+'px'; }
+document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-item]'); if(el) showTip(el.dataset.item,e.clientX,e.clientY);});
+document.addEventListener('mousemove',e=>{ if(!tip.hidden){ const w=tip.offsetWidth,h=tip.offsetHeight; tip.style.left=Math.min(e.clientX+14,innerWidth-w-8)+'px'; tip.style.top=(e.clientY+18+h>innerHeight? e.clientY-h-8 : e.clientY+18)+'px'; }});
+document.addEventListener('mouseout',e=>{ if(e.target.closest&&e.target.closest('[data-item]')) tip.hidden=true; });
+function itemModal(name){
+  const it=(D.items&&D.items[name])||{}; const hist=it.history||[];
+  const m=document.createElement('div'); m.id='modal';
+  m.innerHTML=`<div class="box" role="dialog" aria-label="${esc(name)}"><button class="close" aria-label="Close">×</button><div class="eyebrow">Item</div><h2>${esc(name)}${it.url?` <a href="${esc(it.url)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:400">pqdi ↗</a>`:''}</h2>
+    ${it.data?`<pre style="white-space:pre-wrap;font:13px/1.4 inherit;color:var(--muted);margin:0 0 14px">${esc(it.data)}</pre>`:''}
+    <h2 style="font-size:20px">Every time it dropped</h2>
+    ${hist.length?`<div class="tablewrap"><table><thead><tr><th>Went to</th><th class="num">DKP</th><th>Raid</th></tr></thead><tbody>${hist.map(h=>`<tr><td>${nameBtn(h.winner)}</td><td class="num brassx">${h.cost}</td><td class="mut">${esc(h.raid)} · ${ago(h.ts_ms)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Never charged in the ledger.</p>'}
+    <p class="mut" style="font-size:13px;margin-top:12px">This is the ledger's own history for the item — what <code>/searchlogs</code> would show an officer.</p></div>`;
+  m.addEventListener('click',e=>{ if(e.target===m||e.target.closest('.close')) m.remove(); if(e.target.closest('[data-name]')) m.remove(); });
+  document.body.appendChild(m);
+}
+document.addEventListener('click',e=>{ const it=e.target.closest('[data-item]'); if(it){ tip.hidden=true; itemModal(it.dataset.item); return; }const b=e.target.closest('button[data-raid]'); if(b){raidIdx=+b.dataset.raid; render(); return;} const n=e.target.closest('button[data-name]'); if(n){location.hash='#me/'+encodeURIComponent(n.dataset.name);}});
 window.addEventListener('hashchange',()=>{ if(D) render(); });
 </script>

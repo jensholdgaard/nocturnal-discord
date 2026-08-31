@@ -341,10 +341,56 @@ pub fn render(
 /// keyed by Discord username so the page shows the viewer theirs. Behind the
 /// login. What is deliberately absent is any per-item price aggregate: that
 /// is a bidding guide, and the guild does not want one.
+/// One squished line of a member's ledger: a raid's ticks as one entry
+/// ("+33 · Vulak & Ring War · 33 ticks") rather than thirty-three "+1"s,
+/// with loot and adjustments kept as their own lines.
+fn squish_history(log: &[nocturnal_core::state::LogEntry], max: usize) -> Vec<serde_json::Value> {
+    let mut out: Vec<serde_json::Value> = Vec::new();
+    let mut i = log.len();
+    while i > 0 && out.len() < max {
+        i -= 1;
+        let e = &log[i];
+        let is_tick =
+            e.dkp > 0 && (e.comment == "Tick" || e.comment == "Start") && e.raid.is_some();
+        if is_tick {
+            // Absorb every earlier tick of the same raid.
+            let raid = e.raid.as_ref().map(|r| r.raid_id.clone());
+            let mut ticks = 1;
+            let mut dkp = e.dkp;
+            let last_ts = e.ts_ms;
+            while i > 0 {
+                let f = &log[i - 1];
+                let same = f.dkp > 0
+                    && (f.comment == "Tick" || f.comment == "Start")
+                    && f.raid.as_ref().map(|r| r.raid_id.clone()) == raid;
+                if !same {
+                    break;
+                }
+                ticks += 1;
+                dkp += f.dkp;
+                i -= 1;
+            }
+            out.push(serde_json::json!({
+                "kind": "raid", "dkp": dkp, "ticks": ticks, "ts_ms": last_ts,
+                "raid": e.raid.as_ref().map(|r| r.name.clone()),
+            }));
+        } else {
+            out.push(serde_json::json!({
+                "kind": if e.item.is_some() { "loot" } else { "adjust" },
+                "dkp": e.dkp, "comment": e.comment, "ts_ms": e.ts_ms,
+                "raid": e.raid.as_ref().map(|r| r.name.clone()),
+                "item": e.item.as_ref().map(|i| i.name.clone()),
+            }));
+        }
+    }
+    out
+}
+
 pub fn render_site(
     g: &GuildState,
     members: &HashMap<u64, MemberInfo>,
     now_ms: i64,
+    upcoming: &[serde_json::Value],
 ) -> serde_json::Value {
     let name = |id: &PlayerId| {
         members
@@ -400,19 +446,7 @@ pub fn render_site(
                     .is_some_and(|r| r.entries.iter().any(|e| e.players.contains(&id)))
             })
             .count();
-        let history: Vec<serde_json::Value> = p
-            .log
-            .iter()
-            .rev()
-            .take(12)
-            .map(|e| {
-                serde_json::json!({
-                    "dkp": e.dkp, "comment": e.comment, "ts_ms": e.ts_ms,
-                    "raid": e.raid.as_ref().map(|r| r.name.clone()),
-                    "item": e.item.as_ref().map(|i| i.name.clone()),
-                })
-            })
-            .collect();
+        let history = squish_history(&p.log, 12);
         let chars: Vec<serde_json::Value> = g
             .roster
             .get(&id)
@@ -431,11 +465,49 @@ pub fn render_site(
             }),
         );
     }
+    // Every item the ledger has ever charged, with the stat block and icon
+    // captured when it was looked up — so the page can show an item on hover
+    // from our own data, and its award history on click. History, not a
+    // price guide: the entries are who, when, at which raid, for what.
+    let mut items: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+    let mut awards: HashMap<String, Vec<(i64, String, String, i64)>> = HashMap::new();
+    for (pid, p) in &g.players {
+        for e in &p.log {
+            let Some(item) = &e.item else { continue };
+            if e.dkp >= 0 {
+                continue;
+            }
+            awards.entry(item.name.clone()).or_default().push((
+                e.ts_ms,
+                e.raid.as_ref().map(|r| r.name.clone()).unwrap_or_default(),
+                name(pid),
+                -e.dkp,
+            ));
+            items.entry(item.name.clone()).or_insert_with(|| {
+                serde_json::json!({"id": item.id, "url": item.url, "image": item.image, "data": item.data})
+            });
+        }
+    }
+    for (iname, mut list) in awards {
+        list.sort_by_key(|a| std::cmp::Reverse(a.0));
+        if let Some(serde_json::Value::Object(o)) = items.get_mut(&iname) {
+            o.insert(
+                "history".into(),
+                serde_json::Value::Array(
+                    list.into_iter()
+                        .map(|(ts, raid, winner, cost)| serde_json::json!({"ts_ms": ts, "raid": raid, "winner": winner, "cost": cost}))
+                        .collect(),
+                ),
+            );
+        }
+    }
     serde_json::json!({
         "generatedAt": now_ms,
         "avgAttendance": g.average_attendance(now_ms),
         "raids": raids,
+        "upcoming": upcoming,
         "members": me,
+        "items": items,
     })
 }
 
@@ -543,11 +615,40 @@ pub async fn rematerialize(
     )
     .await;
     let members = members_cache.lock().map(|m| m.clone()).unwrap_or_default();
+    // Next raids from RaidHelper, if the guild configured a key. A failed
+    // fetch is an empty list, never a failed page.
+    let api_key = driver
+        .query(move |l| {
+            l.state().guild(ledger_guild).and_then(|g| {
+                g.config
+                    .raidhelper_api_key
+                    .as_ref()
+                    .map(|k| k.as_str().to_owned())
+            })
+        })
+        .await;
+    let upcoming: Vec<serde_json::Value> = match api_key {
+        Some(key) => match crate::raidhelper::upcoming_events(&key, discord_guild, now, 14 * 86_400_000).await {
+            Ok(evs) => evs
+                .iter()
+                .take(5)
+                .map(|e| serde_json::json!({"title": e.title, "start_ms": e.start_time * 1000, "signups": crate::raidhelper::attending(e), "id": e.id}))
+                .collect(),
+            Err(e) => {
+                tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "raid-helper upcoming unavailable");
+                Vec::new()
+            }
+        },
+        None => Vec::new(),
+    };
     let both = driver
         .query(move |l| {
-            l.state()
-                .guild(ledger_guild)
-                .map(|g| (render(g, &members, now), render_site(g, &members, now)))
+            l.state().guild(ledger_guild).map(|g| {
+                (
+                    render(g, &members, now),
+                    render_site(g, &members, now, &upcoming),
+                )
+            })
         })
         .await;
     let Some((json, site)) = both else {

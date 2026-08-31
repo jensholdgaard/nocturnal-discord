@@ -76,6 +76,48 @@ pub async fn event_starting_now(
     }))
 }
 
+/// Events scheduled in the next `horizon_ms`, soonest first — the site's
+/// "next raid". Same endpoint as `event_starting_now`, forward window.
+pub async fn upcoming_events(
+    api_key: &str,
+    guild: u64,
+    now_ms: i64,
+    horizon_ms: i64,
+) -> anyhow::Result<Vec<Event>> {
+    #[derive(Deserialize)]
+    struct Listing {
+        #[serde(rename = "postedEvents", default)]
+        posted_events: Vec<Event>,
+    }
+    let resp = client()?
+        .get(format!("{API}/servers/{guild}/events"))
+        .header("Authorization", api_key)
+        .header("StartTimeFilter", (now_ms / 1000).to_string())
+        .header("EndTimeFilter", ((now_ms + horizon_ms) / 1000).to_string())
+        .send()
+        .await
+        .context("raid-helper upcoming listing")?;
+    if !resp.status().is_success() {
+        anyhow::bail!("raid-helper returned {}", resp.status());
+    }
+    let listing: Listing = resp.json().await.context("raid-helper listing json")?;
+    let mut events: Vec<Event> = listing
+        .posted_events
+        .into_iter()
+        .filter(|e| e.start_time * 1000 >= now_ms)
+        .collect();
+    events.sort_by_key(|e| e.start_time);
+    Ok(events)
+}
+
+/// Sign-ups that mean "coming": everything but Absence and Bench.
+pub fn attending(e: &Event) -> usize {
+    e.signups
+        .iter()
+        .filter(|s| !IGNORED_STATUSES.contains(&s.class_name.as_str()))
+        .count()
+}
+
 pub async fn fetch_event(event_id: &str) -> anyhow::Result<Event> {
     let resp = client()?
         .get(format!("{API}/events/{event_id}"))
