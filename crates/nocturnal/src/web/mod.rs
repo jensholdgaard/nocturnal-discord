@@ -56,11 +56,26 @@ pub fn respond(path: &str, site: &SiteHandle, assets_dir: Option<&Path>) -> Resp
     if let Some(rest) = path.strip_prefix("/assets/") {
         return serve_asset(rest, assets_dir);
     }
+    let segs: Vec<String> = path.trim_matches('/').split('/').map(decode).collect();
+    let known = matches!(
+        (segs[0].as_str(), segs.len()),
+        ("", 1)
+            | ("me", 1)
+            | ("roster", 1)
+            | ("loot", 1)
+            | ("raid", 2)
+            | ("member", 2)
+            | ("who", 2)
+            | ("char", 2)
+            | ("item", 2)
+    );
+    if !known {
+        return Response::not_found();
+    }
     let snapshot = site.read().ok().and_then(|s| s.clone());
     let Some(data) = snapshot else {
         return Response::html(pages::not_ready());
     };
-    let segs: Vec<String> = path.trim_matches('/').split('/').map(decode).collect();
     let page = match (segs[0].as_str(), segs.get(1).map(String::as_str)) {
         ("", None) => pages::raid(&data, None, assets_dir.is_some()),
         ("raid", Some(id)) => pages::raid(&data, Some(id), assets_dir.is_some()),
@@ -227,5 +242,10 @@ mod tests {
         let site: SiteHandle = Default::default();
         let r = respond("/", &site, None);
         assert!(String::from_utf8(r.body).unwrap().contains("Warming up"));
+        assert_eq!(
+            respond("/nope", &site, None).status,
+            "404 Not Found",
+            "unknown paths are 404 even while warming"
+        );
     }
 }
