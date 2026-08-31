@@ -40,7 +40,7 @@ fn island_version() -> String {
     .clone()
 }
 
-fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
+fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: bool) -> String {
     let v = island_version();
     let doc = html! {
         (DOCTYPE)
@@ -63,13 +63,18 @@ fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
                     a class="tab" href="/perses/" title="The full Perses dashboards" { "Dashboards ↗" }
                     span class="who" id="who" { "…" }
                 } }
-                main id="main" { (body) }
+                main id="main" class=[wide.then_some("wide")] { (body) }
                 script { (PreEscaped(PAGE_JS)) }
                 @if island { script type="module" src={ "/assets/island.js?v=" (v) } {} }
             }
         }
     };
     doc.into_string()
+}
+
+/// The common case: a reading-width page.
+fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
+    layout_full(title, current, body, island, false)
 }
 
 // --- small helpers -------------------------------------------------------------------------
@@ -546,7 +551,7 @@ pub fn roster(data: &SiteData) -> String {
         } }
         (discord_box("Add or change a character?"))
     };
-    layout("Roster", "roster", body, false)
+    layout_full("Roster", "roster", body, false, true)
 }
 
 pub fn loot(data: &SiteData) -> String {
@@ -566,7 +571,7 @@ pub fn loot(data: &SiteData) -> String {
         } }
         (discord_box("Disputing a line? Officers use /searchlogs"))
     };
-    layout("Loot", "loot", body, false)
+    layout_full("Loot", "loot", body, false, true)
 }
 
 pub fn item(data: &SiteData, name: &str) -> String {
