@@ -229,6 +229,10 @@ pub enum Event {
     },
     #[serde(rename = "raid.ended")]
     RaidEnded { raid_id: String, reason: String },
+    /// Officer correction (2026-09-01): `from` — a false `/startraid` — is
+    /// folded into `into`. Pure relabel: no DKP moves.
+    #[serde(rename = "raid.merged")]
+    RaidMerged { from: String, into: String },
     #[serde(rename = "raid.imported")]
     RaidImported {
         raid_id: String,
@@ -367,6 +371,7 @@ impl Event {
             Event::RaidAwarded { .. } => "raid.awarded",
             Event::RaidTicked { .. } => "raid.tick",
             Event::RaidEnded { .. } => "raid.ended",
+            Event::RaidMerged { .. } => "raid.merged",
             Event::RaidImported { .. } => "raid.imported",
             Event::AuctionOpened { .. } => "auction.opened",
             Event::BidPlaced { .. } => "auction.bid_placed",

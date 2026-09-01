@@ -172,6 +172,25 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             ])
         }
 
+        Command::MergeRaid { from, into } => {
+            if from == into {
+                return Err(Rejection::SameRaid);
+            }
+            let src = g.raids.get(from).ok_or(Rejection::RaidNotFound)?;
+            let dst = g.raids.get(into).ok_or(Rejection::RaidNotFound)?;
+            for r in [src, dst] {
+                if r.active {
+                    return Err(Rejection::RaidStillActive {
+                        name: r.name.clone(),
+                    });
+                }
+            }
+            Ok(vec![Event::RaidMerged {
+                from: from.clone(),
+                into: into.clone(),
+            }])
+        }
+
         Command::OpenAuction {
             auction_id,
             item,

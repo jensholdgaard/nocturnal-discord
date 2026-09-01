@@ -55,6 +55,13 @@ pub enum Command {
         players_present: Vec<PlayerId>,
         reason: String,
     },
+    /// `/mergeraid`: fold a false-start raid into the real one. Attendance
+    /// entries and every player's log lines are re-labelled; balances do
+    /// not move; `from` ceases to exist.
+    MergeRaid {
+        from: String,
+        into: String,
+    },
     OpenAuction {
         auction_id: String,
         item: Item,
@@ -149,6 +156,7 @@ impl Command {
             Command::Tick { .. } => "tick",
             Command::AwardRaid { .. } => "award_raid",
             Command::EndRaid { .. } => "end_raid",
+            Command::MergeRaid { .. } => "merge_raid",
             Command::OpenAuction { .. } => "open_auction",
             Command::PlaceBid { .. } => "place_bid",
             Command::RetractBid { .. } => "retract_bid",

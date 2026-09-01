@@ -79,7 +79,7 @@ fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
 
 // --- small helpers -------------------------------------------------------------------------
 
-fn day(ms: i64) -> String {
+pub(crate) fn day(ms: i64) -> String {
     let (y, m, d) = civil(ms);
     const M: [&str; 12] = [
         "January",

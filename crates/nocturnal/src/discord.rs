@@ -720,6 +720,7 @@ pub async fn run(
         showconfig(),
         startraid(),
         endraid(),
+        mergeraid(),
         adddkp(),
         removedkp(),
         addraiddkp(),
@@ -1132,6 +1133,10 @@ pub fn rejection_text(e: &ExecError) -> String {
         }
     };
     match rejection {
+        R::SameRaid => ":no_entry: That is the same raid on both sides.".to_owned(),
+        R::RaidStillActive { name } => {
+            format!(":no_entry: **{name}** is still running — `/endraid` it first.")
+        }
         // The one people hit most: they tried to spend more than they have.
         R::InsufficientBalance {
             available,
@@ -1350,6 +1355,104 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
         .await?;
+    Ok(())
+}
+
+/// Ended raids, newest first, as picker choices: "Seru & Emp · 31 Aug · 2 entries".
+async fn autocomplete_raid(ctx: Context<'_>, partial: &str) -> Vec<serenity::AutocompleteChoice> {
+    let Ok(ledger_guild) = require_guild(&ctx) else {
+        return Vec::new();
+    };
+    let partial = partial.to_lowercase();
+    ctx.data()
+        .driver
+        .query(move |l| {
+            let Some(g) = l.state().guild(ledger_guild) else {
+                return Vec::new();
+            };
+            let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> =
+                g.raids.iter().filter(|(_, r)| !r.active).collect();
+            raids.sort_by_key(|(_, r)| std::cmp::Reverse(r.date_ms));
+            raids
+                .into_iter()
+                .filter(|(id, r)| {
+                    partial.is_empty()
+                        || r.name.to_lowercase().contains(&partial)
+                        || id.contains(&partial)
+                })
+                .take(25)
+                .map(|(id, r)| {
+                    let name: String = r.name.chars().take(40).collect();
+                    let when = crate::web::pages::day(r.date_ms);
+                    let when: Vec<&str> = when.split(' ').skip(1).take(2).collect();
+                    serenity::AutocompleteChoice::new(
+                        format!("{name} · {} · {} entries", when.join(" "), r.entries.len()),
+                        id.clone(),
+                    )
+                })
+                .collect()
+        })
+        .await
+}
+
+/// Fold a false-start raid into the real one (attendance and loot lines
+/// re-filed, no DKP moves).
+#[tracing::instrument(name = "command.mergeraid", skip_all, fields(otel.kind = "server"))]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "mergeraid",
+    check = "officer_check"
+)]
+pub async fn mergeraid(
+    ctx: Context<'_>,
+    #[description = "The false start — it goes away"]
+    #[autocomplete = "autocomplete_raid"]
+    from: String,
+    #[description = "The real raid — it keeps everything"]
+    #[autocomplete = "autocomplete_raid"]
+    into: String,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let (f, i) = (from.clone(), into.clone());
+    let names = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            let g = l.state().guild(ledger_guild)?;
+            let src = g.raids.get(&f)?;
+            let dst = g.raids.get(&i)?;
+            Some((src.name.clone(), dst.name.clone(), src.entries.len()))
+        })
+        .await;
+    match execute(&ctx, Command::MergeRaid { from, into }).await? {
+        Ok(_) => {
+            let (fname, iname, n) = names.unwrap_or_default();
+            ctx.say(format!(
+                "Merged **{fname}** into **{iname}** — {n} attendance entries and every DKP line \
+                 re-filed under it; no balances changed. The site is rebuilding."
+            ))
+            .await?;
+            if let Some(out) = &ctx.data().roster_output {
+                crate::roster_page::rematerialize(
+                    ctx.serenity_context().http.as_ref(),
+                    ctx.guild_id().map_or(0, |g| g.get()),
+                    &ctx.data().driver,
+                    out,
+                    &ctx.data().members,
+                    ledger_guild,
+                    ctx.data().ourios.as_ref(),
+                    &ctx.data().item_mirror,
+                    &ctx.data().site,
+                )
+                .await;
+            }
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
     Ok(())
 }
 

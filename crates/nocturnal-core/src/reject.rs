@@ -27,6 +27,12 @@ pub enum Rejection {
     NoActiveRaid,
     RaidNotFound,
     TickTooSoon,
+    /// `/mergeraid` on a raid that is still running — end it first.
+    RaidStillActive {
+        name: String,
+    },
+    /// `/mergeraid` with the same raid on both sides.
+    SameRaid,
     AuctionNotFound,
     AuctionIdTaken,
     AuctionNotActive,
@@ -76,6 +82,8 @@ impl Rejection {
             Rejection::NoActiveRaid => "no_active_raid",
             Rejection::RaidNotFound => "raid_not_found",
             Rejection::TickTooSoon => "tick_too_soon",
+            Rejection::RaidStillActive { .. } => "raid_still_active",
+            Rejection::SameRaid => "same_raid",
             Rejection::AuctionNotFound => "auction_not_found",
             Rejection::AuctionIdTaken => "auction_id_taken",
             Rejection::AuctionNotActive => "auction_not_active",

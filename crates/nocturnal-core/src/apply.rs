@@ -118,6 +118,35 @@ pub fn apply(state: &mut State, env: &Envelope) {
             }
         }
 
+        Event::RaidMerged { from, into } => {
+            // Total by construction: decide guaranteed both exist, but a
+            // replay must never panic, so a missing side is a no-op.
+            let Some(src) = g.raids.remove(from) else {
+                return;
+            };
+            let Some(dst) = g.raids.get_mut(into) else {
+                g.raids.insert(from.clone(), src);
+                return;
+            };
+            dst.entries.extend(src.entries);
+            dst.entries.sort_by_key(|e| e.ts_ms); // stable: same-ts order kept
+            dst.date_ms = dst.date_ms.min(src.date_ms);
+            let re = crate::event::RaidRef {
+                raid_id: into.clone(),
+                name: dst.name.clone(),
+            };
+            for p in g.players.values_mut() {
+                for e in &mut p.log {
+                    if e.raid.as_ref().is_some_and(|r| r.raid_id == *from) {
+                        e.raid = Some(re.clone());
+                    }
+                }
+            }
+            if g.active_raid.as_deref() == Some(from) {
+                g.active_raid = None;
+            }
+        }
+
         Event::RaidImported {
             raid_id,
             name,
