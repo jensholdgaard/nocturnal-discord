@@ -1672,6 +1672,7 @@ mod tests {
             ))),
             site: Default::default(),
             members: Default::default(),
+            feedback: None,
         };
 
         driver

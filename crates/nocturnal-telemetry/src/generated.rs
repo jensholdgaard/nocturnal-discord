@@ -67,6 +67,11 @@ pub mod attr {
     pub const NOCTURNAL_TELEMETRY_PROTOCOL: &str = "nocturnal.telemetry.protocol";
     pub const FILE_PATH: &str = "file.path";
     pub const HTTP_REQUEST_METHOD: &str = "http.request.method";
+    pub const NOCTURNAL_FEEDBACK_ATTACHMENTS: &str = "nocturnal.feedback.attachments";
+    pub const NOCTURNAL_FEEDBACK_KIND: &str = "nocturnal.feedback.kind";
+    pub const NOCTURNAL_FEEDBACK_MESSAGE_ID: &str = "nocturnal.feedback.message_id";
+    pub const NOCTURNAL_FEEDBACK_POSTED_MS: &str = "nocturnal.feedback.posted_ms";
+    pub const NOCTURNAL_FEEDBACK_REPLY_TO: &str = "nocturnal.feedback.reply_to";
     pub const URL_PATH: &str = "url.path";
     pub const CPU_MODE: &str = "cpu.mode";
     pub const SYSTEM_FILESYSTEM_MOUNTPOINT: &str = "system.filesystem.mountpoint";

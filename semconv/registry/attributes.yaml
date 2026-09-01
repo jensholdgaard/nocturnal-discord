@@ -458,3 +458,40 @@ groups:
         stability: development
         brief: Filesystem path of an override bell sound that could not be read.
         examples: ['/etc/nocturnal/bell.mp3']
+      - id: nocturnal.feedback.message_id
+        type: string
+        stability: development
+        brief: Snowflake of the feedback-channel message this record mirrors.
+        examples: ['1544069000000000000']
+      - id: nocturnal.feedback.kind
+        type:
+          members:
+            - id: posted
+              value: 'posted'
+              stability: development
+              brief: Seen live on the gateway.
+            - id: edited
+              value: 'edited'
+              stability: development
+              brief: A later edit; the newest record for a message id wins.
+            - id: backfill
+              value: 'backfill'
+              stability: development
+              brief: Read from channel history at boot, past the stored cursor.
+        stability: development
+        brief: How the bot came by the message.
+      - id: nocturnal.feedback.attachments
+        type: int
+        stability: development
+        brief: Number of attachments on the message; their bytes are not mirrored.
+        examples: [0, 1]
+      - id: nocturnal.feedback.reply_to
+        type: string
+        stability: development
+        brief: Message id this one replies to, or empty.
+        examples: ['1544069000000000000', '']
+      - id: nocturnal.feedback.posted_ms
+        type: int
+        stability: development
+        brief: Discord's own timestamp of the message, Unix ms — differs from the record time for backfills and edits.
+        examples: [1788280670540]

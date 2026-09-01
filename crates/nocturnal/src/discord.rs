@@ -37,6 +37,8 @@ pub struct Data {
     pub item_mirror: std::sync::Arc<crate::items::ItemMirror>,
     /// The page server's live snapshot, replaced on every render.
     pub site: crate::site::SiteHandle,
+    /// The feedback-channel mirror, when configured.
+    pub feedback: Option<std::sync::Arc<crate::feedback::Feedback>>,
     /// Discord display names and roles by player id, filled lazily by the
     /// page materializer. Presentation state: lost on restart, refilled.
     pub members: std::sync::Arc<
@@ -544,6 +546,31 @@ async fn on_event(
     event: &serenity::FullEvent,
     data: &Data,
 ) -> Result<(), Error> {
+    // The feedback channel, mirrored into Ourios; edits re-emit under the
+    // same message id, and the newest record wins on read.
+    if let Some(f) = &data.feedback {
+        match event {
+            serenity::FullEvent::Message { new_message } if f.wants(new_message) => {
+                f.record(new_message, "posted");
+            }
+            serenity::FullEvent::MessageUpdate { new: Some(m), .. } if f.wants(m) => {
+                f.record(m, "edited");
+            }
+            serenity::FullEvent::MessageUpdate {
+                event: upd,
+                new: None,
+                ..
+            } if upd.channel_id == f.channel && upd.content.is_some() => {
+                // No cache: fetch the edited message once.
+                if let Ok(m) = f.channel.message(&ctx.http, upd.id).await {
+                    if f.wants(&m) {
+                        f.record(&m, "edited");
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     if let serenity::FullEvent::InteractionCreate { interaction } = event {
         if let Some(component) = interaction.as_message_component() {
             // Diagnostic: proves component clicks reach us at all, and shows
@@ -683,6 +710,7 @@ async fn provisioning_client(
                     )),
                     site: Default::default(),
                     members: Default::default(),
+                    feedback: None,
                 })
             })
         })
@@ -752,6 +780,11 @@ pub async fn run(
     let provision_driver = driver.clone();
     let roster_labels = cfg.roster.access_labels.clone();
     let roster_output = cfg.roster.output_path.clone();
+    let feedback = cfg
+        .discord
+        .feedback_channel_id
+        .map(|c| std::sync::Arc::new(crate::feedback::Feedback::new(c, &cfg.data.dir)));
+    let feedback_enabled = feedback.is_some();
     let members: std::sync::Arc<
         std::sync::Mutex<std::collections::HashMap<u64, crate::roster_page::MemberInfo>>,
     > = Default::default();
@@ -837,6 +870,12 @@ pub async fn run(
                         }
                     });
                 }
+                // The feedback mirror catches up on whatever was posted while
+                // the bot was away, then follows the channel live.
+                if let Some(f) = feedback.clone() {
+                    let http = ctx.http.clone();
+                    tokio::spawn(async move { f.backfill(http.as_ref()).await });
+                }
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
                 crate::auctions::repost_open_auctions(
@@ -868,6 +907,7 @@ pub async fn run(
                     item_mirror: item_mirror.clone(),
                     site: site_handle.clone(),
                     members: members.clone(),
+                    feedback: feedback.clone(),
                 })
             })
         })
@@ -901,13 +941,11 @@ pub async fn run(
     use songbird::serenity::SerenityInit as _;
     let mut client = serenity::ClientBuilder::new_with_http(
         http,
-        // Exactly what the bot needs, spelled out: guild/channel data,
-        // voice states (raid tick attendance), and DMs (the bid flow).
-        // Message *content* in DMs with the app is exempt from the
-        // privileged MESSAGE_CONTENT intent, so bids still read.
-        serenity::GatewayIntents::GUILDS
-            | serenity::GatewayIntents::GUILD_VOICE_STATES
-            | serenity::GatewayIntents::DIRECT_MESSAGES,
+        // Exactly what the bot needs, spelled out (see feedback.rs): the
+        // privileged MESSAGE_CONTENT intent is requested only when a
+        // feedback channel is configured. DMs with the app are exempt from
+        // it, so bids read regardless.
+        crate::feedback::gateway_intents(feedback_enabled),
     )
     .framework(framework)
     .register_songbird()

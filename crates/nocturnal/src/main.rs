@@ -9,6 +9,7 @@ mod bell;
 mod config;
 mod discord;
 mod driver;
+mod feedback;
 mod health;
 mod items;
 mod lock;
