@@ -25,7 +25,7 @@ pub struct LootView {
 #[derive(Debug, Clone, Serialize)]
 pub struct RaidView {
     pub id: String,
-    /// Ledger ids folded into this one by [`same_raid_groups`]: a false
+    /// Ledger ids folded into this one by `GuildState::raid_nights`: a false
     /// `/startraid` redone under the same name minutes later. `/raid/<alias>`
     /// still resolves.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -220,7 +220,8 @@ impl SiteData {
     ) -> SiteData {
         let name = |id: &PlayerId| Self::name_for(g, members, *id);
 
-        let raids: Vec<RaidView> = same_raid_groups(g)
+        let raids: Vec<RaidView> = g
+            .raid_nights()
             .iter()
             .take(8)
             .map(|group| {
@@ -278,7 +279,10 @@ impl SiteData {
                     start_ms: entries.first().map_or(date_ms, |e| e.ts_ms),
                     end_ms: group
                         .iter()
-                        .map(|(_, r)| raid_window(r).1)
+                        .map(|(_, r)| {
+                            r.ended_ms
+                                .unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms))
+                        })
                         .max()
                         .unwrap_or(canon.date_ms),
                     exact: group.iter().all(|(_, r)| r.ended_ms.is_some()),
@@ -382,35 +386,6 @@ impl SiteData {
     }
 }
 
-/// How far apart two raids of the same name may sit and still be one raid
-/// to the people in it: a false `/startraid` ended and redone (Aug 31 2026:
-/// nine seconds), or a raid ended by mistake and restarted.
-pub const SAME_RAID_GAP_MS: i64 = 30 * 60_000;
-
-/// `(start, end)` — the `/startraid` timestamp to `/endraid`, or to the last
-/// entry while it runs.
-fn raid_window(r: &nocturnal_core::state::Raid) -> (i64, i64) {
-    let start = r
-        .entries
-        .first()
-        .map_or(r.date_ms, |e| e.ts_ms.min(r.date_ms));
-    let end = r
-        .ended_ms
-        .unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms));
-    (start, end)
-}
-
-/// Same name (case and whitespace aside) and windows within
-/// [`SAME_RAID_GAP_MS`] of each other.
-pub fn same_raid(a: &nocturnal_core::state::Raid, b: &nocturnal_core::state::Raid) -> bool {
-    if !a.name.trim().eq_ignore_ascii_case(b.name.trim()) {
-        return false;
-    }
-    let (sa, ea) = raid_window(a);
-    let (sb, eb) = raid_window(b);
-    sb <= ea + SAME_RAID_GAP_MS && sa <= eb + SAME_RAID_GAP_MS
-}
-
 /// Two log lines belong to the same raid night: the same ledger raid, or the
 /// same name with the lines `gap_ms` apart at most.
 fn same_raid_ref(
@@ -421,28 +396,12 @@ fn same_raid_ref(
     match (a, b) {
         (Some(a), Some(b)) => {
             a.raid_id == b.raid_id
-                || (a.name.trim().eq_ignore_ascii_case(b.name.trim()) && gap_ms <= SAME_RAID_GAP_MS)
+                || (a.name.trim().eq_ignore_ascii_case(b.name.trim())
+                    && gap_ms <= nocturnal_core::state::SAME_RAID_GAP_MS)
         }
         (None, None) => true,
         _ => false,
     }
-}
-
-/// The ledger's raids as the site reads them: back-to-back raids under one
-/// name are one group. Newest group first; inside a group, oldest first.
-/// The ledger is untouched — two ids stay two ids — this is presentation.
-pub fn same_raid_groups(g: &GuildState) -> Vec<Vec<(&String, &nocturnal_core::state::Raid)>> {
-    let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> = g.raids.iter().collect();
-    raids.sort_by_key(|(_, r)| raid_window(r).0);
-    let mut groups: Vec<Vec<(&String, &nocturnal_core::state::Raid)>> = Vec::new();
-    for (id, r) in raids {
-        match groups.last_mut() {
-            Some(gp) if gp.iter().any(|(_, x)| same_raid(x, r)) => gp.push((id, r)),
-            _ => groups.push(vec![(id, r)]),
-        }
-    }
-    groups.reverse();
-    groups
 }
 
 #[cfg(test)]
@@ -559,8 +518,14 @@ mod tests {
         end(&mut l, 2_000);
         start(&mut l, 3_000, "b", "Emp", vec![1]);
         end(&mut l, 4_000);
-        start(&mut l, 4_000 + SAME_RAID_GAP_MS + 1, "c", "Emp", vec![1]);
-        end(&mut l, 4_000 + SAME_RAID_GAP_MS + 2);
+        start(
+            &mut l,
+            4_000 + nocturnal_core::state::SAME_RAID_GAP_MS + 1,
+            "c",
+            "Emp",
+            vec![1],
+        );
+        end(&mut l, 4_000 + nocturnal_core::state::SAME_RAID_GAP_MS + 2);
         let g = l.state().guild(GUILD).unwrap();
         let site = SiteData::build(g, &HashMap::new(), 10_000_000, vec![]);
         let ids: Vec<&str> = site.raids.iter().map(|r| r.id.as_str()).collect();

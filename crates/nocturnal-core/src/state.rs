@@ -259,36 +259,70 @@ impl GuildState {
         (!pcts.is_empty()).then(|| pcts.iter().sum::<f64>() / pcts.len() as f64)
     }
 
-    /// Attendance %, legacy formula (2 decimal places; no possible entries =>
-    /// 100). Entries in raids that predate the player count only from the
-    /// player's creation timestamp onward.
-    pub fn attendance_pct(&self, player: PlayerId, now_ms: i64) -> f64 {
-        let creation = self
-            .players
-            .get(&player)
-            .map_or(now_ms, |p| p.creation_ts_ms);
-        let mut possible = 0u64;
-        let mut attended = 0u64;
-        for raid in self.raids.values() {
-            if !self.raid_counts(raid, now_ms) {
-                continue;
+    /// The ledger's raids as people experience them: back-to-back raids
+    /// under one name are one raid night. A false `/startraid` ended and
+    /// redone minutes later stays two ids in the ledger and reads as one
+    /// night everywhere else. Newest night first; inside a night, oldest
+    /// raid first.
+    pub fn raid_nights(&self) -> Vec<Vec<(&String, &Raid)>> {
+        let mut raids: Vec<(&String, &Raid)> = self.raids.iter().collect();
+        raids.sort_by_key(|(_, r)| raid_window(r).0);
+        let mut nights: Vec<Vec<(&String, &Raid)>> = Vec::new();
+        for (id, r) in raids {
+            match nights.last_mut() {
+                Some(n) if n.iter().any(|(_, x)| same_raid(x, r)) => n.push((id, r)),
+                _ => nights.push(vec![(id, r)]),
             }
-            if raid.date_ms < creation {
-                possible += raid.entries.iter().filter(|e| e.ts_ms >= creation).count() as u64;
-            } else {
-                possible += raid.entries.len() as u64;
-            }
-            attended += raid
-                .entries
-                .iter()
-                .filter(|e| e.players.contains(&player))
-                .count() as u64;
         }
-        if possible == 0 {
+        nights.reverse();
+        nights
+    }
+
+    /// Raid attendance, the guild's one definition — the rule Zig's roster
+    /// sheet uses, reverse-engineered on 2026-09-01 to a 240/240 exact match
+    /// against two snapshots of that sheet (docs/attendance.md):
+    ///
+    /// 1. Count DKP-bearing ticks only (`Start` and `Tick` entries; `End`
+    ///    and awards are not ticks).
+    /// 2. Bucket them into weeks (Monday 00:00 UTC) and keep the ten most
+    ///    recent weeks that had any raid, the current partial week included.
+    /// 3. Drop the two weeks with the lowest percentage; among equal
+    ///    percentages the week with more ticks held goes first. Eight weeks
+    ///    or fewer: keep them all.
+    /// 4. `floor(attended / held * 100)` over the kept weeks, pooled — not a
+    ///    mean of weekly percentages.
+    ///
+    /// No raids at all reads as 100 (nothing was possible), as before.
+    pub fn attendance_pct(&self, player: PlayerId, now_ms: i64) -> f64 {
+        let mut weeks: BTreeMap<i64, (u64, u64)> = BTreeMap::new();
+        for raid in self.raids.values() {
+            for e in &raid.entries {
+                if e.ts_ms > now_ms || !(e.comment == "Tick" || e.comment == "Start") {
+                    continue;
+                }
+                // The epoch was a Thursday; +3 days makes the buckets start
+                // on Mondays.
+                let week = (e.ts_ms + 3 * DAY_MS).div_euclid(WEEK_MS);
+                let w = weeks.entry(week).or_default();
+                w.1 += 1;
+                if e.players.contains(&player) {
+                    w.0 += 1;
+                }
+            }
+        }
+        let mut recent: Vec<(u64, u64)> = weeks.values().rev().take(10).copied().collect();
+        if recent.is_empty() {
             return 100.0;
         }
-        let pct = attended as f64 / possible as f64 * 100.0;
-        (pct * 100.0).round() / 100.0
+        if recent.len() > 8 {
+            let pct = |w: &(u64, u64)| w.0 as f64 / w.1 as f64;
+            recent.sort_by(|a, b| pct(a).total_cmp(&pct(b)).then(b.1.cmp(&a.1)));
+            recent.drain(..2);
+        }
+        let (attended, held) = recent
+            .iter()
+            .fold((0u64, 0u64), |acc, w| (acc.0 + w.0, acc.1 + w.1));
+        (attended as f64 / held as f64 * 100.0).floor()
     }
 
     /// DKP a player has committed as standing bids on *other* open auctions —
@@ -302,4 +336,36 @@ impl GuildState {
             .map(|b| b.amount)
             .sum()
     }
+}
+
+/// A week of raid attendance.
+const WEEK_MS: i64 = 7 * DAY_MS;
+
+/// How far apart two raids of the same name may sit and still be one raid
+/// night: a false `/startraid` ended and redone (Aug 31 2026: nine seconds),
+/// or a raid ended by mistake and restarted.
+pub const SAME_RAID_GAP_MS: i64 = 30 * 60_000;
+
+/// `(start, end)` — `/startraid` to `/endraid`, or to the last entry while
+/// it runs.
+fn raid_window(r: &Raid) -> (i64, i64) {
+    let start = r
+        .entries
+        .first()
+        .map_or(r.date_ms, |e| e.ts_ms.min(r.date_ms));
+    let end = r
+        .ended_ms
+        .unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms));
+    (start, end)
+}
+
+/// Same name (case and whitespace aside) and windows within
+/// [`SAME_RAID_GAP_MS`] of each other.
+pub fn same_raid(a: &Raid, b: &Raid) -> bool {
+    if !a.name.trim().eq_ignore_ascii_case(b.name.trim()) {
+        return false;
+    }
+    let (sa, ea) = raid_window(a);
+    let (sb, eb) = raid_window(b);
+    sb <= ea + SAME_RAID_GAP_MS && sa <= eb + SAME_RAID_GAP_MS
 }

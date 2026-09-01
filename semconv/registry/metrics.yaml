@@ -111,9 +111,11 @@ groups:
     stability: development
     brief: >
       Mean attendance percentage over the players `/listplayersdkps` would list
-      (last activity inside the raid-deprecation window), computed by the same
-      legacy formula the command uses, so the number here is the number officers
-      see averaged. One series per guild, no player identity.
+      (last activity inside the raid-deprecation window), computed by the
+      guild's one attendance rule — best 8 of the last 10 raid weeks, the
+      roster sheet's definition (docs/attendance.md) — through the same function
+      the command uses, so the number here is the number officers see averaged.
+      One series per guild, no player identity.
     instrument: gauge
     unit: "%"
   - id: metric.nocturnal.raid.active

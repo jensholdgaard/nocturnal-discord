@@ -360,7 +360,7 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
                 h1 { (m.name) @if m.discord != m.name { " " span class="mut" style="font:400 15px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (m.discord) " on Discord" } } }
                 div class="nums" {
                     div class="brass" { b { (fmt(m.dkp)) } span { "DKP" } }
-                    div { b { (format!("{:.2}", m.attendance)) "%" } span { "attendance, 90 days" } }
+                    div { b { (format!("{:.2}", m.attendance)) "%" } span { "attendance · best 8 of last 10 raid weeks" } }
                     div { b { (m.raids_attended) span style="font-size:16px;font-weight:400;color:var(--muted)" { " / " (data.raids.len()) } } span { "of the last " (data.raids.len()) " raids" } }
                 }
     }

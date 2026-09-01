@@ -100,8 +100,11 @@ fn finish(l: &mut Ledger, id: &str) -> Vec<(u64, i64, bool)> {
 
 /// Attendance scaffold: one raid, first entry includes everyone, later
 /// entries only some — mirrors the jest raid fixtures.
+/// A short raid *before* the auction opens (2_000) and the bids (3_000):
+/// attendance is read at bid time and only the past counts, so a raid at
+/// 5_000 — where this fixture used to sit — was invisible to the tie-break.
 fn raid_with_entries(l: &mut Ledger, entries: &[&[u64]]) {
-    let mut t = 5_000;
+    let mut t = 1_500;
     l.execute(
         &ctx(t),
         &Command::StartRaid {
@@ -166,13 +169,14 @@ fn remove_dkp_debits_and_logs_negative() {
     assert_eq!(p.log[1].dkp, -8);
 }
 
-/// listPlayers() fixture: attendance 80 / 100 / 100. Legacy marks raids
-/// deprecated with a flag; we derive it from the window, so the fixture sets
-/// an explicit `raid_deprecation_ms`. Timeline mirrors the jest spec: the
-/// old raid predates the window, and the 4-entry raid predates P3's creation
-/// (so none of its entries count as possible for P3).
+/// The legacy listPlayers() fixture (attendance 80 / 100 / 100 under the
+/// old 90-day formula), re-read under the guild's one rule since
+/// 2026-09-01 (best 8 of the last 10 raid weeks, docs/attendance.md): every
+/// tick here lands in one week, nothing is deprecated and nothing is cut at
+/// a player's creation, so it is simply ticks attended over the 6 held —
+/// P1 6/6, P2 4/6, P3 1/6, floored.
 #[test]
-fn attendance_matches_legacy_fixture() {
+fn attendance_is_ticks_over_the_kept_weeks() {
     let mut l = Ledger::new();
     let now = 1_300_000i64;
     l.execute(
@@ -253,9 +257,13 @@ fn attendance_matches_legacy_fixture() {
     .unwrap();
 
     let g = l.state().guild(GUILD).unwrap();
-    assert_eq!(g.attendance_pct(P2, now), 80.0);
     assert_eq!(g.attendance_pct(P1, now), 100.0);
-    assert_eq!(g.attendance_pct(P3, now), 100.0);
+    assert_eq!(g.attendance_pct(P2, now), 66.0, "4 of 6, floored");
+    assert_eq!(
+        g.attendance_pct(P3, now),
+        16.0,
+        "1 of 6 — no creation cut-off"
+    );
 }
 
 #[test]
