@@ -11,6 +11,6 @@ pub mod generated;
 pub mod otlp;
 pub mod process;
 
-pub use generated::{attr, metric};
+pub use generated::{attr, event, metric};
 pub use otlp::{init, metrics, Metrics, TelemetryConfig, TelemetryGuard};
 pub use process::ProcessMetrics;

@@ -110,7 +110,7 @@ pub mod metric {
     pub const SYSTEM_FILESYSTEM_USAGE: &str = "system.filesystem.usage";
 }
 
-/// Mvent names.
+/// Event names.
 pub mod event {
     pub const NOCTURNAL_FEEDBACK_MESSAGE: &str = "nocturnal.feedback.message";
 }
