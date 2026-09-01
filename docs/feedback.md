@@ -1,7 +1,7 @@
 # The feedback channel, mirrored into Ourios
 
 Members post feedback in one Discord channel. The bot mirrors every message
-there into Ourios as a `discord.feedback` log record — the same pipeline and
+there into Ourios as a `nocturnal.feedback.message` log record — the same pipeline and
 tenant as its own logs and the members' `everquest.character.profile`
 events — so feedback can be read, searched and (eventually) shown on the
 site without anyone scrolling Discord history or a second bot in the guild.
@@ -21,6 +21,19 @@ site without anyone scrolling Discord history or a second bot in the guild.
    Deploy the binary that knows the key **before** the config carrying it
    (`deny_unknown_fields`: a rollback binary would otherwise crash-loop).
 3. The bot needs *View Channel* and *Read Message History* on that channel.
+
+## Naming
+
+The event is `nocturnal.feedback.message` and its attributes live under
+`nocturnal.feedback.*`, following the OpenTelemetry naming guidance for
+application-specific names: prefix with the application's own namespace,
+never with an existing or third-party system namespace (`discord.*` would be
+one — a later convention could claim it, and then two things would share a
+name). Event names identify a *structure* and never carry per-occurrence
+values; `kind` (posted / edited / backfill) is an attribute for that reason.
+The definition is in `semconv/registry/events.yaml`; the name constant is
+weaver-generated (`event::NOCTURNAL_FEEDBACK_MESSAGE`), so code and registry
+cannot drift.
 
 ## What is recorded
 
@@ -42,7 +55,7 @@ nothing. Attachments stay on Discord.
 ## Reading it back
 
 ```
-event_name == "discord.feedback" | range(-30d, now) | limit 500
+event_name == "nocturnal.feedback.message" | range(-30d, now) | limit 500
 ```
 
 against the Ourios query endpoint with `x-ourios-tenant: nocturnal`.

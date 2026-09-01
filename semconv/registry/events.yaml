@@ -1,0 +1,33 @@
+groups:
+  - id: event.nocturnal.feedback.message
+    type: event
+    name: nocturnal.feedback.message
+    stability: development
+    brief: >
+      One message in the guild's Discord feedback channel, mirrored into the
+      event store by the bot (docs/feedback.md). The body is the message text;
+      an edit re-emits under the same message id and the newest record wins.
+    note: >
+      Named under the application namespace (`nocturnal.*`), per the semconv
+      naming guidance for application-specific names: never under a system
+      name such as `discord.*`, which a future convention could claim.
+      Recorded at INFO, with Discord's own timestamp of the message carried in
+      `nocturnal.feedback.posted_ms` because the record time differs for
+      backfills and edits.
+    attributes:
+      - ref: nocturnal.feedback.message_id
+        requirement_level: required
+      - ref: nocturnal.feedback.kind
+        requirement_level: required
+      - ref: nocturnal.feedback.posted_ms
+        requirement_level: required
+      - ref: nocturnal.discord.channel.id
+        requirement_level: required
+      - ref: nocturnal.discord.user.id
+        requirement_level: required
+      - ref: nocturnal.discord.user.name
+        requirement_level: recommended
+      - ref: nocturnal.feedback.reply_to
+        requirement_level: opt_in
+      - ref: nocturnal.feedback.attachments
+        requirement_level: recommended

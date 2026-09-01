@@ -175,7 +175,7 @@ pub struct DiscordConfig {
     /// other deployments without colliding names. Empty for production.
     #[serde(default)]
     pub command_prefix: String,
-    /// The guild's feedback channel, mirrored into Ourios as `discord.feedback`
+    /// The guild's feedback channel, mirrored into Ourios as `nocturnal.feedback.message`
     /// records (see docs/feedback.md). Setting it makes the bot request the
     /// privileged MESSAGE_CONTENT intent, which must be enabled for the app
     /// in the Discord developer portal first — otherwise the gateway refuses

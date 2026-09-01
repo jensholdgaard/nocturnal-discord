@@ -21,3 +21,12 @@ pub mod metric {
 {%- endfor %}
 }
 
+/// Mvent names.
+pub mod event {
+{%- for group in ctx.groups %}
+{%- if group.type == "event" %}
+    pub const {{ group.name | replace(".", "_") | upper }}: &str = "{{ group.name }}";
+{%- endif %}
+{%- endfor %}
+}
+

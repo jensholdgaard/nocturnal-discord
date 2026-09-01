@@ -1,7 +1,7 @@
 //! The guild's feedback channel, mirrored into Ourios.
 //!
-//! Every message in the configured channel becomes one `discord.feedback`
-//! log record on the bot's own OTLP pipeline (gateway → Ourios, tenant
+//! Every message in the configured channel becomes one
+//! `nocturnal.feedback.message` event record on the bot's own OTLP pipeline (gateway → Ourios, tenant
 //! `nocturnal`): the text is the record body, the who/when/which are
 //! attributes. Live messages arrive on the gateway; at boot the channel's
 //! history is read back to the last id already mirrored, so a restart or
@@ -11,6 +11,7 @@
 //! `DiscordConfig::feedback_channel_id` and docs/feedback.md.
 
 use nocturnal_telemetry::attr;
+use nocturnal_telemetry::event;
 use poise::serenity_prelude as serenity;
 use std::path::{Path, PathBuf};
 
@@ -59,7 +60,7 @@ impl Feedback {
             .map(|id| id.to_string())
             .unwrap_or_default();
         tracing::event!(
-            name: "discord.feedback",
+            name: event::NOCTURNAL_FEEDBACK_MESSAGE,
             target: "nocturnal::feedback",
             tracing::Level::INFO,
             { attr::NOCTURNAL_DISCORD_CHANNEL_ID } = m.channel_id.get(),
