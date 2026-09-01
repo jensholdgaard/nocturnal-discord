@@ -12,8 +12,8 @@ discord:
   # so there is no remap and no prefix; the test-server identity is retired.
   guild_id: 1169758926825324645
   # Mirror this channel into Ourios as nocturnal.feedback.message (docs/feedback.md).
-  # Needs the Message Content intent enabled in the developer portal FIRST.
-  # feedback_channel_id: 1544068940349579404
+  # Needs the Message Content intent enabled in the developer portal FIRST (it is, since 2026-09-01).
+  feedback_channel_id: 1544068940349579404
 
 bell:
   enabled: true              # rings in the raid channels when a short auction opens
