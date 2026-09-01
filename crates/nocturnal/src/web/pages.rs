@@ -254,7 +254,10 @@ pub fn me_redirect() -> String {
 
 pub fn raid(data: &SiteData, id: Option<&str>, island: bool) -> String {
     let Some(r) = (match id {
-        Some(id) => data.raids.iter().find(|r| r.id == id),
+        Some(id) => data
+            .raids
+            .iter()
+            .find(|r| r.id == id || r.aliases.iter().any(|a| a == id)),
         None => data.raids.first(),
     }) else {
         return layout(

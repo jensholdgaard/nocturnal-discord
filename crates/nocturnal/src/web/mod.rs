@@ -141,6 +141,7 @@ mod tests {
         };
         data.raids.push(RaidView {
             id: "r1".into(),
+            aliases: Vec::new(),
             name: "Vulak & Ring War".into(),
             date_ms: 1_787_853_613_551,
             start_ms: 1_787_853_613_551,

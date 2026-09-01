@@ -25,6 +25,11 @@ pub struct LootView {
 #[derive(Debug, Clone, Serialize)]
 pub struct RaidView {
     pub id: String,
+    /// Ledger ids folded into this one by [`same_raid_groups`]: a false
+    /// `/startraid` redone under the same name minutes later. `/raid/<alias>`
+    /// still resolves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     pub name: String,
     pub date_ms: i64,
     pub start_ms: i64,
@@ -134,20 +139,22 @@ pub fn squish_history(
             e.dkp > 0 && (e.comment == "Tick" || e.comment == "Start") && e.raid.is_some();
         if is_tick {
             // Absorb every earlier tick of the same raid.
-            let raid = e.raid.as_ref().map(|r| r.raid_id.clone());
+            let raid = e.raid.as_ref();
             let mut ticks = 1;
             let mut dkp = e.dkp;
             let last_ts = e.ts_ms;
+            let mut first_ts = e.ts_ms;
             while i > 0 {
                 let f = &log[i - 1];
                 let same = f.dkp > 0
                     && (f.comment == "Tick" || f.comment == "Start")
-                    && f.raid.as_ref().map(|r| r.raid_id.clone()) == raid;
+                    && same_raid_ref(f.raid.as_ref(), raid, first_ts - f.ts_ms);
                 if !same {
                     break;
                 }
                 ticks += 1;
                 dkp += f.dkp;
+                first_ts = f.ts_ms;
                 i -= 1;
             }
             out.push(serde_json::json!({
@@ -213,16 +220,26 @@ impl SiteData {
     ) -> SiteData {
         let name = |id: &PlayerId| Self::name_for(g, members, *id);
 
-        let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> = g.raids.iter().collect();
-        raids.sort_by_key(|(_, r)| std::cmp::Reverse(r.date_ms));
-        let raids: Vec<RaidView> = raids
+        let raids: Vec<RaidView> = same_raid_groups(g)
             .iter()
             .take(8)
-            .map(|(id, r)| {
+            .map(|group| {
+                // The canonical member is the real raid: most entries, then
+                // the earlier one. Everyone else in the group is an alias.
+                let (cid, canon) = group
+                    .iter()
+                    .max_by_key(|(_, r)| (r.entries.len(), std::cmp::Reverse(r.date_ms)))
+                    .copied()
+                    .expect("groups are never empty");
+                let ids: Vec<&String> = group.iter().map(|(id, _)| *id).collect();
                 let mut loot: Vec<LootView> = Vec::new();
                 for (pid, p) in &g.players {
                     for e in &p.log {
-                        if e.dkp < 0 && e.raid.as_ref().map(|x| &x.raid_id) == Some(*id) {
+                        if e.dkp < 0
+                            && e.raid
+                                .as_ref()
+                                .is_some_and(|x| ids.iter().any(|i| **i == x.raid_id))
+                        {
                             loot.push(LootView {
                                 ts_ms: e.ts_ms,
                                 item: e
@@ -237,26 +254,39 @@ impl SiteData {
                     }
                 }
                 loot.sort_by_key(|l| l.ts_ms);
-                let attendees: std::collections::BTreeSet<PlayerId> = r
-                    .entries
+                let mut entries: Vec<&nocturnal_core::state::AttendanceEntry> =
+                    group.iter().flat_map(|(_, r)| r.entries.iter()).collect();
+                entries.sort_by_key(|e| e.ts_ms);
+                let attendees: std::collections::BTreeSet<PlayerId> = entries
                     .iter()
                     .flat_map(|e| e.players.iter().copied())
                     .collect();
+                let date_ms = group
+                    .iter()
+                    .map(|(_, r)| r.date_ms)
+                    .min()
+                    .unwrap_or(canon.date_ms);
                 RaidView {
-                    id: (*id).clone(),
-                    name: r.name.clone(),
-                    date_ms: r.date_ms,
-                    start_ms: r.entries.first().map_or(r.date_ms, |e| e.ts_ms),
-                    end_ms: r
-                        .ended_ms
-                        .unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms)),
-                    exact: r.ended_ms.is_some(),
-                    ticks: r
-                        .entries
+                    id: cid.clone(),
+                    aliases: ids
+                        .iter()
+                        .filter(|i| **i != cid)
+                        .map(|i| (*i).clone())
+                        .collect(),
+                    name: canon.name.clone(),
+                    date_ms,
+                    start_ms: entries.first().map_or(date_ms, |e| e.ts_ms),
+                    end_ms: group
+                        .iter()
+                        .map(|(_, r)| raid_window(r).1)
+                        .max()
+                        .unwrap_or(canon.date_ms),
+                    exact: group.iter().all(|(_, r)| r.ended_ms.is_some()),
+                    ticks: entries
                         .iter()
                         .filter(|e| e.comment == "Tick" || e.comment == "Start")
                         .count(),
-                    dkp_per_tick: r.dkp_per_tick,
+                    dkp_per_tick: canon.dkp_per_tick,
                     attendees: attendees.iter().map(name).collect(),
                     attendee_characters: attendees
                         .iter()
@@ -267,17 +297,18 @@ impl SiteData {
                 }
             })
             .collect();
-        let recent: Vec<&str> = raids.iter().map(|r| r.id.as_str()).collect();
 
         let mut members_out = BTreeMap::new();
         for (id, p) in g.raiding_players(now_ms) {
             let Some(m) = members.get(&id) else { continue };
-            let attended = recent
+            let attended = raids
                 .iter()
-                .filter(|rid| {
-                    g.raids
-                        .get(**rid)
-                        .is_some_and(|r| r.entries.iter().any(|e| e.players.contains(&id)))
+                .filter(|v| {
+                    std::iter::once(&v.id).chain(v.aliases.iter()).any(|rid| {
+                        g.raids
+                            .get(rid)
+                            .is_some_and(|r| r.entries.iter().any(|e| e.players.contains(&id)))
+                    })
                 })
                 .count();
             members_out.insert(
@@ -348,5 +379,203 @@ impl SiteData {
             profiles: BTreeMap::new(),
             gear_items: BTreeMap::new(),
         }
+    }
+}
+
+/// How far apart two raids of the same name may sit and still be one raid
+/// to the people in it: a false `/startraid` ended and redone (Aug 31 2026:
+/// nine seconds), or a raid ended by mistake and restarted.
+pub const SAME_RAID_GAP_MS: i64 = 30 * 60_000;
+
+/// `(start, end)` — the `/startraid` timestamp to `/endraid`, or to the last
+/// entry while it runs.
+fn raid_window(r: &nocturnal_core::state::Raid) -> (i64, i64) {
+    let start = r
+        .entries
+        .first()
+        .map_or(r.date_ms, |e| e.ts_ms.min(r.date_ms));
+    let end = r
+        .ended_ms
+        .unwrap_or_else(|| r.entries.last().map_or(r.date_ms, |e| e.ts_ms));
+    (start, end)
+}
+
+/// Same name (case and whitespace aside) and windows within
+/// [`SAME_RAID_GAP_MS`] of each other.
+pub fn same_raid(a: &nocturnal_core::state::Raid, b: &nocturnal_core::state::Raid) -> bool {
+    if !a.name.trim().eq_ignore_ascii_case(b.name.trim()) {
+        return false;
+    }
+    let (sa, ea) = raid_window(a);
+    let (sb, eb) = raid_window(b);
+    sb <= ea + SAME_RAID_GAP_MS && sa <= eb + SAME_RAID_GAP_MS
+}
+
+/// Two log lines belong to the same raid night: the same ledger raid, or the
+/// same name with the lines `gap_ms` apart at most.
+fn same_raid_ref(
+    a: Option<&nocturnal_core::event::RaidRef>,
+    b: Option<&nocturnal_core::event::RaidRef>,
+    gap_ms: i64,
+) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            a.raid_id == b.raid_id
+                || (a.name.trim().eq_ignore_ascii_case(b.name.trim()) && gap_ms <= SAME_RAID_GAP_MS)
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// The ledger's raids as the site reads them: back-to-back raids under one
+/// name are one group. Newest group first; inside a group, oldest first.
+/// The ledger is untouched — two ids stay two ids — this is presentation.
+pub fn same_raid_groups(g: &GuildState) -> Vec<Vec<(&String, &nocturnal_core::state::Raid)>> {
+    let mut raids: Vec<(&String, &nocturnal_core::state::Raid)> = g.raids.iter().collect();
+    raids.sort_by_key(|(_, r)| raid_window(r).0);
+    let mut groups: Vec<Vec<(&String, &nocturnal_core::state::Raid)>> = Vec::new();
+    for (id, r) in raids {
+        match groups.last_mut() {
+            Some(gp) if gp.iter().any(|(_, x)| same_raid(x, r)) => gp.push((id, r)),
+            _ => groups.push(vec![(id, r)]),
+        }
+    }
+    groups.reverse();
+    groups
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)] // tests assert; unwrap is the assertion
+mod tests {
+    use super::*;
+    use nocturnal_core::{Actor, Command, Ctx, Ledger};
+
+    const GUILD: u64 = 42;
+
+    fn run(l: &mut Ledger, now: i64, cmd: Command) {
+        let envs = l
+            .propose(
+                &Ctx {
+                    guild: GUILD,
+                    actor: Actor::User(1),
+                    now_ms: now,
+                },
+                &cmd,
+            )
+            .unwrap();
+        l.commit(&envs);
+    }
+
+    fn start(l: &mut Ledger, now: i64, id: &str, name: &str, players: Vec<u64>) {
+        run(
+            l,
+            now,
+            Command::StartRaid {
+                raid_id: id.into(),
+                name: name.into(),
+                tick_interval_ms: 60_000,
+                dkp_per_tick: 1,
+                players_present: players,
+                event_id: None,
+            },
+        );
+    }
+
+    fn end(l: &mut Ledger, now: i64) {
+        run(
+            l,
+            now,
+            Command::EndRaid {
+                players_present: vec![],
+                reason: "officer".into(),
+            },
+        );
+    }
+
+    /// Aug 31 2026: a 3-minute phantom with a Start tick and one award,
+    /// then the real raid nine seconds later.
+    fn phantom_then_real() -> Ledger {
+        let mut l = Ledger::new();
+        start(&mut l, 1_000, "phantom", "Seru & Emp", vec![1, 2]);
+        run(
+            &mut l,
+            1_200,
+            Command::AdjustDkp {
+                player: 1,
+                delta: 100,
+                comment: "seed".into(),
+                item: None,
+            },
+        );
+        run(
+            &mut l,
+            1_500,
+            Command::AdjustDkp {
+                player: 1,
+                delta: -42,
+                comment: "Sigil Earring".into(),
+                item: None,
+            },
+        );
+        end(&mut l, 2_000);
+        start(&mut l, 3_000, "seru & emp ", "Seru & Emp", vec![1, 2, 3]);
+        run(
+            &mut l,
+            70_000,
+            Command::Tick {
+                players_present: vec![1, 2, 3],
+            },
+        );
+        end(&mut l, 80_000);
+        l
+    }
+
+    #[test]
+    fn a_false_start_reads_as_one_raid() {
+        let l = phantom_then_real();
+        let g = l.state().guild(GUILD).unwrap();
+        let site = SiteData::build(g, &HashMap::new(), 100_000, vec![]);
+        assert_eq!(
+            site.raids.len(),
+            1,
+            "one raid night, not two: {:?}",
+            site.raids
+        );
+        let r = &site.raids[0];
+        assert_eq!(r.id, "seru & emp ", "the real raid is canonical");
+        assert_eq!(r.aliases, vec!["phantom".to_owned()]);
+        assert_eq!((r.start_ms, r.end_ms, r.exact), (1_000, 80_000, true));
+        assert_eq!(r.ticks, 3, "phantom Start + real Start + one Tick");
+        assert_eq!(r.attendees.len(), 3);
+        assert_eq!(r.loot.len(), 1, "the phantom's award is on the raid");
+        assert_eq!(r.loot[0].cost, 42);
+    }
+
+    #[test]
+    fn different_names_or_a_long_gap_stay_apart() {
+        let mut l = Ledger::new();
+        start(&mut l, 1_000, "a", "Seru", vec![1]);
+        end(&mut l, 2_000);
+        start(&mut l, 3_000, "b", "Emp", vec![1]);
+        end(&mut l, 4_000);
+        start(&mut l, 4_000 + SAME_RAID_GAP_MS + 1, "c", "Emp", vec![1]);
+        end(&mut l, 4_000 + SAME_RAID_GAP_MS + 2);
+        let g = l.state().guild(GUILD).unwrap();
+        let site = SiteData::build(g, &HashMap::new(), 10_000_000, vec![]);
+        let ids: Vec<&str> = site.raids.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["c", "b", "a"], "newest first, nothing folded");
+        assert!(site.raids.iter().all(|r| r.aliases.is_empty()));
+    }
+
+    #[test]
+    fn a_member_history_line_spans_the_false_start() {
+        let l = phantom_then_real();
+        let g = l.state().guild(GUILD).unwrap();
+        // Player 2: phantom Start, real Start, Tick — one line, three ticks.
+        let h = squish_history(&g.players[&2].log, 12);
+        assert_eq!(h.len(), 1, "{h:?}");
+        assert_eq!(h[0]["ticks"], 3);
+        assert_eq!(h[0]["dkp"], 3);
     }
 }
