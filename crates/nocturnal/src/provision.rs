@@ -169,26 +169,15 @@ fn record(operation: &'static str, outcome: &'static str) {
 /// it carries text out instead of in. Nothing lands in any message history;
 /// closing the modal is the end of the secret's visible life.
 pub fn token_modal(token: &str) -> serenity::CreateModal {
-    let line = |label: &str, id: &str, value: String| {
-        serenity::CreateActionRow::InputText(
-            serenity::CreateInputText::new(serenity::InputTextStyle::Short, label, id)
-                .value(value)
-                .required(false),
-        )
-    };
-    serenity::CreateModal::new(TOKEN_MODAL_ID, "Copy these 3 lines, then Submit").components(vec![
-        line(
-            "1) in game: endpoint",
-            "l1",
-            "/otlp endpoint https://dps.nocturnal-guild.de/otlp".to_owned(),
-        ),
-        line(
-            "2) in game: your token (keep it private!)",
-            "l2",
-            format!("/otlp token {token}"),
-        ),
-        line("3) in game: turn it on", "l3", "/otlp on".to_owned()),
-    ])
+    let line = serenity::CreateInputText::new(
+        serenity::InputTextStyle::Short,
+        "Paste this in game (it is your private token)",
+        "l1",
+    )
+    .value(format!("/otlp setup {token}"))
+    .required(false);
+    serenity::CreateModal::new(TOKEN_MODAL_ID, "Copy this line, then Submit")
+        .components(vec![serenity::CreateActionRow::InputText(line)])
 }
 
 /// Custom id the token modal's submit comes back under.
@@ -198,60 +187,22 @@ pub const TOKEN_MODAL_ID: &str = "dpstoken:copy";
 /// the secret, so this reply is safe to sit in the (ephemeral) history.
 pub fn setup_steps(dashboard: &str) -> String {
     format!(
-        "**Got your three lines? Here's the rest.**\n\n\
+        "**Got your line? Here's the rest.**\n\n\
          **1.** Latest Zeal: \
          https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview — drop `Zeal.asi` \
          into your EverQuest folder, replacing the one there (keep a copy of the old one; you \
-         still need your normal Zeal install).\n\
-         **2.** Start EverQuest and paste the three lines from the popup, one at a time, in \
-         order.\n\
+         still need your normal Zeal install). The one-line setup needs this build.\n\
+         **2.** Start EverQuest and paste the line from the popup. That sets the endpoint, \
+         stores the token and turns reporting on.\n\
          **3.** `/otlp status` should show `token: set (ends ...)` and `last HTTP status: 200` \
          with the payload count going up. A `401` means the server refused the token — tell an \
          officer, that is not you doing it wrong.\n\n\
          The token is stored encrypted and tied to your Windows account; it is never shown \
-         again. **Don't paste the `/otlp token` line in a public channel**, and note chat is \
-         written to your `eqlog` file when logging is on.\n\
+         again. **Don't paste it in a public channel**, and note chat is written to your \
+         `eqlog` file when logging is on.\n\
          Dashboard: {dashboard} (log in with Discord — access is already set up).\n\
          Lost the token? Ask an officer to `/dpsrevoke` you, then run `/dpstoken` again.\n\
          Bonus: `/magelo` in game puts your gear on the guild site."
-    )
-}
-
-/// The DM a member gets with their token.
-///
-/// Setup used to be a PowerShell one-liner that installed a local collector, because the collector
-/// was the only thing that could attach the bearer token. Zeal does that itself now, so this is
-/// three lines typed in game and nothing left running in the background.
-#[allow(dead_code)]
-fn dm_body(token: &str, dashboard: &str) -> String {
-    format!(
-        "Your personal DPS meter token — **keep it private, it is yours alone**:\n\
-         ```\n{token}\n```\n\
-         **Setup is three lines typed in game.** No installer, no collector, nothing running in \
-         the background any more.\n\n\
-         **1.** Get the latest Zeal: \
-         https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview\n\
-         Download `Zeal.asi` and drop it in your EverQuest folder, replacing the one there. \
-         (Keep a copy of your old one first. It replaces that single file — you still need your \
-         normal Zeal install.)\n\n\
-         **2.** Start EverQuest, then paste these one at a time:\n\
-         ```\n\
-         /otlp endpoint https://dps.nocturnal-guild.de/otlp\n\
-         /otlp token {token}\n\
-         /otlp on\n\
-         ```\n\n\
-         **3.** Check it worked:\n\
-         ```\n/otlp status\n```\n\
-         You want `token: set (ends ...)` and `last HTTP status: 200` with the payload count going \
-         up. If it says `401`, tell an officer — that is the server refusing the token, not you \
-         doing it wrong.\n\n\
-         Your token is stored encrypted and tied to this Windows account, so the file it lives in \
-         is useless to anyone else. Still: **do not paste that `/otlp token` line in a public \
-         channel**, and note that chat is written to your `eqlog` file when logging is on.\n\n\
-         Dashboard: {dashboard} (log in with Discord — your access is already set up)\n\
-         You also get a personal project to save your own dashboards in; the guild ones stay \
-         read-only.\n\
-         Lost the token? Ask an officer to `/dpsrevoke` you, then run `/dpstoken` again."
     )
 }
 
@@ -473,7 +424,7 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
         // Fallback when a modal can't be raised: the legacy ephemeral
         // spoiler, only the caller can see it.
         ctx.say(format!(
-            "Couldn't open the popup — only you can see this:\n||/otlp token {token}||\n\n{}",
+            "Couldn't open the popup — only you can see this:\n||/otlp setup {token}||\n\n{}",
             setup_steps(&p.dashboard_url)
         ))
         .await?;
