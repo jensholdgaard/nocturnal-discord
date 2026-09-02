@@ -580,13 +580,26 @@ async fn on_event(
                 { attr::NOCTURNAL_DISCORD_USER_ID } = component.user.id.get(),
                 "component interaction received"
             );
-            if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
-                // `{:#}` prints the whole anyhow chain — the outermost context
-                // alone hid the real cause of a failed component reply.
-                tracing::warn!(
-                    { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
-                    "auction component handler failed"
-                );
+            // The /dpstoken gate button first; everything else is an auction.
+            let handled = match crate::provision::handle_component(ctx, component, data).await {
+                Ok(handled) => handled,
+                Err(e) => {
+                    tracing::warn!(
+                        { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                        "dpstoken gate handler failed"
+                    );
+                    true
+                }
+            };
+            if !handled {
+                if let Err(e) = crate::auctions::handle_component(ctx, component, data).await {
+                    // `{:#}` prints the whole anyhow chain — the outermost context
+                    // alone hid the real cause of a failed component reply.
+                    tracing::warn!(
+                        { attr::NOCTURNAL_ERROR_MESSAGE } = format!("{e:#}"),
+                        "auction component handler failed"
+                    );
+                }
             }
         }
         // The amount typed into a bid modal comes back as its own interaction.

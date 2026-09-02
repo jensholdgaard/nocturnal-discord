@@ -141,6 +141,12 @@ pub struct ProvisionConfig {
     /// until cutover; the token commands are ready now, and are the whole
     /// reason a second Python process was still running.
     pub guild_id: Option<u64>,
+    /// The commit stamped into the current members' Zeal build (what `/zeal
+    /// version` prints after `1.4.5+`). When set, `/dpstoken` tells members
+    /// the exact version to expect before handing over a token; unset, it
+    /// falls back to the `/otlp setup` usage-line tell. Bump on every release.
+    #[serde(default)]
+    pub zeal_build: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

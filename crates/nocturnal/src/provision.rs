@@ -26,6 +26,8 @@ pub struct Provisioning {
     pub paths: Paths,
     pub roles_map: std::path::PathBuf,
     pub dashboard_url: String,
+    /// See `ProvisionConfig::zeal_build`.
+    pub zeal_build: Option<String>,
 }
 
 impl Provisioning {
@@ -39,6 +41,7 @@ impl Provisioning {
             },
             roles_map: cfg.roles_map_path.clone()?,
             dashboard_url: cfg.dashboard_url.clone()?,
+            zeal_build: cfg.zeal_build.clone(),
         })
     }
 }
@@ -168,6 +171,38 @@ fn record(operation: &'static str, outcome: &'static str) {
 /// copies straight into the game. Same trick as the bid modal, inverted —
 /// it carries text out instead of in. Nothing lands in any message history;
 /// closing the modal is the end of the secret's visible life.
+/// Where members get the guild's Zeal build.
+pub const ZEAL_RELEASE_URL: &str =
+    "https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview";
+/// The button under the Zeal gate; pressing it is the "I have it" answer.
+pub const ZEAL_GATE_ID: &str = "dpstoken:zeal_ok";
+
+/// What `/dpstoken` says *before* any token exists: the token is useless on
+/// an old `Zeal.asi`, and members kept finding that out from a usage line in
+/// game. With `zeal_build` configured the check is exact; without it, the
+/// tell is whether `/otlp setup` exists.
+pub fn zeal_gate_text(zeal_build: Option<&str>) -> String {
+    let check = match zeal_build {
+        Some(b) => format!(
+            "In game, `/zeal version` must say `1.4.5+{b}`. Anything else — `1.4.5+UNOFFICIAL` \
+             included — is an older file: swap it first."
+        ),
+        None => {
+            "In game, `/otlp setup` must be a known command. If it prints a usage line instead, \
+                 you're on an older file: swap it first."
+                .to_owned()
+        }
+    };
+    format!(
+        "**Before your token: the DPS meter needs the Nocturnal Zeal build.**\n\
+         **1.** Get the latest `Zeal.asi`: {ZEAL_RELEASE_URL} — drop it into your EverQuest folder, \
+         replacing the one there (keep the old one aside; you still need your normal Zeal \
+         install).\n\
+         **2.** {check}\n\n\
+         Then press the button. It hands you one line to paste in game."
+    )
+}
+
 pub fn token_modal(token: &str) -> serenity::CreateModal {
     let line = serenity::CreateInputText::new(
         serenity::InputTextStyle::Short,
@@ -290,6 +325,102 @@ pub async fn import_legacy(
 }
 
 /// Get your personal token for the guild DPS meter.
+/// How an issue attempt ended, for the reply that follows it.
+pub enum Issued {
+    /// A brand-new token: show it once, in the modal.
+    Fresh(String),
+    /// The member already had one; access was refreshed to this role.
+    Existing(String),
+}
+
+/// The one path that creates a grant, shared by the slash command's refresh
+/// branch and the gate button: existing grant → refresh access; otherwise
+/// mint, commit the fingerprint, append the token line. `Err` carries the
+/// member-facing text.
+pub async fn issue(
+    data: &crate::discord::Data,
+    p: &Provisioning,
+    ledger_guild: u64,
+    user_id: u64,
+    user: &str,
+    role: &str,
+) -> Result<Issued, String> {
+    let existing = {
+        let u = user.to_owned();
+        data.driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .and_then(|g| g.telemetry.get(&u).map(|t| t.role.clone()))
+            })
+            .await
+    };
+    if existing.is_some() {
+        let _ = data
+            .driver
+            .execute(
+                ledger_guild,
+                Actor::User(user_id),
+                Command::RefreshAccess {
+                    username: user.to_owned(),
+                    role: role.to_owned(),
+                },
+            )
+            .await;
+        record("refresh", "accepted");
+        return Ok(Issued::Existing(role.to_owned()));
+    }
+    let token =
+        mint_token().map_err(|_| "Couldn't mint a token right now — try again.".to_owned())?;
+    if let Err(e) = data
+        .driver
+        .execute(
+            ledger_guild,
+            Actor::User(user_id),
+            Command::IssueToken {
+                username: user.to_owned(),
+                token_fp: fingerprint(&token),
+                role: role.to_owned(),
+            },
+        )
+        .await
+    {
+        record("issue", "error");
+        tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "issuing a telemetry token failed");
+        return Err("Couldn't record that right now — try again in a moment.".to_owned());
+    }
+    let paths = p.paths.clone();
+    let (u, t) = (user.to_owned(), token.clone());
+    match tokio::task::spawn_blocking(move || append_token(&paths, &u, &t)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            record("issue", "error");
+            tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "writing the token line failed");
+            return Err(
+                "Issued, but the gateway file couldn't be written — tell an officer.".to_owned(),
+            );
+        }
+        Err(e) => {
+            record("issue", "error");
+            tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "token writer task failed");
+            return Err(
+                "Issued, but the gateway file couldn't be written — tell an officer.".to_owned(),
+            );
+        }
+    }
+    record("issue", "accepted");
+    Ok(Issued::Fresh(token))
+}
+
+/// Role names a member holds, from the cache.
+fn role_names(member: Option<&serenity::Member>, cache: &serenity::Context) -> Vec<String> {
+    member
+        .and_then(|m| m.roles(cache))
+        .map(|roles| roles.iter().map(|r| r.name.to_string()).collect())
+        .unwrap_or_default()
+}
+
+/// Get your personal token for the guild DPS meter.
 #[poise::command(slash_command, ephemeral)]
 #[tracing::instrument(name = "command.dpstoken", skip_all, fields(otel.kind = "server"))]
 pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
@@ -299,24 +430,14 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     };
     let ledger_guild = crate::discord::require_guild(&ctx)?;
-    // No defer: Discord only accepts a modal as the interaction's *first*
-    // response, and everything we do before it is milliseconds.
-
     let user = ctx.author().name.clone();
     if !valid_username(&user) {
         record("issue", "rejected");
         ctx.say("Sorry, can't handle that username.").await?;
         return Ok(());
     }
-
-    // Guild roles by name, re-read from roles.yaml on every invocation.
-    let held: Vec<String> = match ctx.author_member().await {
-        Some(m) => m
-            .roles(ctx.serenity_context())
-            .map(|roles| roles.iter().map(|r| r.name.to_string()).collect())
-            .unwrap_or_default(),
-        None => Vec::new(),
-    };
+    let member = ctx.author_member().await;
+    let held = role_names(member.as_deref(), ctx.serenity_context());
     let Some(role) = role_for(&p.roles_map, &held) else {
         record("issue", "rejected");
         ctx.say(
@@ -327,6 +448,7 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     };
 
+    // Already provisioned: refresh and say so; the token is never re-shown.
     let existing = {
         let u = user.clone();
         ctx.data()
@@ -338,102 +460,155 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
             })
             .await
     };
-
     if existing.is_some() {
-        // Legacy behaviour: refresh access, never re-issue. The member's
-        // client is already using the old token.
-        let _ = ctx
-            .data()
-            .driver
-            .execute(
-                ledger_guild,
-                Actor::User(ctx.author().id.get()),
-                Command::RefreshAccess {
-                    username: user.clone(),
-                    role: role.clone(),
-                },
-            )
-            .await;
-        record("refresh", "accepted");
-        ctx.say(format!(
-            "You already have a token — refreshed your dashboard access to `{role}`. \
-             Lost the token? Ask an officer to `/dpsrevoke` you first."
-        ))
-        .await?;
-        // After the reply: rematerializing can take seconds and the 3s
-        // interaction deadline no longer protects us.
-        rematerialize(&ctx.data().driver, &p, ledger_guild).await;
-        return Ok(());
-    }
-
-    let token = mint_token()?;
-    // The ledger records only the fingerprint. Event first, so the grant is
-    // durable before the secret exists anywhere; a crash between the two
-    // leaves a grant with no token line, which the next materialization
-    // reports rather than papering over.
-    if let Err(e) = ctx
-        .data()
-        .driver
-        .execute(
+        if let Ok(Issued::Existing(role)) = issue(
+            ctx.data(),
+            &p,
             ledger_guild,
-            Actor::User(ctx.author().id.get()),
-            Command::IssueToken {
-                username: user.clone(),
-                token_fp: fingerprint(&token),
-                role: role.clone(),
-            },
+            ctx.author().id.get(),
+            &user,
+            &role,
         )
         .await
-    {
-        record("issue", "error");
-        tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "issuing a telemetry token failed");
-        ctx.say("Couldn't record that right now — try again in a moment.")
+        {
+            ctx.say(format!(
+                "You already have a token — refreshed your dashboard access to `{role}`. \
+                 Lost the token? Ask an officer to `/dpsrevoke` you first.\n\
+                 Make sure you're on the current Zeal build: {ZEAL_RELEASE_URL}"
+            ))
             .await?;
+            rematerialize(&ctx.data().driver, &p, ledger_guild).await;
+        }
         return Ok(());
     }
+
+    // No grant yet: the Zeal gate first. The button mints and opens the modal.
+    let button = serenity::CreateButton::new(ZEAL_GATE_ID)
+        .label("I have the latest Zeal — give me my token")
+        .style(serenity::ButtonStyle::Primary);
+    ctx.send(
+        poise::CreateReply::default()
+            .content(zeal_gate_text(p.zeal_build.as_deref()))
+            .ephemeral(true)
+            .components(vec![serenity::CreateActionRow::Buttons(vec![button])]),
+    )
+    .await?;
+    Ok(())
+}
+
+/// The gate button: re-run the cheap checks (roles can change between the
+/// command and the click), mint, and answer with the token modal — a modal is
+/// a valid first response to a button. `Ok(false)` = not ours.
+pub async fn handle_component(
+    ctx: &serenity::Context,
+    component: &serenity::ComponentInteraction,
+    data: &crate::discord::Data,
+) -> anyhow::Result<bool> {
+    if component.data.custom_id != ZEAL_GATE_ID {
+        return Ok(false);
+    }
+    let say = |text: String| {
+        serenity::CreateInteractionResponse::Message(
+            serenity::CreateInteractionResponseMessage::new()
+                .content(text)
+                .ephemeral(true),
+        )
+    };
+    let Some(p) = data.provisioning.clone() else {
+        component
+            .create_response(
+                ctx,
+                say("Telemetry provisioning isn't configured on this deployment.".into()),
+            )
+            .await?;
+        return Ok(true);
+    };
+    let Some(guild) = component.guild_id.map(|g| g.get()) else {
+        component
+            .create_response(
+                ctx,
+                say("This only works inside the guild's Discord server.".into()),
+            )
+            .await?;
+        return Ok(true);
+    };
+    let ledger_guild = match data.data_guild {
+        Some((from, to)) if from == guild => to,
+        _ => guild,
+    };
+    let user = component.user.name.clone();
+    if !valid_username(&user) {
+        record("issue", "rejected");
+        component
+            .create_response(ctx, say("Sorry, can't handle that username.".into()))
+            .await?;
+        return Ok(true);
+    }
+    let held = role_names(component.member.as_ref(), ctx);
+    let Some(role) = role_for(&p.roles_map, &held) else {
+        record("issue", "rejected");
+        component
+            .create_response(
+                ctx,
+                say(
+                    "You need a guild rank (Trial/Recruit/Member/Raider or officer) for dashboard \
+                     access. Ask an officer if you think this is wrong."
+                        .into(),
+                ),
+            )
+            .await?;
+        return Ok(true);
+    };
+    match issue(
+        data,
+        &p,
+        ledger_guild,
+        component.user.id.get(),
+        &user,
+        &role,
+    )
+    .await
     {
-        // The one writer that introduces a secret. Blocking, so off the reactor.
-        let paths = p.paths.clone();
-        let (u, t) = (user.clone(), token.clone());
-        if let Err(e) = tokio::task::spawn_blocking(move || append_token(&paths, &u, &t)).await? {
-            record("issue", "error");
-            tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "writing the token line failed");
-            ctx.say("Issued, but the gateway file couldn't be written — tell an officer.")
+        Ok(Issued::Fresh(token)) => {
+            let shown = component
+                .create_response(
+                    ctx,
+                    serenity::CreateInteractionResponse::Modal(token_modal(&token)),
+                )
+                .await
+                .is_ok();
+            if !shown {
+                component
+                    .create_response(
+                        ctx,
+                        say(format!(
+                            "Couldn't open the popup — only you can see this:\n||/otlp setup {token}||\n\n{}",
+                            setup_steps(&p.dashboard_url)
+                        )),
+                    )
+                    .await?;
+            }
+            let (driver, p2) = (data.driver.clone(), p.clone());
+            tokio::spawn(async move { rematerialize(&driver, &p2, ledger_guild).await });
+        }
+        Ok(Issued::Existing(role)) => {
+            component
+                .create_response(
+                    ctx,
+                    say(format!(
+                        "You already have a token — refreshed your dashboard access to `{role}`. \
+                         Lost the token? Ask an officer to `/dpsrevoke` you first."
+                    )),
+                )
                 .await?;
-            return Ok(());
+            let (driver, p2) = (data.driver.clone(), p.clone());
+            tokio::spawn(async move { rematerialize(&driver, &p2, ledger_guild).await });
+        }
+        Err(text) => {
+            component.create_response(ctx, say(text)).await?;
         }
     }
-    record("issue", "accepted");
-
-    // Hand the token over in a modal: the member copies the pre-filled lines
-    // in place, and the secret never enters any message history — not DMs,
-    // not ephemerals. Submit comes back as `TOKEN_MODAL_ID` and gets the
-    // token-free setup steps.
-    let shown = match &ctx {
-        poise::Context::Application(app) => app
-            .interaction
-            .create_response(
-                ctx.serenity_context(),
-                serenity::CreateInteractionResponse::Modal(token_modal(&token)),
-            )
-            .await
-            .is_ok(),
-        poise::Context::Prefix(_) => false,
-    };
-    if !shown {
-        // Fallback when a modal can't be raised: the legacy ephemeral
-        // spoiler, only the caller can see it.
-        ctx.say(format!(
-            "Couldn't open the popup — only you can see this:\n||/otlp setup {token}||\n\n{}",
-            setup_steps(&p.dashboard_url)
-        ))
-        .await?;
-    }
-    // The site rebuild can take seconds; nothing about it is on the
-    // interaction's critical path any more.
-    let (driver, p2) = (ctx.data().driver.clone(), p.clone());
-    tokio::spawn(async move { rematerialize(&driver, &p2, ledger_guild).await });
-    Ok(())
+    Ok(true)
 }
 
 /// (officers) Revoke a member's DPS meter token.
@@ -575,7 +750,23 @@ pub async fn dpsstatus(ctx: Context<'_>) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{mint_token, role_for};
+    use super::{mint_token, role_for, zeal_gate_text, ZEAL_RELEASE_URL};
+
+    #[test]
+    fn the_gate_names_the_build_when_known_and_the_usage_tell_otherwise() {
+        let exact = zeal_gate_text(Some("2b3cf2b"));
+        assert!(exact.contains("`1.4.5+2b3cf2b`"), "{exact}");
+        assert!(exact.contains(ZEAL_RELEASE_URL));
+        let generic = zeal_gate_text(None);
+        assert!(
+            generic.contains("`/otlp setup` must be a known command"),
+            "{generic}"
+        );
+        assert!(
+            !generic.contains("UNOFFICIAL"),
+            "without a known build, UNOFFICIAL proves nothing"
+        );
+    }
 
     const ROLES_YAML: &str = "\
 # Maps Discord guild roles to Perses roles.
