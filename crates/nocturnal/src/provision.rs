@@ -26,7 +26,7 @@ pub struct Provisioning {
     pub paths: Paths,
     pub roles_map: std::path::PathBuf,
     pub dashboard_url: String,
-    /// See `ProvisionConfig::zeal_build`.
+    /// See `ProvisionConfig::zeal_build` (override; the release is the source).
     pub zeal_build: Option<String>,
 }
 
