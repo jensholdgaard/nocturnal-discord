@@ -250,6 +250,104 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Pr
     latest_per_character(&records)
 }
 
+/// One member's telemetry footprint, for `/dpsstatus`.
+pub struct ReporterStatus {
+    pub reporter: String,
+    pub version: String,
+    pub last_seen_ms: i64,
+    pub count: usize,
+}
+
+/// Who has sent a character profile lately, their Zeal build
+/// (`service.version`) and when last seen — the officer view of who is
+/// reporting and who needs to update. Newest first; empty on any Ourios
+/// failure (logged, never surfaced as a crash). A wider window than the site
+/// fetch: this is a roll-call, so `-14d` catches members who raid weekly.
+pub async fn reporter_status(query_url: &str, tenant: &str) -> Vec<ReporterStatus> {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let query = r#"event_name == "everquest.character.profile" | range(-14d, now) | limit 5000"#;
+    let resp = client
+        .post(query_url)
+        .header("content-type", "application/json")
+        .header("x-ourios-tenant", tenant)
+        .json(&serde_json::json!({ "query": query }))
+        .send()
+        .await;
+    let body: serde_json::Value = match resp {
+        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+        Ok(r) => {
+            tracing::warn!(status = %r.status(), "ourios refused the dpsstatus query");
+            return Vec::new();
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "ourios unreachable for dpsstatus");
+            return Vec::new();
+        }
+    };
+    let records = body["records"].as_array().cloned().unwrap_or_default();
+    aggregate_reporters(&records)
+}
+
+/// The reduce half of [`reporter_status`], split out so a fixture can pin the
+/// attribute-shape handling without a live Ourios.
+pub fn aggregate_reporters(records: &[serde_json::Value]) -> Vec<ReporterStatus> {
+    fn attr(r: &serde_json::Value, key: &str) -> Option<String> {
+        for group in ["attributes", "resource_attributes"] {
+            if let Some(arr) = r[group].as_array() {
+                for a in arr {
+                    if a["key"].as_str() == Some(key) {
+                        let v = &a["value"];
+                        return v["stringValue"]
+                            .as_str()
+                            .or_else(|| v["intValue"].as_str())
+                            .map(str::to_owned)
+                            .or_else(|| v.as_str().map(str::to_owned));
+                    }
+                }
+            }
+        }
+        None
+    }
+    fn seen_ms(r: &serde_json::Value) -> i64 {
+        let t = &r["time_unix_nano"];
+        let nanos = t
+            .as_i64()
+            .or_else(|| t.as_str().and_then(|s| s.parse().ok()))
+            .unwrap_or(0);
+        nanos / 1_000_000
+    }
+    let mut by: std::collections::BTreeMap<String, ReporterStatus> =
+        std::collections::BTreeMap::new();
+    for r in records {
+        let reporter = attr(r, "everquest.reporter")
+            .or_else(|| attr(r, "everquest.character.name"))
+            .unwrap_or_else(|| "unknown".to_owned());
+        let version = attr(r, "service.version").unwrap_or_else(|| "?".to_owned());
+        let ts = seen_ms(r);
+        let e = by.entry(reporter.clone()).or_insert(ReporterStatus {
+            reporter,
+            version: version.clone(),
+            last_seen_ms: 0,
+            count: 0,
+        });
+        e.count += 1;
+        // The build shown is the one from the most recent profile.
+        if ts >= e.last_seen_ms {
+            e.last_seen_ms = ts;
+            e.version = version;
+        }
+    }
+    let mut out: Vec<ReporterStatus> = by.into_values().collect();
+    out.sort_by_key(|r| std::cmp::Reverse(r.last_seen_ms));
+    out
+}
+
 /// Write what the clients reported into the roster: a character the member
 /// never added appears, a level that moved is updated, and nothing else is
 /// touched. `players` maps reporter username → player id; profiles whose
@@ -423,5 +521,49 @@ mod tests {
         let text = r["body"]["line"].as_str().unwrap().to_owned();
         r["body"] = serde_json::Value::String(text);
         assert_eq!(latest_per_character(&[r]).len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod reporter_status_tests {
+    use super::aggregate_reporters;
+    use serde_json::json;
+
+    #[test]
+    fn newest_profile_wins_and_rows_sort_by_recency() {
+        let rec = |reporter: &str, ver: &str, nanos: i64| {
+            json!({
+                "time_unix_nano": nanos,
+                "attributes": [{"key": "everquest.reporter", "value": {"stringValue": reporter}}],
+                "resource_attributes": [{"key": "service.version", "value": {"stringValue": ver}}],
+            })
+        };
+        let rows = aggregate_reporters(&[
+            rec("zig", "1.4.5+aaa", 1_000_000_000),
+            rec("bisben", "1.4.5+bbb", 3_000_000_000),
+            rec("zig", "1.4.5+ccc", 2_000_000_000), // newer than zig's first
+        ]);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].reporter, "bisben", "most recently seen first");
+        assert_eq!(rows[1].reporter, "zig");
+        assert_eq!(
+            rows[1].version, "1.4.5+ccc",
+            "the build from zig's newest profile"
+        );
+        assert_eq!(rows[1].count, 2);
+        assert_eq!(rows[1].last_seen_ms, 2_000);
+    }
+
+    #[test]
+    fn nanos_as_string_and_missing_reporter_are_handled() {
+        let rows = aggregate_reporters(&[json!({
+            "time_unix_nano": "1500000000",
+            "attributes": [{"key": "everquest.character.name", "value": {"stringValue": "Solo"}}],
+            "resource_attributes": [],
+        })]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].reporter, "Solo", "falls back to character name");
+        assert_eq!(rows[0].version, "?");
+        assert_eq!(rows[0].last_seen_ms, 1_500);
     }
 }

@@ -17,7 +17,7 @@ use nocturnal_telemetry::attr;
 use poise::serenity_prelude as serenity;
 
 use crate::config::ProvisionConfig;
-use crate::discord::{ack_ephemeral, Context, Error};
+use crate::discord::{ack_ephemeral, officer_check, Context, Error};
 use crate::driver::DriverHandle;
 
 /// Resolved provisioning configuration. `None` anywhere = commands disabled.
@@ -554,7 +554,72 @@ pub async fn dpsrevoke(
 }
 
 pub fn commands() -> Vec<poise::Command<crate::discord::Data, Error>> {
-    vec![dpstoken(), dpsrevoke()]
+    vec![dpstoken(), dpsrevoke(), dpsstatus()]
+}
+
+/// (officers) Who is reporting telemetry, on what Zeal build, last seen.
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "dpsstatus",
+    check = "officer_check"
+)]
+#[tracing::instrument(name = "command.dpsstatus", skip_all, fields(otel.kind = "server"))]
+pub async fn dpsstatus(ctx: Context<'_>) -> Result<(), Error> {
+    let Some((url, tenant)) = ctx.data().ourios.clone() else {
+        ctx.say("Telemetry storage (Ourios) isn't configured on this deployment.")
+            .await?;
+        return Ok(());
+    };
+    ack_ephemeral(&ctx).await?;
+    let rows = crate::profiles::reporter_status(&url, &tenant).await;
+    if rows.is_empty() {
+        ctx.say(
+            "No character profiles in the last 14 days — nobody is reporting, or Ourios did not \
+             answer in time. Members start with `/dpstoken`, then `/magelo` in game.",
+        )
+        .await?;
+        return Ok(());
+    }
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    fn ago(now_ms: i64, then_ms: i64) -> String {
+        let m = ((now_ms - then_ms) / 60_000).max(0);
+        if m < 60 {
+            format!("{m}m")
+        } else if m < 1440 {
+            format!("{}h", m / 60)
+        } else {
+            format!("{}d", m / 1440)
+        }
+    }
+    let mut body = format!(
+        "**Telemetry reporters — {} in the last 14 days**\n```\n",
+        rows.len()
+    );
+    body.push_str(&format!(
+        "{:<16} {:<18} {:>6} {:>5}\n",
+        "reporter", "zeal build", "last", "n"
+    ));
+    for r in rows.iter().take(40) {
+        // A build tail (after the '+') is enough to spot who is behind.
+        let build = r.version.rsplit('+').next().unwrap_or(&r.version);
+        body.push_str(&format!(
+            "{:<16.16} {:<18.18} {:>6} {:>5}\n",
+            r.reporter,
+            build,
+            ago(now_ms, r.last_seen_ms),
+            r.count
+        ));
+    }
+    body.push_str("```");
+    if rows.len() > 40 {
+        body.push_str(&format!("\n…and {} more.", rows.len() - 40));
+    }
+    ctx.say(body).await?;
+    Ok(())
 }
 
 #[cfg(test)]
