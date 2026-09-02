@@ -34,6 +34,10 @@ pub struct Profile {
     pub guild: String,
     #[serde(default)]
     pub base_stats: HashMap<String, i64>,
+    /// The character sheet as the client drew it (effective stats, resists,
+    /// hp/max_hp, mana/max_mana, ac, atk). Empty from builds before it was
+    /// sent; the page falls back to base + item sums.
+    pub sheet: HashMap<String, i64>,
     #[serde(default)]
     pub aa: HashMap<String, i64>,
     #[serde(default)]
@@ -66,6 +70,8 @@ struct Body {
     guild: String,
     #[serde(default)]
     base_stats: HashMap<String, i64>,
+    #[serde(default)]
+    sheet: HashMap<String, i64>,
     #[serde(default)]
     aa: HashMap<String, i64>,
     #[serde(default)]
@@ -146,6 +152,7 @@ pub fn latest_per_character(records: &[serde_json::Value]) -> HashMap<String, Pr
                     deity: b.deity,
                     guild: b.guild,
                     base_stats: b.base_stats,
+                    sheet: b.sheet,
                     aa: b.aa,
                     equipment: b.equipment,
                     aa_abilities: b.aa_abilities,

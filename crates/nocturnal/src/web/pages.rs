@@ -582,14 +582,20 @@ pub fn character(data: &SiteData, name: &str) -> String {
         div class="read" {
             div class="eyebrow" { "Character · reported " (ago(data.generated_ms, p.reported_ms)) }
             h1 { (p.name) " " span class="mut" style="font:400 16px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (p.level) " " (class) @if !p.guild.is_empty() { " · " (p.guild) } } }
-            // Item sums, not the character sheet: the game computes AC from
-            // item AC plus defense and agility, HP from level, class and
-            // stamina plus items, and clamps every stat at its cap. Until
-            // the client reports its own sheet, say what these are.
+            // With a sheet (newer Zeal): the numbers the member sees in the
+            // inventory window, item sums as detail. Without: item sums,
+            // labelled as such - the game computes AC from item AC plus
+            // defense and agility, HP from level, class, stamina and items,
+            // and clamps every stat at its cap.
+            @let sheet = |k: &str| p.sheet.get(k).copied();
             div class="stats" {
-                div { b { (fmt(ac)) } span { "AC on gear (item sum)" } }
-                div { b { (fmt(hp)) } span { "HP on gear (item sum)" } }
-                div { b { (fmt(mana)) } span { "Mana on gear (item sum)" } }
+                @if let Some(v) = sheet("ac") { div { b { (fmt(v)) } span { "AC · " (fmt(ac)) " on gear" } } }
+                @else { div { b { (fmt(ac)) } span { "AC on gear (item sum)" } } }
+                @if let Some(v) = sheet("max_hp") { div { b { (fmt(v)) } span { "HP · " (fmt(hp)) " on gear" } } }
+                @else { div { b { (fmt(hp)) } span { "HP on gear (item sum)" } } }
+                @if let Some(v) = sheet("max_mana") { div { b { (fmt(v)) } span { "Mana · " (fmt(mana)) " on gear" } } }
+                @else { div { b { (fmt(mana)) } span { "Mana on gear (item sum)" } } }
+                @if let Some(v) = sheet("atk") { div { b { (fmt(v)) } span { "ATK" } } }
                 @if p.aa_abilities.is_empty() {
                     div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA ranks (update Zeal for points)" } }
                 } @else {
@@ -600,14 +606,20 @@ pub fn character(data: &SiteData, name: &str) -> String {
             div class="stats" { @for (i, k) in ["str", "sta", "agi", "dex", "wis", "int", "cha"].iter().enumerate() {
                 @let base = p.base_stats.get(*k).copied().unwrap_or(0);
                 @let raw = base + gstats[i];
-                @if base != 0 || gstats[i] != 0 {
+                @if let Some(v) = sheet(k) {
+                    div { b { (v) } span { (k) " · base " (base) " + gear " (gstats[i]) @if raw > v { " (" (raw) " raw)" } } }
+                } @else if base != 0 || gstats[i] != 0 {
                     // The sheet shows the capped value; the raw sum is the
                     // headroom a member actually cares about.
                     div { b { (raw.min(STAT_CAP)) } span { (k) " · base " (base) " + gear " (gstats[i]) @if raw > STAT_CAP { " (" (raw) ", over the " (STAT_CAP) " cap)" } } }
                 }
             } }
             div class="stats" { @for (i, k) in ["MR", "FR", "CR", "DR", "PR"].iter().enumerate() {
-                div { b { (gresists[i]) } span { (k) " on gear (race/class base not included)" } }
+                @if let Some(v) = sheet(&k.to_lowercase()) {
+                    div { b { (v) } span { (k) " · " (gresists[i]) " on gear" } }
+                } @else {
+                    div { b { (gresists[i]) } span { (k) " on gear (race/class base not included)" } }
+                }
             } }
         }
         div class="wide-block" {
