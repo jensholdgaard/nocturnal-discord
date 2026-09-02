@@ -646,8 +646,12 @@ pub async fn dpsrevoke(
         Ok(_) => {
             rematerialize(&ctx.data().driver, &p, ledger_guild).await;
             record("revoke", "accepted");
-            ctx.say(format!("Revoked `{user}` (token + dashboard access)."))
-                .await?;
+            ctx.say(format!(
+                "Revoked `{user}` (token + dashboard access). Their Zeal keeps sending the old \
+                 token and gets refused from now on — they need `/dpstoken` again and the new \
+                 `/otlp setup` line in game."
+            ))
+            .await?;
         }
         Err(crate::driver::ExecError::Rejected(_)) => {
             record("revoke", "rejected");
