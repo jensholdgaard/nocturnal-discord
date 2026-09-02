@@ -173,7 +173,7 @@ fn record(operation: &'static str, outcome: &'static str) {
 /// closing the modal is the end of the secret's visible life.
 /// Where members get the guild's Zeal build.
 pub const ZEAL_RELEASE_URL: &str =
-    "https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview";
+    "https://github.com/jensholdgaard/NewZeal/releases/tag/nocturnal-zeal";
 /// The button under the Zeal gate; pressing it is the "I have it" answer.
 pub const ZEAL_GATE_ID: &str = "dpstoken:zeal_ok";
 
@@ -223,7 +223,7 @@ pub fn setup_steps(dashboard: &str) -> String {
     format!(
         "**Then:**\n\
          **1.** Latest Zeal: \
-         https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview — drop `Zeal.asi` \
+         https://github.com/jensholdgaard/NewZeal/releases/tag/nocturnal-zeal — drop `Zeal.asi` \
          into your EverQuest folder, replacing the one there (keep a copy of the old one; you \
          still need your normal Zeal install). The one-line setup needs this build.\n\
          **2.** Start EverQuest and paste the line from the popup. That sets the endpoint, \
