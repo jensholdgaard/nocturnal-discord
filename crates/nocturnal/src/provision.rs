@@ -203,26 +203,25 @@ pub fn zeal_gate_text(zeal_build: Option<&str>) -> String {
     )
 }
 
-pub fn token_modal(token: &str) -> serenity::CreateModal {
-    let line = serenity::CreateInputText::new(
-        serenity::InputTextStyle::Short,
-        "Paste this in game (it is your private token)",
-        "l1",
+/// The handover: an ephemeral message only the member sees — the one line in
+/// a code block (one click to copy on desktop), the rest of the setup under
+/// it, and "dismiss" when done. Not a modal: a modal always ends in a
+/// Submit/Cancel choice that added nothing here. Not a DM: nothing should
+/// outlive the moment it was needed.
+pub fn token_handover(token: &str, dashboard: &str) -> String {
+    format!(
+        "**Your line — paste it in game:**\n```\n/otlp setup {token}\n```\n{}\n\n\
+         *Done? Dismiss this message (⋯ → Dismiss message). Only you can see it, and it is never \
+         shown again.*",
+        setup_steps(dashboard)
     )
-    .value(format!("/otlp setup {token}"))
-    .required(false);
-    serenity::CreateModal::new(TOKEN_MODAL_ID, "Copy this line, then Submit")
-        .components(vec![serenity::CreateActionRow::InputText(line)])
 }
-
-/// Custom id the token modal's submit comes back under.
-pub const TOKEN_MODAL_ID: &str = "dpstoken:copy";
 
 /// The rest of the setup, shown after the modal closes — everything **but**
 /// the secret, so this reply is safe to sit in the (ephemeral) history.
 pub fn setup_steps(dashboard: &str) -> String {
     format!(
-        "**Got your line? Here's the rest.**\n\n\
+        "**Then:**\n\
          **1.** Latest Zeal: \
          https://github.com/jensholdgaard/NewZeal/releases/tag/otlp-sdk-preview — drop `Zeal.asi` \
          into your EverQuest folder, replacing the one there (keep a copy of the old one; you \
@@ -570,24 +569,9 @@ pub async fn handle_component(
     .await
     {
         Ok(Issued::Fresh(token)) => {
-            let shown = component
-                .create_response(
-                    ctx,
-                    serenity::CreateInteractionResponse::Modal(token_modal(&token)),
-                )
-                .await
-                .is_ok();
-            if !shown {
-                component
-                    .create_response(
-                        ctx,
-                        say(format!(
-                            "Couldn't open the popup — only you can see this:\n||/otlp setup {token}||\n\n{}",
-                            setup_steps(&p.dashboard_url)
-                        )),
-                    )
-                    .await?;
-            }
+            component
+                .create_response(ctx, say(token_handover(&token, &p.dashboard_url)))
+                .await?;
             let (driver, p2) = (data.driver.clone(), p.clone());
             tokio::spawn(async move { rematerialize(&driver, &p2, ledger_guild).await });
         }
