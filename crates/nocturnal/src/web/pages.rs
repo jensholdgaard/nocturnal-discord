@@ -499,6 +499,10 @@ const CLASSES: [&str; 16] = [
 ];
 
 /// The stat line an item shows in its cell: everything numeric, compact.
+/// The stat cap the character sheet clamps to on Quarm (pre-PoP: 255 at
+/// every level). Base + gear above it is headroom, not a number anyone sees.
+const STAT_CAP: i64 = 255;
+
 fn gear_stat_line(it: &crate::items::ItemSummary) -> String {
     let mut st: Vec<String> = Vec::new();
     for (n, v) in [("AC", it.ac), ("HP", it.hp), ("Mana", it.mana)] {
@@ -578,10 +582,14 @@ pub fn character(data: &SiteData, name: &str) -> String {
         div class="read" {
             div class="eyebrow" { "Character · reported " (ago(data.generated_ms, p.reported_ms)) }
             h1 { (p.name) " " span class="mut" style="font:400 16px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (p.level) " " (class) @if !p.guild.is_empty() { " · " (p.guild) } } }
+            // Item sums, not the character sheet: the game computes AC from
+            // item AC plus defense and agility, HP from level, class and
+            // stamina plus items, and clamps every stat at its cap. Until
+            // the client reports its own sheet, say what these are.
             div class="stats" {
-                div { b { (fmt(ac)) } span { "AC from gear" } }
-                div { b { (fmt(hp)) } span { "HP from gear" } }
-                div { b { (fmt(mana)) } span { "Mana from gear" } }
+                div { b { (fmt(ac)) } span { "AC on gear (item sum)" } }
+                div { b { (fmt(hp)) } span { "HP on gear (item sum)" } }
+                div { b { (fmt(mana)) } span { "Mana on gear (item sum)" } }
                 @if p.aa_abilities.is_empty() {
                     div { b { (p.aa.get("spent").copied().unwrap_or(0)) } span { "AA ranks (update Zeal for points)" } }
                 } @else {
@@ -591,12 +599,15 @@ pub fn character(data: &SiteData, name: &str) -> String {
             }
             div class="stats" { @for (i, k) in ["str", "sta", "agi", "dex", "wis", "int", "cha"].iter().enumerate() {
                 @let base = p.base_stats.get(*k).copied().unwrap_or(0);
+                @let raw = base + gstats[i];
                 @if base != 0 || gstats[i] != 0 {
-                    div { b { (base + gstats[i]) } span { (k) " · base " (base) " + gear " (gstats[i]) } }
+                    // The sheet shows the capped value; the raw sum is the
+                    // headroom a member actually cares about.
+                    div { b { (raw.min(STAT_CAP)) } span { (k) " · base " (base) " + gear " (gstats[i]) @if raw > STAT_CAP { " (" (raw) ", over the " (STAT_CAP) " cap)" } } }
                 }
             } }
             div class="stats" { @for (i, k) in ["MR", "FR", "CR", "DR", "PR"].iter().enumerate() {
-                div { b { (gresists[i]) } span { (k) " from gear" } }
+                div { b { (gresists[i]) } span { (k) " on gear (race/class base not included)" } }
             } }
         }
         div class="wide-block" {
