@@ -176,6 +176,42 @@ pub const ZEAL_RELEASE_URL: &str =
     "https://github.com/jensholdgaard/NewZeal/releases/tag/nocturnal-zeal";
 /// The button under the Zeal gate; pressing it is the "I have it" answer.
 pub const ZEAL_GATE_ID: &str = "dpstoken:zeal_ok";
+/// Published by the NewZeal workflow next to the asset: the short commit
+/// stamped into the current release's binary.
+pub const ZEAL_BUILD_URL: &str =
+    "https://github.com/jensholdgaard/NewZeal/releases/download/nocturnal-zeal/build.txt";
+
+/// The build the gate should ask for: the config override if set, otherwise
+/// whatever the release currently carries — so a push to NewZeal never
+/// leaves the gate asking for a build nobody can download any more. `None`
+/// when neither is available (the gate falls back to the usage-line tell).
+pub async fn expected_zeal_build(p: &Provisioning) -> Option<String> {
+    if let Some(b) = p
+        .zeal_build
+        .as_deref()
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+    {
+        return Some(b.to_owned());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .ok()?;
+    let text = client
+        .get(format!("{ZEAL_BUILD_URL}?cb={}", std::process::id()))
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .text()
+        .await
+        .ok()?;
+    let b = text.trim();
+    (!b.is_empty() && b.len() <= 12 && b.chars().all(|c| c.is_ascii_hexdigit()))
+        .then(|| b.to_owned())
+}
 
 /// What `/dpstoken` says *before* any token exists: the token is useless on
 /// an old `Zeal.asi`, and members kept finding that out from a usage line in
@@ -487,7 +523,7 @@ pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
         .style(serenity::ButtonStyle::Primary);
     ctx.send(
         poise::CreateReply::default()
-            .content(zeal_gate_text(p.zeal_build.as_deref()))
+            .content(zeal_gate_text(expected_zeal_build(&p).await.as_deref()))
             .ephemeral(true)
             .components(vec![serenity::CreateActionRow::Buttons(vec![button])]),
     )
