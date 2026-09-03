@@ -168,3 +168,70 @@ async fn partitions_are_archived_and_restored_on_a_fresh_disk() {
     let (_, replayed) = Store::open_with_archive(dir.path(), Some(broken)).unwrap();
     assert_eq!(replayed, batch);
 }
+
+/// 2026-09-03: a compaction wrote and archived `2026-08.parquet`, then died
+/// before removing the WAL segments it had covered. On the next open the
+/// Parquet said "history ends at 1438", the WAL still began at 0, and the
+/// store refused ("wal sequence gap: expected 1439, found 0") — a crash
+/// loop, on a raid night. The overlap is the *same* events under the same
+/// seqs; opening must skip the archived prefix, replay each event once, and
+/// the next compaction must finish the removal.
+#[test]
+fn an_interrupted_compaction_leaves_overlap_that_open_tolerates() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut store, _) = Store::open(dir.path()).unwrap();
+    store
+        .append(&(0..10).map(|i| env(i, AUG_2026)).collect::<Vec<_>>())
+        .unwrap();
+    store.wal().seal().unwrap();
+    // Keep a copy of the sealed segment: this is what the dead writer left
+    // behind after the Parquet (and its upload) had already succeeded.
+    let wal_dir = dir.path().join("wal");
+    // Only the sealed segment: `seal()` has already opened the next, empty,
+    // active segment, and copying that one back later would clobber the
+    // live tail written after the compaction.
+    let sealed: Vec<_> = std::fs::read_dir(&wal_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| std::fs::metadata(p).map(|m| m.len() > 0).unwrap_or(false))
+        .collect();
+    assert_eq!(sealed.len(), 1, "one sealed segment: {sealed:?}");
+    let stash = tempfile::tempdir().unwrap();
+    for f in &sealed {
+        std::fs::copy(f, stash.path().join(f.file_name().unwrap())).unwrap();
+    }
+    let report = store.compact().unwrap();
+    assert_eq!(report.segments_deleted, 1);
+    // A live tail after the compaction, as on the night.
+    store
+        .append(&(10..13).map(|i| env(i, SEP_2026)).collect::<Vec<_>>())
+        .unwrap();
+    drop(store);
+    for f in std::fs::read_dir(stash.path()).unwrap() {
+        let f = f.unwrap().path();
+        std::fs::copy(&f, wal_dir.join(f.file_name().unwrap())).unwrap();
+    }
+
+    // Open: no refusal, every event exactly once, in order.
+    let (mut store, replayed) = Store::open(dir.path()).unwrap();
+    assert_eq!(replayed.len(), 13, "10 archived + 3 tail, none twice");
+    assert_eq!(
+        replayed.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        (0..13).collect::<Vec<_>>()
+    );
+    // Appends continue where the tail left off.
+    store.append(&[env(13, SEP_2026)]).unwrap();
+
+    // The next compaction finishes what the interrupted one did not: the
+    // stale segment goes, the partition keeps exactly its rows.
+    store.wal().seal().unwrap();
+    let report = store.compact().unwrap();
+    assert!(report.segments_deleted >= 1, "{report:?}");
+    drop(store);
+    let (_, replayed) = Store::open(dir.path()).unwrap();
+    assert_eq!(replayed.len(), 14);
+    assert_eq!(
+        replayed.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        (0..14).collect::<Vec<_>>()
+    );
+}

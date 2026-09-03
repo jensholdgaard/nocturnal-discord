@@ -150,3 +150,66 @@ impl Archive {
         Ok(restored)
     }
 }
+
+/// Run archive I/O from any thread.
+///
+/// The S3 client needs a Tokio reactor. The ledger-writer is a plain std
+/// thread with none, and `futures::executor::block_on` there panicked with
+/// "there is no reactor running" (2026-09-03, mid-compaction, after the
+/// partition had reached the archive and before the WAL segments it covered
+/// were removed) — killing the writer and, on every restart, refusing the
+/// overlapping WAL. Inside a multi-thread runtime, block in place on its
+/// handle; on a current-thread runtime (tests) the caller drives the reactor;
+/// outside any runtime, a private current-thread runtime built once.
+pub(crate) fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => match handle.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => {
+                tokio::task::block_in_place(|| handle.block_on(fut))
+            }
+            _ => futures::executor::block_on(fut),
+        },
+        Err(_) => {
+            static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+            RT.get_or_init(|| {
+                match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt,
+                    Err(e) => panic!("archive runtime: {e}"),
+                }
+            })
+            .block_on(fut)
+        }
+    }
+}
+
+#[cfg(test)]
+mod block_on_tests {
+    use super::block_on;
+
+    /// The exact failure: a reactor-dependent future on a thread with no
+    /// runtime. `futures::executor::block_on` panics here; this must not.
+    #[test]
+    fn a_plain_thread_can_drive_reactor_futures() {
+        let v = std::thread::spawn(|| {
+            block_on(async {
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                7
+            })
+        })
+        .join()
+        .expect("no panic on the std thread");
+        assert_eq!(v, 7);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn inside_a_multi_thread_runtime_it_blocks_in_place() {
+        let v = block_on(async {
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            8
+        });
+        assert_eq!(v, 8);
+    }
+}

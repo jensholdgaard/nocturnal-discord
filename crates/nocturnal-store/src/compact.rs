@@ -82,7 +82,7 @@ impl Store {
         fs::create_dir_all(&events_dir)?;
 
         if let Some(archive) = &archive {
-            match futures::executor::block_on(archive.restore_missing(&events_dir)) {
+            match crate::archive::block_on(archive.restore_missing(&events_dir)) {
                 Ok(names) if !names.is_empty() => {
                     tracing::info!(
                         { attr::NOCTURNAL_ARCHIVE_PARTITIONS_RESTORED } = names.len(),
@@ -114,17 +114,40 @@ impl Store {
 
         let (mut wal, tail) = Wal::open(data_dir.join("wal"))?;
         let expected = envelopes.len() as u64;
-        match tail.first() {
-            Some(first) if first.seq != expected => {
+        match tail.first().map(|e| e.seq) {
+            // A WAL that starts beyond the archived tail lost something.
+            Some(first) if first > expected => {
                 return Err(WalError::SequenceGap {
                     expected,
-                    found: first.seq,
+                    found: first,
                 });
             }
-            Some(_) => {}
+            // A WAL that starts *below* it is an interrupted compaction: the
+            // partition was written (and maybe archived) but the writer died
+            // before removing the segments it covered, so the WAL still holds
+            // events the Parquet already has. Same events, same seqs: skip
+            // the archived prefix. The next compaction dedupes by seq and
+            // finishes the removal. Seen 2026-09-03 after an upload panic.
+            Some(first) if first < expected => {
+                let skipped = tail.iter().take_while(|e| e.seq < expected).count();
+                if let Some(next) = tail.get(skipped) {
+                    if next.seq != expected {
+                        return Err(WalError::SequenceGap {
+                            expected,
+                            found: next.seq,
+                        });
+                    }
+                }
+                tracing::warn!(
+                    overlap = skipped,
+                    archived = expected,
+                    "wal overlaps archived history (interrupted compaction); skipping the archived prefix"
+                );
+                envelopes.extend(tail.into_iter().skip(skipped));
+            }
+            Some(_) => envelopes.extend(tail),
             None => wal.align_next_seq(expected),
         }
-        envelopes.extend(tail);
 
         Ok((
             Store {
@@ -195,7 +218,7 @@ impl Store {
             // Write-through: only a partition that verified locally is
             // mirrored off-site.
             if let Some(archive) = &self.archive {
-                match futures::executor::block_on(archive.put_partition(&target)) {
+                match crate::archive::block_on(archive.put_partition(&target)) {
                     Ok(()) => {
                         tracing::info!({ attr::NOCTURNAL_COMPACTION_PARTITION } = %name, "partition archived")
                     }

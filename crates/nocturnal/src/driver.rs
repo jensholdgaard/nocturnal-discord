@@ -262,14 +262,16 @@ pub fn start_with_archive(
                     Request::Query(f) => f(&ledger),
                     Request::Compact(reply) => {
                         let span = tracing::info_span!("store.compact", otel.kind = "internal");
-                        let outcome = span.in_scope(|| {
-                            // Only *sealed* segments compact, and a segment
-                            // seals at 16 MB. Sealing first is what makes a
-                            // scheduled run mean "drain the WAL" rather than
-                            // "drain it only once it got big"; merging dedupes
-                            // by seq, so the extra partial partitions are free.
-                            store.wal().seal()?;
-                            store.compact()
+                        let outcome = guarded(|| {
+                            span.in_scope(|| {
+                                // Only *sealed* segments compact, and a segment
+                                // seals at 16 MB. Sealing first is what makes a
+                                // scheduled run mean "drain the WAL" rather than
+                                // "drain it only once it got big"; merging dedupes
+                                // by seq, so the extra partial partitions are free.
+                                store.wal().seal()?;
+                                store.compact()
+                            })
                         });
                         let result = match outcome {
                             Ok(report) => {
@@ -310,7 +312,7 @@ pub fn start_with_archive(
                                     { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
                                     "compaction failed; the WAL was not drained"
                                 );
-                                Err(e.to_string())
+                                Err(e)
                             }
                         };
                         // The backlog just changed by design — report it now
@@ -480,5 +482,41 @@ mod tests {
             .filter_map(|e| e.ok())
             .map(|e| e.metadata().expect("metadata").len())
             .sum()
+    }
+}
+
+/// Run a compaction so that a panic inside it becomes an `Err`, not the end
+/// of the writer thread. On 2026-09-03 an upload panicked mid-compaction and
+/// the writer died with it; every command after that failed with "driver
+/// gone" until a restart. The store is not consulted after a panic here
+/// beyond what the next scheduled run does, and that run dedupes by seq.
+fn guarded<T>(f: impl FnOnce() -> Result<T, nocturnal_store::WalError>) -> Result<T, String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "non-string panic".to_owned());
+            Err(format!("compaction panicked: {msg}"))
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)] // tests assert; unwrap is the assertion
+mod guarded_tests {
+    use super::guarded;
+
+    #[test]
+    fn a_panic_becomes_an_error_and_the_caller_lives() {
+        let r: Result<(), String> = guarded(|| panic!("there is no reactor running"));
+        assert_eq!(
+            r.unwrap_err(),
+            "compaction panicked: there is no reactor running"
+        );
+        assert_eq!(guarded(|| Ok(3)), Ok(3));
     }
 }
