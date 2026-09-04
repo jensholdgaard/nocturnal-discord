@@ -67,6 +67,9 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/registercharacter` | all | name | Link an EQ character to the caller |
 | `/startraid` | officer | name?, dkpspertick?, tickduration? | Start the (single) raid; awards a `Start` tick to those present |
 | `/endraid` | officer | — | End raid; final `End` attendance entry (0 DKP); posts full movement log; RaidHelper auto-award if event-linked |
+| `/mergeraid` | officer | from, into (ended raids) | Escape hatch: fold a false-start raid into the real one in the ledger (`raid.merged`). Normally unnecessary — the site folds back-to-back raids under one name (or an unnamed one) on its own |
+| `/renameraid` | officer | raid (ended raids), name | Escape hatch: correct a raid's name (`raid.renamed`; every DKP line follows). Normally unnecessary — see automatic naming below |
+| `/dpsstatus` | officer | — | Who is sending telemetry, on what Zeal build, last seen (from Ourios, 14 days) |
 | `/startbid` | officer | search, minbid?, numitems?, database? | Short auction flow (below) |
 | `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database? | Long auction; bids via `/bid` |
 | `/auctiondetails` | officer | auctionid | Dump bids/winners of a **settled** auction; refused while it is still running; publicly announces the peek in the auction channel (only when it actually showed something) |
@@ -186,7 +189,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
 | `/roster remove name` | all | Remove a character from your row |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
-| `/dpstoken` | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
+| `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
 
 Contract (from the legacy implementation):
@@ -299,3 +302,17 @@ be requested later. Concretely:
 The [deliberate changes](#deliberate-changes-officer-sign-off--all-fixes-no-feature-changes)
 above are bug fixes, not UX changes — they ship with the rewrite; officers can
 veto any individually later.
+
+## Raid names, automatically
+
+`/startraid` without a name gets "Raid night <date>". At `/endraid`, and again
+at boot and every half hour for any ended raid still on a placeholder, the bot
+asks Prometheus which targets took player damage during the raid window and
+keeps the ones listed in the boss table — `roster.raid_bosses_path`, a YAML
+map of NPC name → the guild's shorthand (`deploy/raid-bosses.yaml` is the
+seed; `Narandi the Wretched: Ring War`, every Vex Thal boss → `VT`). Only
+table names can name a raid, so trash never does; bosses are ordered by first
+engagement ("Vulak, Cursed & Ring War"), shorthands dedupe, and a boss under
+2 % of boss damage is a tag, not a kill. `roster.prometheus_query_url` points
+at the box-local Prometheus. Old placeholder names (`<t:…:D>`) count as
+unnamed. `/renameraid` overrides.
