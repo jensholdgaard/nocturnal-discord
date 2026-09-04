@@ -233,6 +233,10 @@ pub enum Event {
     /// folded into `into`. Pure relabel: no DKP moves.
     #[serde(rename = "raid.merged")]
     RaidMerged { from: String, into: String },
+    /// Officer correction (2026-09-04): the raid's name, and the copy of it
+    /// on every log line that references the raid.
+    #[serde(rename = "raid.renamed")]
+    RaidRenamed { raid_id: String, name: String },
     #[serde(rename = "raid.imported")]
     RaidImported {
         raid_id: String,
@@ -372,6 +376,7 @@ impl Event {
             Event::RaidTicked { .. } => "raid.tick",
             Event::RaidEnded { .. } => "raid.ended",
             Event::RaidMerged { .. } => "raid.merged",
+            Event::RaidRenamed { .. } => "raid.renamed",
             Event::RaidImported { .. } => "raid.imported",
             Event::AuctionOpened { .. } => "auction.opened",
             Event::BidPlaced { .. } => "auction.bid_placed",

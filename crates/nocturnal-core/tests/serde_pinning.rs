@@ -76,6 +76,10 @@ fn samples() -> Vec<Event> {
             from: "r0".into(),
             into: "r".into(),
         },
+        Event::RaidRenamed {
+            raid_id: "r".into(),
+            name: "Vulak, Cursed and Ringwar".into(),
+        },
         Event::RaidImported {
             raid_id: "r0".into(),
             name: "Old".into(),
@@ -175,6 +179,7 @@ const PINNED_KINDS: &[&str] = &[
     "raid.tick",
     "raid.ended",
     "raid.merged",
+    "raid.renamed",
     "raid.imported",
     "auction.opened",
     "auction.bid_placed",

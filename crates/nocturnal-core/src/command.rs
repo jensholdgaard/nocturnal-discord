@@ -62,6 +62,13 @@ pub enum Command {
         from: String,
         into: String,
     },
+    /// `/renameraid`: correct a raid's name after the fact (a `/startraid`
+    /// without one gets a placeholder). Every log line that names the raid
+    /// follows; nothing else moves.
+    RenameRaid {
+        raid_id: String,
+        name: String,
+    },
     OpenAuction {
         auction_id: String,
         item: Item,
@@ -157,6 +164,7 @@ impl Command {
             Command::AwardRaid { .. } => "award_raid",
             Command::EndRaid { .. } => "end_raid",
             Command::MergeRaid { .. } => "merge_raid",
+            Command::RenameRaid { .. } => "rename_raid",
             Command::OpenAuction { .. } => "open_auction",
             Command::PlaceBid { .. } => "place_bid",
             Command::RetractBid { .. } => "retract_bid",

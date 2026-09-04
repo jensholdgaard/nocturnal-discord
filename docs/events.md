@@ -52,6 +52,7 @@ Rules:
 | `raid.tick` | raid_id, tick_no, awarded[{player, amount}] | One event per tick — the "41 writes per tick" pattern becomes one append; `tick_no` makes double-award unrepresentable |
 | `raid.ended` | raid_id, reason (officer \| catchup) | Transient Discord errors can no longer end a raid — only this event can |
 | `raid.merged` | from, into | Officer correction (2026-09-01): a false `/startraid` folded into the real raid. Attendance entries and every log line are re-labelled to `into`, balances untouched, `from` ceases to exist. Both must be ended |
+| `raid.renamed` | raid_id, name | Officer correction (2026-09-04): a raid's name after the fact — a `/startraid` without one gets a placeholder. The name on every log line referencing the raid follows |
 | `raid.imported` | …, `tick_interval_ms`, `dkp_per_tick`, `event_id`? | Genesis only. The three trailing fields were added 2026-08-26 (defaulted, so older events replay unchanged) because `/backup` has to give them back |
 
 ### Auctions (one unified model; `flavor: short | long`)

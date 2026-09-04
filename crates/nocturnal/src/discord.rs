@@ -738,6 +738,7 @@ pub async fn run(
         startraid(),
         endraid(),
         mergeraid(),
+        renameraid(),
         adddkp(),
         removedkp(),
         addraiddkp(),
@@ -1161,6 +1162,7 @@ pub fn rejection_text(e: &ExecError) -> String {
     };
     match rejection {
         R::SameRaid => ":no_entry: That is the same raid on both sides.".to_owned(),
+        R::EmptyName => ":no_entry: A raid needs a name.".to_owned(),
         R::RaidStillActive { name } => {
             format!(":no_entry: **{name}** is still running — `/endraid` it first.")
         }
@@ -1420,6 +1422,72 @@ async fn autocomplete_raid(ctx: Context<'_>, partial: &str) -> Vec<serenity::Aut
                 .collect()
         })
         .await
+}
+
+/// Give a raid its proper name after the fact.
+#[tracing::instrument(name = "command.renameraid", skip_all, fields(otel.kind = "server"))]
+#[poise::command(
+    slash_command,
+    ephemeral,
+    rename = "renameraid",
+    check = "officer_check"
+)]
+pub async fn renameraid(
+    ctx: Context<'_>,
+    #[description = "The raid"]
+    #[autocomplete = "autocomplete_raid"]
+    raid: String,
+    #[description = "Its name"] name: String,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let (r, n) = (raid.clone(), name.clone());
+    let old = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.raids.get(&r).map(|x| x.name.clone()))
+        })
+        .await;
+    match execute(
+        &ctx,
+        Command::RenameRaid {
+            raid_id: raid,
+            name: n,
+        },
+    )
+    .await?
+    {
+        Ok(_) => {
+            ctx.say(format!(
+                "Renamed **{}** → **{}**. Every DKP line that names it follows; the site is \
+                 rebuilding. (Telemetry already recorded keeps the old label.)",
+                old.unwrap_or_default(),
+                name.trim()
+            ))
+            .await?;
+            if let Some(out) = &ctx.data().roster_output {
+                crate::roster_page::rematerialize(
+                    ctx.serenity_context().http.as_ref(),
+                    ctx.guild_id().map_or(0, |g| g.get()),
+                    &ctx.data().driver,
+                    out,
+                    &ctx.data().members,
+                    ledger_guild,
+                    ctx.data().ourios.as_ref(),
+                    &ctx.data().item_mirror,
+                    &ctx.data().site,
+                )
+                .await;
+            }
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
+    Ok(())
 }
 
 /// Fold a false-start raid into the real one (attendance and loot lines

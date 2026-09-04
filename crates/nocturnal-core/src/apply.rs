@@ -147,6 +147,22 @@ pub fn apply(state: &mut State, env: &Envelope) {
             }
         }
 
+        Event::RaidRenamed { raid_id, name } => {
+            let Some(r) = g.raids.get_mut(raid_id) else {
+                return;
+            };
+            r.name = name.clone();
+            for p in g.players.values_mut() {
+                for e in &mut p.log {
+                    if let Some(rr) = e.raid.as_mut() {
+                        if rr.raid_id == *raid_id {
+                            rr.name = name.clone();
+                        }
+                    }
+                }
+            }
+        }
+
         Event::RaidImported {
             raid_id,
             name,

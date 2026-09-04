@@ -191,6 +191,17 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
+        Command::RenameRaid { raid_id, name } => {
+            if name.trim().is_empty() {
+                return Err(Rejection::EmptyName);
+            }
+            g.raids.get(raid_id).ok_or(Rejection::RaidNotFound)?;
+            Ok(vec![Event::RaidRenamed {
+                raid_id: raid_id.clone(),
+                name: name.trim().to_owned(),
+            }])
+        }
+
         Command::OpenAuction {
             auction_id,
             item,

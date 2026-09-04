@@ -157,3 +157,55 @@ fn merge_refuses_active_same_and_unknown_raids() {
         "a running raid is not a merge target"
     );
 }
+
+#[test]
+fn rename_changes_the_raid_and_every_line_that_names_it() {
+    let mut l = phantom_then_real();
+    run(
+        &mut l,
+        90_000,
+        Command::RenameRaid {
+            raid_id: "real".into(),
+            name: "  Vulak, Cursed and Ringwar ".into(),
+        },
+    );
+    let g = l.state().guild(GUILD).unwrap();
+    assert_eq!(g.raids["real"].name, "Vulak, Cursed and Ringwar", "trimmed");
+    assert_eq!(
+        g.raids["phantom"].name, "Seru & Emp",
+        "other raids untouched"
+    );
+    let lines: Vec<&str> = g.players[&3]
+        .log
+        .iter()
+        .filter_map(|e| e.raid.as_ref())
+        .map(|r| r.name.as_str())
+        .collect();
+    assert!(!lines.is_empty());
+    assert!(
+        lines.iter().all(|n| *n == "Vulak, Cursed and Ringwar"),
+        "{lines:?}"
+    );
+    assert_eq!(
+        l.propose(
+            &ctx(90_001),
+            &Command::RenameRaid {
+                raid_id: "real".into(),
+                name: "   ".into()
+            }
+        )
+        .err(),
+        Some(Rejection::EmptyName)
+    );
+    assert_eq!(
+        l.propose(
+            &ctx(90_001),
+            &Command::RenameRaid {
+                raid_id: "nope".into(),
+                name: "x".into()
+            }
+        )
+        .err(),
+        Some(Rejection::RaidNotFound)
+    );
+}

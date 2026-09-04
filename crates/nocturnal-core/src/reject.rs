@@ -33,6 +33,8 @@ pub enum Rejection {
     },
     /// `/mergeraid` with the same raid on both sides.
     SameRaid,
+    /// `/renameraid` with an empty name.
+    EmptyName,
     AuctionNotFound,
     AuctionIdTaken,
     AuctionNotActive,
@@ -84,6 +86,7 @@ impl Rejection {
             Rejection::TickTooSoon => "tick_too_soon",
             Rejection::RaidStillActive { .. } => "raid_still_active",
             Rejection::SameRaid => "same_raid",
+            Rejection::EmptyName => "empty_name",
             Rejection::AuctionNotFound => "auction_not_found",
             Rejection::AuctionIdTaken => "auction_id_taken",
             Rejection::AuctionNotActive => "auction_not_active",
