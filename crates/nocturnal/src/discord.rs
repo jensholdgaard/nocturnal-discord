@@ -850,8 +850,21 @@ pub async fn run(
                     // And every half hour after: profiles arrive from
                     // members' clients through Ourios on their own schedule,
                     // and nothing else would re-render the page for them.
+                    let prom = prometheus_query_url.clone();
+                    let bosses = raid_bosses_path.clone();
                     tokio::spawn(async move {
                         loop {
+                            // Raids still on a placeholder name get one from
+                            // what they fought, before the site renders.
+                            if let (Some(url), Some(path)) = (prom.as_deref(), bosses.as_deref()) {
+                                crate::raid_names::name_unnamed_raids(
+                                    &driver,
+                                    ledger_guild,
+                                    url,
+                                    path,
+                                )
+                                .await;
+                            }
                             crate::roster_page::rematerialize(
                                 http.as_ref(),
                                 guild_id,
