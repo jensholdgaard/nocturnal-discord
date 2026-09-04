@@ -23,21 +23,17 @@ const so=document.getElementById('signout');if(so)so.addEventListener('click',as
 fetch('/perses/api/v1/user/whoami').then(r=>r.ok?r.json():null).then(u=>{const w=document.getElementById('who');if(!w)return;const n=u&&u.metadata&&u.metadata.name;w.innerHTML=n?('signed in as <b>'+n.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</b> · <button class="namelink" id="signout">sign out</button>'):'not signed in';const so=document.getElementById('signout');if(so)so.addEventListener('click',async()=>{try{await fetch('/perses/api/auth/logout',{credentials:'include'});}catch(e){}location.href='/';});}).catch(()=>{});
 "#;
 
-/// The island's version, for cache-busting its URLs: the checksum the puller
-/// wrote beside the assets directory, else the bot's own version. Assets are
-/// cached for a day by URL, so a new island must be a new URL.
+/// The installed island's hash, read per render: the puller replaces the
+/// island on every poll but restarts the bot only for a new binary, so a
+/// version cached at boot would keep pages pointing at a bundle that is no
+/// longer there (an island-only change would never reach a browser).
 fn island_version() -> String {
-    static V: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    V.get_or_init(|| {
-        crate::web::ASSETS_DIR
-            .get()
-            .and_then(|d| d.parent().map(|p| p.join(".sha256")))
-            .and_then(|f| std::fs::read_to_string(f).ok())
-            .map(|s| s.trim().chars().take(12).collect())
-            .filter(|s: &String| !s.is_empty())
-            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned())
-    })
-    .clone()
+    crate::web::ASSETS_DIR
+        .get()
+        .map(|d| d.join(".sha256"))
+        .and_then(|f| std::fs::read_to_string(f).ok())
+        .map(|s| s.trim().chars().take(12).collect())
+        .unwrap_or_else(|| "0".to_owned())
 }
 
 fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: bool) -> String {
