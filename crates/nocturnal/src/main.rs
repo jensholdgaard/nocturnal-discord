@@ -15,6 +15,7 @@ mod items;
 mod lock;
 mod profiles;
 mod provision;
+mod raid_names;
 mod raidhelper;
 mod roster;
 mod roster_page;

@@ -1,0 +1,87 @@
+# NPC name -> the guild's shorthand. Only names here can name a raid at
+# /endraid; trash never can. Case, whitespace and the client's "#" prefix on
+# instanced spawns are ignored. Edit freely; the bot re-reads it every time.
+# Several bosses may share a shorthand (every Vex Thal boss -> VT).
+
+# Kunark
+Lord Nagafen: Naggy
+Lady Vox: Vox
+Trakanon: Trakanon
+Venril Sathir: VS
+Talendor: Talendor
+Gorenaire: Gorenaire
+Severilous: Severilous
+Faydedar: Faydedar
+Phara Dar: Phara Dar
+Silverwing: Silverwing
+Hoshkar: Hoshkar
+Xygoz: Xygoz
+Druushk: Druushk
+Nexona: Nexona
+
+# Velious
+Vulak`Aerr: Vulak
+Lord Yelinak: Yelinak
+Klandicar: Klandicar
+Zlandicar: Zlandicar
+Dozekar the Cursed: Dozekar
+Aaryonar: Aaryonar
+Lady Nevederia: Nevederia
+Lady Mirenilla: Mirenilla
+Lord Feshlak: Feshlak
+Lord Koi`Doken: Koi`Doken
+Lord Kreizenn: Kreizenn
+Lord Vyemm: Vyemm
+Sevalak: Sevalak
+Jorlleag: Jorlleag
+Eashen of the Sky: Eashen
+Ikatiar the Venom: Ikatiar
+Gozzrem: Gozzrem
+Telkorenar: Telkorenar
+Cekenar: Cekenar
+Dagarn the Destroyer: Dagarn
+Narandi the Wretched: Ring War
+Dain Frostreaver IV: Ring War
+King Tormax: Tormax
+Avatar of War: AoW
+The Statue of Rallos Zek: Statue
+Derakor the Vindicator: Vindi
+Velketor the Sorcerer: Velketor
+Tunare: Tunare
+Kelorek`Dar: Kelorek
+Wuoshi: Wuoshi
+Ventani: Warders
+Hraashna: Warders
+Nanzata: Warders
+Tukaarak: Warders
+Master of the Guard: Master of the Guard
+The Final Arbiter: Final Arbiter
+Kerafyrm: Sleeper
+
+# Luclin
+Emperor Ssraeshza: Emp
+Vyzh`dra the Cursed: Cursed
+Vyzh`dra the Exiled: Cursed
+Xerkizh the Creator: Xerkizh
+High Priest of Ssraeshza: High Priest
+Blood of Ssraeshza: Blood
+Arch Lich Rhag`Zadune: Rhag`Zadune
+Lord Inquisitor Seru: Seru
+Aten Ha Ra: AHR
+Va Xi Aten Ha Ra: AHR
+Kaas Thox Xi Ans Dyek: VT
+Kaas Thox Xi Aten Ha Ra: VT
+Thall Va Kelun: VT
+Thall Xundraux Diabo: VT
+Diabo Xi Va: VT
+Diabo Xi Va Temariel: VT
+Diabo Xi Xin: VT
+Diabo Xi Xin Thall: VT
+Va Dyn Khar: VT
+Va Xi Diabo Nnet: VT
+The Itraer Vius: Itraer Vius
+Shei Vinitras: Shei
+Doomshade: Doomshade
+Grieg Veneficus: Grieg
+Rumblecrush: Rumblecrush
+Servitor of Luclin: Servitor

@@ -39,6 +39,10 @@ pub struct Data {
     pub site: crate::site::SiteHandle,
     /// The feedback-channel mirror, when configured.
     pub feedback: Option<std::sync::Arc<crate::feedback::Feedback>>,
+    /// Prometheus instant-query URL and the boss table, for naming a raid
+    /// from what it fought at `/endraid`.
+    pub prometheus_query_url: Option<String>,
+    pub raid_bosses_path: Option<std::path::PathBuf>,
     /// Discord display names and roles by player id, filled lazily by the
     /// page materializer. Presentation state: lost on restart, refilled.
     pub members: std::sync::Arc<
@@ -700,6 +704,8 @@ async fn provisioning_client(
                     site: Default::default(),
                     members: Default::default(),
                     feedback: None,
+                    prometheus_query_url: None,
+                    raid_bosses_path: None,
                 })
             })
         })
@@ -775,6 +781,8 @@ pub async fn run(
         .feedback_channel_id
         .map(|c| std::sync::Arc::new(crate::feedback::Feedback::new(c, &cfg.data.dir)));
     let feedback_enabled = feedback.is_some();
+    let prometheus_query_url = cfg.roster.prometheus_query_url.clone();
+    let raid_bosses_path = cfg.roster.raid_bosses_path.clone();
     let members: std::sync::Arc<
         std::sync::Mutex<std::collections::HashMap<u64, crate::roster_page::MemberInfo>>,
     > = Default::default();
@@ -898,6 +906,8 @@ pub async fn run(
                     site: site_handle.clone(),
                     members: members.clone(),
                     feedback: feedback.clone(),
+                    prometheus_query_url: prometheus_query_url.clone(),
+                    raid_bosses_path: raid_bosses_path.clone(),
                 })
             })
         })
@@ -1775,6 +1785,60 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
         })
         .await;
     ctx.say(format!("Raid {raid_name} ended")).await?;
+    // An unnamed raid names itself from what it fought: bosses in the table
+    // only, so trash can never make the name. Best-effort; /renameraid
+    // overrides.
+    if nocturnal_core::state::is_placeholder_raid_name(&raid_name) {
+        if let (Some(url), Some(path)) = (
+            ctx.data().prometheus_query_url.as_deref(),
+            ctx.data().raid_bosses_path.as_deref(),
+        ) {
+            let rid2 = raid_id.clone();
+            let window = ctx
+                .data()
+                .driver
+                .query(move |l| {
+                    let g = l.state().guild(ledger_guild)?;
+                    let r = g.raids.get(&rid2)?;
+                    Some((r.date_ms, r.ended_ms.unwrap_or(r.date_ms)))
+                })
+                .await;
+            if let Some((start_ms, end_ms)) = window {
+                let rows = crate::raid_names::targets_in_window(url, start_ms, end_ms).await;
+                let bosses = crate::raid_names::load_bosses(path);
+                match crate::raid_names::pick(&rows, &bosses) {
+                    Some(name) => {
+                        let applied = execute(
+                            &ctx,
+                            Command::RenameRaid {
+                                raid_id: raid_id.clone(),
+                                name: name.clone(),
+                            },
+                        )
+                        .await?;
+                        match applied {
+                            Ok(_) => {
+                                ctx.say(format!(
+                                    "Named it **{name}** from tonight's kills. Wrong? `/renameraid`."
+                                ))
+                                .await?;
+                            }
+                            Err(e) => {
+                                ctx.say(rejection_text(&e)).await?;
+                            }
+                        }
+                    }
+                    None => {
+                        ctx.say(
+                            "Couldn't name this raid from telemetry (no boss from the table took \
+                             damage). Give it one with `/renameraid`.",
+                        )
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
 
     // Linked to a RaidHelper event? Award the signups who actually turned up.
     let rid = raid_id.clone();

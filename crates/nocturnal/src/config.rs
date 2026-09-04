@@ -46,6 +46,15 @@ pub struct RosterConfig {
     pub ourios_query_url: Option<String>,
     #[serde(default = "default_ourios_tenant")]
     pub ourios_tenant: String,
+    /// Prometheus' instant-query endpoint (the box-local one), for naming
+    /// a raid from what it fought. Unset = raids keep their placeholder name.
+    #[serde(default)]
+    pub prometheus_query_url: Option<String>,
+    /// The boss table: NPC name → the guild's shorthand (`Vulak`Aerr: Vulak`,
+    /// every Vex Thal boss: VT). Re-read on every use so officers can extend
+    /// it without a deploy. Only names in it can name a raid — trash never.
+    #[serde(default)]
+    pub raid_bosses_path: Option<PathBuf>,
     /// Where the puller unpacks the Perses island (`island.js`, `island.css`).
     /// The page server serves it under /assets. Unset = charts render as a
     /// note saying the island is not installed.
@@ -67,6 +76,8 @@ impl Default for RosterConfig {
             output_path: None,
             ourios_query_url: None,
             ourios_tenant: default_ourios_tenant(),
+            prometheus_query_url: None,
+            raid_bosses_path: None,
             assets_dir: None,
         }
     }

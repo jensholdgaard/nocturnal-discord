@@ -1673,6 +1673,8 @@ mod tests {
             site: Default::default(),
             members: Default::default(),
             feedback: None,
+            prometheus_query_url: None,
+            raid_bosses_path: None,
         };
 
         driver
