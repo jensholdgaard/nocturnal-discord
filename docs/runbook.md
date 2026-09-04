@@ -118,3 +118,23 @@ aside). The event log is forward-compatible: older binaries read events they
 know, and every payload change is additive with a version bump, so a rollback
 does not corrupt anything. A rollback across a *new event kind* would leave
 that kind unhandled — check the release notes, which list any new `(kind, v)`.
+
+## Is the bot actually alive? (readiness, heartbeat, watchdog)
+
+Since 2026-09-04 `/readyz` means: replay done, gateway connected, **and the
+ledger writer thread beat within the last 60 s**. On 2026-09-03 the writer
+died mid-compaction while the process, the gateway and the scheduler all
+looked fine and `/readyz` said 200 for hours; every command failed with
+"driver gone". The signals that now catch that:
+
+- `rate(nocturnal_ledger_writer_heartbeat_total[2m])` — healthy 0.05–0.1/s,
+  dead exactly 0. First panel on the dashboard ("Bot health").
+- `/readyz` → 503 with "the ledger writer is not beating".
+- `nocturnal-watchdog.timer` (every minute) restarts the service after three
+  consecutive unready minutes; `journalctl -u nocturnal-watchdog` shows strikes.
+- Compaction failures: `nocturnal_compaction_runs_total{nocturnal_decision_outcome="error"}`
+  and `store.compact` spans with status ERROR and `error.type` (`storage` |
+  `panic`). Command failures: `nocturnal_commands_total{...="error"}` and
+  `command.*` spans with status ERROR and an `exception` event.
+- Which build: every span, metric and log carries `service.version`
+  (`0.1.0+<commit>`) and `service.instance.id` (one per boot).
