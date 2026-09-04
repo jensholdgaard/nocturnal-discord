@@ -47,10 +47,17 @@ function mount(el: HTMLElement) {
 /// no idea what to do about it.
 async function preflight(): Promise<'ok' | 'no-grant' | 'signed-out' | 'unknown'> {
   try {
-    const r = await fetch(
-      '/perses/proxy/projects/everquest/datasources/prometheus/api/v1/query?query=up',
-      { credentials: 'same-origin', cache: 'no-store' },
-    );
+    // POST, not GET: the datasource proxy forwards /api/v1/query only as a
+    // POST (allowedEndpoints); a GET is a 403 from the proxy itself, which
+    // looked exactly like "no grant" and told a grant-holding officer to run
+    // /dpstoken (2026-09-04).
+    const r = await fetch('/perses/proxy/projects/everquest/datasources/prometheus/api/v1/query', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'query=up',
+    });
     if (r.status === 403) return 'no-grant';
     if (r.status === 401) return 'signed-out';
     return 'ok';
