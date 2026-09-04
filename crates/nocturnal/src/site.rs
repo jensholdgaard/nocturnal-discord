@@ -274,7 +274,16 @@ impl SiteData {
                         .filter(|i| **i != cid)
                         .map(|i| (*i).clone())
                         .collect(),
-                    name: canon.name.clone(),
+                    // A real name from anywhere in the group beats a
+                    // placeholder; a group with none is named by its date.
+                    name: group
+                        .iter()
+                        .map(|(_, r)| r.name.trim())
+                        .find(|n| !nocturnal_core::state::is_placeholder_raid_name(n))
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| {
+                            format!("Raid night {}", crate::web::pages::day(date_ms))
+                        }),
                     date_ms,
                     start_ms: entries.first().map_or(date_ms, |e| e.ts_ms),
                     end_ms: group

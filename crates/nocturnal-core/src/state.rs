@@ -359,10 +359,23 @@ fn raid_window(r: &Raid) -> (i64, i64) {
     (start, end)
 }
 
-/// Same name (case and whitespace aside) and windows within
-/// [`SAME_RAID_GAP_MS`] of each other.
+/// `/startraid` without a name used to default to Discord timestamp markup
+/// (`<t:1788459140:D>`): a date in Discord, a literal string everywhere
+/// else, and unique per second — so two unnamed raids never matched. Such a
+/// name says nothing about the raid; treat it as absent.
+pub fn is_placeholder_raid_name(name: &str) -> bool {
+    let n = name.trim();
+    n.is_empty() || (n.starts_with("<t:") && n.ends_with('>'))
+}
+
+/// Same raid night: windows within [`SAME_RAID_GAP_MS`] of each other and
+/// either the same name (case and whitespace aside) or one side unnamed —
+/// an unnamed false start next to a named raid is the same night.
 pub fn same_raid(a: &Raid, b: &Raid) -> bool {
-    if !a.name.trim().eq_ignore_ascii_case(b.name.trim()) {
+    let (na, nb) = (a.name.trim(), b.name.trim());
+    let names_agree =
+        is_placeholder_raid_name(na) || is_placeholder_raid_name(nb) || na.eq_ignore_ascii_case(nb);
+    if !names_agree {
         return false;
     }
     let (sa, ea) = raid_window(a);

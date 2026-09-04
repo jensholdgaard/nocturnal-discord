@@ -1557,7 +1557,10 @@ pub async fn startraid(
             ),
         }
     }
-    let name = name.unwrap_or_else(|| format!("<t:{}:D>", chrono_now_ms() / 1000));
+    // Legible everywhere, not only in Discord: the site, Ourios and the
+    // Prometheus raid label all carried "<t:…:D>" literally.
+    let name =
+        name.unwrap_or_else(|| format!("Raid night {}", crate::web::pages::day(chrono_now_ms())));
     let raid_id = format!("rd-{:x}", chrono_now_ms());
     let cmd = Command::StartRaid {
         raid_id,
