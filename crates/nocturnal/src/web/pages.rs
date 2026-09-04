@@ -30,10 +30,11 @@ fetch('/perses/api/v1/user/whoami').then(r=>r.ok?r.json():null).then(u=>{const w
 fn island_version() -> String {
     crate::web::ASSETS_DIR
         .get()
-        .map(|d| d.join(".sha256"))
+        .and_then(|d| d.parent().map(|p| p.join(".sha256")))
         .and_then(|f| std::fs::read_to_string(f).ok())
         .map(|s| s.trim().chars().take(12).collect())
-        .unwrap_or_else(|| "0".to_owned())
+        .filter(|s: &String| !s.is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned())
 }
 
 fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: bool) -> String {
