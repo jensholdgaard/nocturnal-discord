@@ -65,6 +65,7 @@ pub mod attr {
     pub const NOCTURNAL_STRESSTEST_REJECTED_COUNT: &str = "nocturnal.stresstest.rejected.count";
     pub const NOCTURNAL_TELEMETRY_ENDPOINT: &str = "nocturnal.telemetry.endpoint";
     pub const NOCTURNAL_TELEMETRY_PROTOCOL: &str = "nocturnal.telemetry.protocol";
+    pub const ERROR_TYPE: &str = "error.type";
     pub const FILE_PATH: &str = "file.path";
     pub const HTTP_REQUEST_METHOD: &str = "http.request.method";
     pub const NOCTURNAL_FEEDBACK_ATTACHMENTS: &str = "nocturnal.feedback.attachments";
@@ -93,6 +94,7 @@ pub mod metric {
     pub const NOCTURNAL_INTERACTION_COMMIT_DURATION: &str = "nocturnal.interaction.commit.duration";
     pub const NOCTURNAL_LEDGER_EVENTS: &str = "nocturnal.ledger.events";
     pub const NOCTURNAL_LEDGER_SEQ: &str = "nocturnal.ledger.seq";
+    pub const NOCTURNAL_LEDGER_WRITER_HEARTBEAT: &str = "nocturnal.ledger.writer.heartbeat";
     pub const NOCTURNAL_PROVISION_OPERATIONS: &str = "nocturnal.provision.operations";
     pub const NOCTURNAL_RAID_ACTIVE: &str = "nocturnal.raid.active";
     pub const NOCTURNAL_RAID_ATTENDANCE: &str = "nocturnal.raid.attendance";

@@ -149,6 +149,17 @@ groups:
     unit: s
     attributes:
       - ref: nocturnal.scheduler.timer
+  - id: metric.nocturnal.ledger.writer.heartbeat
+    type: metric
+    metric_name: nocturnal.ledger.writer.heartbeat
+    stability: development
+    brief: >
+      One per gauge-sampling cycle of the single-writer thread. A rate of zero
+      means the writer is dead while the process, the gateway and the
+      scheduler all look alive - exactly the 2026-09-03 outage, which no other
+      series could show. /readyz turns 503 on the same signal.
+    instrument: counter
+    unit: "{cycle}"
   - id: metric.nocturnal.scheduler.heartbeat
     type: metric
     metric_name: nocturnal.scheduler.heartbeat

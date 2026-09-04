@@ -210,7 +210,7 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    let readiness = health::Readiness::default();
+    let readiness = health::Readiness::default().with_writer_beat(driver.writer_beat());
     let site_handle: site::SiteHandle = Default::default();
     if let Some(bind) = &cfg.health.bind {
         health::serve(

@@ -495,3 +495,8 @@ groups:
         stability: development
         brief: Discord's own timestamp of the message, Unix ms — differs from the record time for backfills and edits.
         examples: [1788280670540]
+      - id: error.type
+        type: string
+        stability: stable
+        brief: Describes a class of error the operation ended with (semconv `error.type`; low cardinality).
+        examples: ['storage', 'panic', 'timeout']

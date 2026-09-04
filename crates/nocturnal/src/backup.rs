@@ -45,7 +45,7 @@ fn human(bytes: usize) -> String {
 }
 
 /// Export the DKP ledger as the legacy players/raids JSON pair, zipped.
-#[tracing::instrument(name = "command.backup", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.backup", skip_all, err, fields(otel.kind = "server"))]
 // Deliberately *not* ephemeral. The reply is the interface: the roster bot
 // watches the channel for the attachment and copies it to Drive, and an
 // ephemeral reply is invisible to every other bot. Legacy did

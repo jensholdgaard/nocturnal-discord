@@ -10,6 +10,11 @@
 # the sha256 protects against a torn download, not against a hostile repo.
 name: release-vm
 
+# Stamped into service.version (nocturnal-telemetry::service_version) so every
+# span, metric and log says which build produced it.
+env:
+  NOCTURNAL_BUILD_SHA: ${{ github.sha }}
+
 on:
   push:
     branches: [main]

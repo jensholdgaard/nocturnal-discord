@@ -6,19 +6,48 @@
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 
+/// How long the writer may go without a gauge-sampling cycle before
+/// /readyz stops vouching for it. The scheduler drives a ledger query every
+/// ten seconds, so a healthy writer beats at least that often.
+const WRITER_STALE_MS: i64 = 60_000;
+
+/// Ready = replay done and gateway connected, *and* the ledger writer thread
+/// still beating. On 2026-09-03 the writer died and /readyz said 200 for
+/// hours while every command failed; readiness that ignores the one thread
+/// every command needs is not readiness.
 #[derive(Clone, Default)]
-pub struct Readiness(Arc<AtomicBool>);
+pub struct Readiness {
+    ready: Arc<AtomicBool>,
+    writer_beat: Option<Arc<AtomicI64>>,
+}
 
 impl Readiness {
+    /// Vouch for the writer too, via the driver's heartbeat.
+    pub fn with_writer_beat(mut self, beat: Arc<AtomicI64>) -> Self {
+        self.writer_beat = Some(beat);
+        self
+    }
     pub fn set_ready(&self) {
-        self.0.store(true, Ordering::Release);
+        self.ready.store(true, Ordering::Release);
     }
     pub fn is_ready(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.ready.load(Ordering::Acquire) && self.writer_fresh(now_ms())
     }
+    fn writer_fresh(&self, now_ms: i64) -> bool {
+        self.writer_beat.as_ref().map_or(true, |b| {
+            now_ms - b.load(Ordering::Acquire) < WRITER_STALE_MS
+        })
+    }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 pub fn serve(
@@ -45,7 +74,7 @@ pub fn serve(
                 let (status, body): (&str, &[u8]) = match path.as_str() {
                     "/healthz" => ("200 OK", b"ok\n"),
                     "/readyz" if readiness.is_ready() => ("200 OK", b"ready\n"),
-                    "/readyz" => ("503 Service Unavailable", b"starting\n"),
+                    "/readyz" => ("503 Service Unavailable", b"not ready (starting, or the ledger writer is not beating)\n"),
                     // Everything else is the guild site, rendered from the
                     // live snapshot. Caddy has already put it behind the login.
                     _ => {
@@ -75,4 +104,24 @@ pub fn serve(
             }
         })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dead_writer_is_not_ready() {
+        let beat = Arc::new(AtomicI64::new(now_ms()));
+        let r = Readiness::default().with_writer_beat(beat.clone());
+        assert!(!r.is_ready(), "not before the gateway is up");
+        r.set_ready();
+        assert!(r.is_ready(), "fresh beat");
+        beat.store(now_ms() - WRITER_STALE_MS - 1, Ordering::Release);
+        assert!(!r.is_ready(), "the writer went quiet: 503, not 200");
+        assert!(
+            Readiness::default().writer_fresh(now_ms()),
+            "no beat wired = not checked"
+        );
+    }
 }

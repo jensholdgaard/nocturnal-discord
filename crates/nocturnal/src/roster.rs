@@ -269,7 +269,7 @@ pub async fn roster(_ctx: Context<'_>) -> Result<(), Error> {
 
 /// Add a character to your roster row.
 #[allow(clippy::too_many_arguments)] // one slash option per parameter, as the roster bot had
-#[tracing::instrument(name = "command.roster.add", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.roster.add", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral)]
 pub async fn add(
     ctx: Context<'_>,
@@ -303,7 +303,7 @@ pub async fn add(
 
 /// Edit a character already on your roster row. Fields left out stay as they were.
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument(name = "command.roster.edit", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.roster.edit", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral)]
 pub async fn edit(
     ctx: Context<'_>,
@@ -326,7 +326,7 @@ pub async fn edit(
 }
 
 /// Remove a character from your roster row.
-#[tracing::instrument(name = "command.roster.remove", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.roster.remove", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral)]
 pub async fn remove(
     ctx: Context<'_>,
@@ -370,7 +370,7 @@ pub async fn remove(
 }
 
 /// Officers: every guild member as a CSV — ID, username, display name, roles, bot/human, joined.
-#[tracing::instrument(name = "command.roster.export", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.roster.export", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, check = "crate::discord::officer_check")]
 pub async fn export(ctx: Context<'_>) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;

@@ -49,6 +49,16 @@ enum Request {
 #[derive(Clone)]
 pub struct DriverHandle {
     tx: mpsc::Sender<Request>,
+    /// Unix ms of the writer thread's last gauge-sampling cycle; readiness
+    /// reads it, so a dead writer turns /readyz 503 instead of leaving the
+    /// bot looking healthy while every command fails.
+    writer_beat: std::sync::Arc<std::sync::atomic::AtomicI64>,
+}
+
+impl DriverHandle {
+    pub fn writer_beat(&self) -> std::sync::Arc<std::sync::atomic::AtomicI64> {
+        self.writer_beat.clone()
+    }
 }
 
 impl DriverHandle {
@@ -118,6 +128,7 @@ const GAUGE_SAMPLE_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 /// Saturation gauges that only the single writer can see: how much WAL is
 /// waiting for compaction, and how much work is currently open.
 fn sample_gauges(store: &nocturnal_store::Store, ledger: &Ledger, metrics: &Metrics) {
+    metrics.writer_heartbeat.add(1, &[]);
     match store.wal_bytes() {
         Ok(bytes) => metrics.wal_size.record(bytes, &[]),
         // Never fatal: a stat failure must not take the writer down.
@@ -244,6 +255,8 @@ pub fn start_with_archive(
     );
 
     let (tx, mut rx) = mpsc::channel::<Request>(256);
+    let writer_beat = std::sync::Arc::new(std::sync::atomic::AtomicI64::new(now_ms()));
+    let beat = writer_beat.clone();
     std::thread::Builder::new()
         .name("ledger-writer".into())
         .spawn(move || {
@@ -256,12 +269,18 @@ pub fn start_with_archive(
             while let Some(req) = rx.blocking_recv() {
                 if sampled_at.elapsed() >= GAUGE_SAMPLE_INTERVAL {
                     sample_gauges(&store, &ledger, &metrics);
+                    beat.store(now_ms(), std::sync::atomic::Ordering::Release);
                     sampled_at = std::time::Instant::now();
                 }
                 match req {
                     Request::Query(f) => f(&ledger),
                     Request::Compact(reply) => {
-                        let span = tracing::info_span!("store.compact", otel.kind = "internal");
+                        let span = tracing::info_span!(
+                            "store.compact",
+                            otel.kind = "internal",
+                            otel.status_code = tracing::field::Empty,
+                            { attr::ERROR_TYPE } = tracing::field::Empty,
+                        );
                         let outcome = guarded(|| {
                             span.in_scope(|| {
                                 // Only *sealed* segments compact, and a segment
@@ -308,6 +327,11 @@ pub fn start_with_archive(
                                         "error",
                                     )],
                                 );
+                                span.record("otel.status_code", "ERROR");
+                                span.record(
+                                    attr::ERROR_TYPE,
+                                    if e.starts_with("compaction panicked") { "panic" } else { "storage" },
+                                );
                                 tracing::error!(
                                     { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
                                     "compaction failed; the WAL was not drained"
@@ -333,6 +357,7 @@ pub fn start_with_archive(
                             "ledger.execute",
                             otel.kind = "internal",
                             otel.status_code = tracing::field::Empty,
+                            { attr::ERROR_TYPE } = tracing::field::Empty,
                             { attr::NOCTURNAL_GUILD_ID } = %guild,
                             { attr::NOCTURNAL_COMMAND } = command_kind,
                             { attr::NOCTURNAL_DECISION_OUTCOME } = tracing::field::Empty,
@@ -398,6 +423,7 @@ pub fn start_with_archive(
                                     Err(e) => {
                                         span.record(attr::NOCTURNAL_DECISION_OUTCOME, "error");
                                         span.record("otel.status_code", "ERROR");
+                                        span.record(attr::ERROR_TYPE, "storage");
                                         tracing::error!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "WAL append failed; command dropped");
                                         metrics.record_command(
                                             command_kind,
@@ -418,7 +444,7 @@ pub fn start_with_archive(
         })
         .context("spawning ledger-writer thread")?;
 
-    Ok((DriverHandle { tx }, replayed))
+    Ok((DriverHandle { tx, writer_beat }, replayed))
 }
 
 #[cfg(test)]

@@ -457,7 +457,7 @@ fn role_names(member: Option<&serenity::Member>, cache: &serenity::Context) -> V
 
 /// Get your personal token for the guild DPS meter.
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.dpstoken", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.dpstoken", skip_all, err, fields(otel.kind = "server"))]
 pub async fn dpstoken(ctx: Context<'_>) -> Result<(), Error> {
     let Some(p) = ctx.data().provisioning.clone() else {
         ctx.say("Telemetry provisioning isn't configured on this deployment.")
@@ -633,7 +633,7 @@ pub async fn handle_component(
 
 /// (officers) Revoke a member's DPS meter token.
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.dpsrevoke", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.dpsrevoke", skip_all, err, fields(otel.kind = "server"))]
 pub async fn dpsrevoke(
     ctx: Context<'_>,
     #[description = "The member to revoke"] member: serenity::Member,
@@ -714,7 +714,7 @@ pub fn commands() -> Vec<poise::Command<crate::discord::Data, Error>> {
     rename = "dpsstatus",
     check = "officer_check"
 )]
-#[tracing::instrument(name = "command.dpsstatus", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.dpsstatus", skip_all, err, fields(otel.kind = "server"))]
 pub async fn dpsstatus(ctx: Context<'_>) -> Result<(), Error> {
     let Some((url, tenant)) = ctx.data().ourios.clone() else {
         ctx.say("Telemetry storage (Ourios) isn't configured on this deployment.")

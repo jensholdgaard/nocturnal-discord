@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart the Nocturnal bot when /readyz stays unready (writer dead, stuck boot)
+After=nocturnal.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nocturnal-watchdog.sh

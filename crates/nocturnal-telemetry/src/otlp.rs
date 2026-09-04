@@ -231,11 +231,19 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
     }
 
     // OTEL_SERVICE_NAME / OTEL_RESOURCE_ATTRIBUTES win; ours is the fallback.
+    // service.version and service.instance.id are always stamped: the
+    // conventions expect both, and without a version no signal can say which
+    // build was running during an incident.
+    let identity = [
+        opentelemetry::KeyValue::new("service.version", service_version()),
+        opentelemetry::KeyValue::new("service.instance.id", instance_id()),
+    ];
     let resource = if std::env::var("OTEL_SERVICE_NAME").is_ok() {
-        Resource::builder().build()
+        Resource::builder().with_attributes(identity).build()
     } else {
         Resource::builder()
             .with_service_name(cfg.default_service_name.clone())
+            .with_attributes(identity)
             .build()
     };
 
@@ -322,6 +330,8 @@ pub struct Metrics {
     /// Bytes of WAL not yet compacted into Parquet.
     pub wal_size: Gauge<u64>,
     pub compaction_runs: Counter<u64>,
+    /// One per writer gauge-sampling cycle; a flat line is a dead writer.
+    pub writer_heartbeat: Counter<u64>,
     /// `/dpstoken` and `/dpsrevoke` outcomes (usernames stay on spans, never here).
     pub provision_operations: Counter<u64>,
     pub auctions_active: Gauge<u64>,
@@ -408,6 +418,10 @@ impl Metrics {
                 .u64_counter(metric::NOCTURNAL_COMPACTION_RUNS)
                 .with_unit("{run}")
                 .build(),
+            writer_heartbeat: meter
+                .u64_counter(metric::NOCTURNAL_LEDGER_WRITER_HEARTBEAT)
+                .with_unit("{cycle}")
+                .build(),
             provision_operations: meter
                 .u64_counter(metric::NOCTURNAL_PROVISION_OPERATIONS)
                 .with_unit("{operation}")
@@ -485,6 +499,30 @@ impl Default for Metrics {
     fn default() -> Self {
         Metrics::new()
     }
+}
+
+/// `<crate version>+<short commit>`; the commit comes from the release
+/// workflow (`NOCTURNAL_BUILD_SHA`), "dev" for local builds.
+pub fn service_version() -> String {
+    let sha = option_env!("NOCTURNAL_BUILD_SHA").unwrap_or("dev");
+    format!("{}+{}", env!("CARGO_PKG_VERSION"), &sha[..sha.len().min(7)])
+}
+
+/// A per-process id, unique enough to tell two boots apart in a backend
+/// (semconv `service.instance.id`). No crate needed: std's random hasher
+/// keys are seeded from the OS.
+pub fn instance_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let s = std::collections::hash_map::RandomState::new();
+    let (mut a, mut b) = (s.build_hasher(), s.build_hasher());
+    a.write_u64(std::process::id() as u64);
+    b.write_u64(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0),
+    );
+    format!("{:016x}{:016x}", a.finish(), b.finish())
 }
 
 #[cfg(test)]

@@ -74,7 +74,7 @@ pub fn require_guild(ctx: &Context<'_>) -> anyhow::Result<u64> {
 
 /// Shows the DKP of a player.
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.playerdkp", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.playerdkp", skip_all, err, fields(otel.kind = "server"))]
 pub async fn playerdkp(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -100,7 +100,7 @@ pub async fn playerdkp(
 
 /// Shows the DKP history of a player (ticks aggregated per raid, 30/page).
 #[poise::command(slash_command, ephemeral)]
-#[tracing::instrument(name = "command.dkphistory", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.dkphistory", skip_all, err, fields(otel.kind = "server"))]
 pub async fn dkphistory(
     ctx: Context<'_>,
     #[description = "The player"] player: Option<serenity::User>,
@@ -197,7 +197,7 @@ fn history_lines(log: &[LogEntry]) -> Vec<String> {
 
 /// List all players and their current DKP (10/page; refused during a raid).
 #[poise::command(slash_command, rename = "listplayersdkps", ephemeral)]
-#[tracing::instrument(name = "command.listplayersdkps", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.listplayersdkps", skip_all, err, fields(otel.kind = "server"))]
 pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
     let guild = require_guild(&ctx)?;
     crate::discord::ack_ephemeral(&ctx).await?;
@@ -330,7 +330,7 @@ pub async fn listplayersdkps(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Search the ledger's comments (literal text — audit E6; 20/page).
 #[poise::command(slash_command, rename = "searchlogs", ephemeral)]
-#[tracing::instrument(name = "command.searchlogs", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.searchlogs", skip_all, err, fields(otel.kind = "server"))]
 pub async fn searchlogs(
     ctx: Context<'_>,
     #[description = "Search term"] search: String,
@@ -1448,7 +1448,7 @@ async fn autocomplete_raid(ctx: Context<'_>, partial: &str) -> Vec<serenity::Aut
 }
 
 /// Give a raid its proper name after the fact.
-#[tracing::instrument(name = "command.renameraid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.renameraid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1515,7 +1515,7 @@ pub async fn renameraid(
 
 /// Fold a false-start raid into the real one (attendance and loot lines
 /// re-filed, no DKP moves).
-#[tracing::instrument(name = "command.mergeraid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.mergeraid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1575,7 +1575,7 @@ pub async fn mergeraid(
 }
 
 /// Create a new raid.
-#[tracing::instrument(name = "command.startraid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.startraid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1687,7 +1687,7 @@ pub async fn startraid(
 }
 
 /// End the current raid.
-#[tracing::instrument(name = "command.endraid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.endraid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, rename = "endraid", check = "officer_check")]
 pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
@@ -1903,7 +1903,7 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Add DKP to a player.
-#[tracing::instrument(name = "command.adddkp", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.adddkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "adddkp", check = "officer_check")]
 pub async fn adddkp(
     ctx: Context<'_>,
@@ -1934,7 +1934,7 @@ pub async fn adddkp(
 }
 
 /// Remove DKP from a player.
-#[tracing::instrument(name = "command.removedkp", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.removedkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "removedkp", check = "officer_check")]
 pub async fn removedkp(
     ctx: Context<'_>,
@@ -1965,7 +1965,7 @@ pub async fn removedkp(
 }
 
 /// Add DKP to everyone in the raid channel.
-#[tracing::instrument(name = "command.addraiddkp", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.addraiddkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -2041,7 +2041,7 @@ pub async fn addraiddkp(
 }
 
 /// Register an EQ character to your Discord account.
-#[tracing::instrument(name = "command.registercharacter", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.registercharacter", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "registercharacter")]
 pub async fn registercharacter(
     ctx: Context<'_>,
@@ -2101,7 +2101,7 @@ fn stress_embed(
 }
 
 /// Stress test: concurrent auctions with live embeds + every player bidding.
-#[tracing::instrument(name = "command.stresstest", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.stresstest", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -2545,7 +2545,7 @@ pub fn item_embed(item: &nocturnal_core::Item, color: u32) -> serenity::CreateEm
 }
 
 /// Search an item in the Quarm/TAKP databases.
-#[tracing::instrument(name = "command.searchitem", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.searchitem", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, rename = "searchitem")]
 pub async fn searchitem(
     ctx: Context<'_>,
@@ -2785,7 +2785,7 @@ async fn award_raidhelper_event(
 }
 
 /// Add DKP to raid attendants that subscribed to a RaidHelper event.
-#[tracing::instrument(name = "command.addraideventdkp", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.addraideventdkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -2812,7 +2812,7 @@ pub async fn addraideventdkp(
 }
 
 /// Ring the auction bell now, to check voice permissions after a deploy.
-#[tracing::instrument(name = "command.belltest", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.belltest", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, rename = "belltest", check = "officer_check")]
 pub async fn belltest(
     ctx: Context<'_>,

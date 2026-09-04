@@ -714,7 +714,7 @@ async fn open_auction(
 }
 
 /// Start a short (live) auction for an item.
-#[tracing::instrument(name = "command.startbid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.startbid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, rename = "startbid", check = "officer_check")]
 pub async fn startbid(
     ctx: Context<'_>,
@@ -756,7 +756,7 @@ pub async fn startbid(
 }
 
 /// Start a long auction (bids via /bid, default 48 hours).
-#[tracing::instrument(name = "command.startlongbid", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.startlongbid", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -797,7 +797,7 @@ pub async fn startlongbid(
 }
 
 /// Show the details of an auction.
-#[tracing::instrument(name = "command.auctiondetails", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.auctiondetails", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -958,7 +958,7 @@ async fn find_auction(ctx: &Context<'_>, auction_id: &str) -> Result<Option<Auct
 }
 
 /// Void a running auction: bids stop, no winner is picked, no DKP moves.
-#[tracing::instrument(name = "command.cancelauction", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.cancelauction", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
@@ -1020,7 +1020,7 @@ pub async fn cancelauction(
 }
 
 /// Close a running auction now and settle it, skipping the wait.
-#[tracing::instrument(name = "command.endauction", skip_all, fields(otel.kind = "server"))]
+#[tracing::instrument(name = "command.endauction", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
     ephemeral,
