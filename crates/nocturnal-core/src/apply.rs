@@ -231,6 +231,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             amount,
             for_main,
             attendance,
+            character,
         } => {
             if let Some(a) = g.auctions.get_mut(auction_id) {
                 // Re-bid replaces (legacy semantics).
@@ -238,12 +239,14 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     b.amount = *amount;
                     b.for_main = *for_main;
                     b.attendance = *attendance;
+                    b.character = character.clone();
                 } else {
                     a.bids.push(Bid {
                         player: *player,
                         amount: *amount,
                         for_main: *for_main,
                         attendance: *attendance,
+                        character: character.clone(),
                     });
                 }
             }

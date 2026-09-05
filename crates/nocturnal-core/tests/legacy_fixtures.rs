@@ -69,6 +69,7 @@ fn bid(l: &mut Ledger, id: &str, player: u64, amount: i64, for_main: bool) {
             player,
             amount,
             for_main,
+            character: None,
         },
     )
     .unwrap();
@@ -324,6 +325,7 @@ fn bid_validation_matches_legacy() {
                 player: P1,
                 amount,
                 for_main: true,
+                character: None,
             },
         )
     };
@@ -340,7 +342,8 @@ fn bid_validation_matches_legacy() {
                 auction_id: "a".into(),
                 player: 999,
                 amount: 20,
-                for_main: true
+                for_main: true,
+                character: None,
             }
         )
         .is_err());
@@ -512,6 +515,7 @@ fn cross_auction_double_spend_rejected_at_bid_time() {
             player: P1,
             amount: 100,
             for_main: true,
+            character: None,
         },
     );
     assert!(r.is_err(), "audit #46: 100 DKP cannot back two 100 bids");
@@ -629,6 +633,7 @@ fn insufficient_balance_carries_the_reservation() {
                 player: P1,
                 amount: 80,
                 for_main: true,
+                character: None,
             },
         )
         .unwrap_err();
@@ -655,6 +660,7 @@ fn insufficient_balance_carries_the_reservation() {
                 player: P1,
                 amount: 40,
                 for_main: true,
+                character: None,
             },
         )
         .unwrap_err();

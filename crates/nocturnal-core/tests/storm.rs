@@ -81,6 +81,7 @@ fn bid_storm_is_fast_on_heavy_history() {
                         player: 100 + p,
                         amount: 1,
                         for_main: true,
+                        character: None,
                     },
                 )
                 .unwrap();

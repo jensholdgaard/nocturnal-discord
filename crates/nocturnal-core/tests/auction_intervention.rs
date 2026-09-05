@@ -77,6 +77,7 @@ fn running_auction() -> Ledger {
             player: BIDDER,
             amount: 100,
             for_main: true,
+            character: None,
         },
     )
     .unwrap();
@@ -149,6 +150,7 @@ fn a_closed_auction_takes_no_further_bids() {
             player: BIDDER,
             amount: 200,
             for_main: true,
+            character: None,
         },
         Command::RetractBid {
             auction_id: "au-1".into(),

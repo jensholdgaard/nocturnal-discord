@@ -235,6 +235,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             player,
             amount,
             for_main,
+            character,
         } => {
             let auction = g
                 .auctions
@@ -262,12 +263,52 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                     needed: *amount,
                 });
             }
+            // Attendance requirement per side (0 = none). The percentage is
+            // the one the bid records anyway, so what refuses a bid is what
+            // the roster page shows.
+            let attendance = g.attendance_pct(*player, ctx.now_ms);
+            let required = if *for_main {
+                g.config.main_bid_min_attendance
+            } else {
+                g.config.alt_bid_min_attendance
+            };
+            if required > 0 && (attendance as i64) < required {
+                return Err(Rejection::AttendanceBelowMinimum {
+                    required,
+                    actual: attendance as i64,
+                    for_main: *for_main,
+                });
+            }
+            // A named character must be on the player's own row and on the
+            // side the button allows. Usability (class, race) is checked
+            // where the item row lives, in the Discord layer.
+            if let Some(name) = character {
+                let key = name.to_lowercase();
+                let on_row = g
+                    .roster
+                    .get(player)
+                    .is_some_and(|chars| chars.contains_key(&key));
+                if !on_row {
+                    return Err(Rejection::RosterCharacterMissing { name: name.clone() });
+                }
+                let allowed = g
+                    .bid_characters(*player, *for_main)
+                    .iter()
+                    .any(|c| c.name.eq_ignore_ascii_case(name));
+                if !allowed {
+                    return Err(Rejection::CharacterNotEligible {
+                        name: name.clone(),
+                        for_main: *for_main,
+                    });
+                }
+            }
             Ok(vec![Event::BidPlaced {
                 auction_id: auction_id.clone(),
                 player: *player,
                 amount: *amount,
                 for_main: *for_main,
-                attendance: g.attendance_pct(*player, ctx.now_ms),
+                attendance,
+                character: character.clone(),
             }])
         }
 
@@ -508,6 +549,14 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
             return Err(bad(setting, "cannot be negative"));
         }
     }
+    for (setting, value) in [
+        ("mainbidminra", p.main_bid_min_attendance),
+        ("altbidminra", p.alt_bid_min_attendance),
+    ] {
+        if value.is_some_and(|v| !(0..=100).contains(&v)) {
+            return Err(bad(setting, "is a percentage: 0 to 100"));
+        }
+    }
     if p.raidhelper_api_key.as_ref().is_some_and(|k| {
         let k = k.as_str();
         k.trim().is_empty() || k.trim().len() != k.len()
@@ -638,6 +687,7 @@ pub fn compute_winners(g: &crate::state::GuildState, auction_id: &str, seed: u64
         player: b.player,
         amount: b.amount,
         for_main: b.for_main,
+        character: b.character.clone(),
     })
     .collect()
 }

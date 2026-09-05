@@ -110,6 +110,7 @@ fn samples() -> Vec<Event> {
             amount: 5,
             for_main: true,
             attendance: 87.5,
+            character: Some("Vexira".into()),
         },
         Event::BidRetracted {
             auction_id: "a".into(),
@@ -125,6 +126,7 @@ fn samples() -> Vec<Event> {
                 player: 1,
                 amount: 5,
                 for_main: true,
+                character: Some("Vexira".into()),
             }],
             seed: 42,
         },
@@ -244,6 +246,34 @@ fn a_wrapped_secret_is_a_plain_string_on_the_wire() {
         back, event,
         "an event written before the wrapper still loads"
     );
+}
+
+/// Character bids (2026-09-05) added `character` to `auction.bid_placed` and
+/// to each finalized winner. Every bid before that day has none, and must
+/// keep loading as a bid with no character — not fail, not become an alt.
+#[test]
+fn a_bid_placed_without_a_character_still_loads() {
+    let json = r#"{"seq":0,"ts_ms":1,"guild":1,"actor":{"user":7},"kind":"auction.bid_placed",
+        "payload":{"auction_id":"a","player":7,"amount":5,"for_main":true,"attendance":50.0}}"#;
+    let env: Envelope = serde_json::from_str(json).unwrap();
+    match env.event {
+        Event::BidPlaced {
+            character,
+            for_main,
+            ..
+        } => {
+            assert_eq!(character, None);
+            assert!(for_main);
+        }
+        other => panic!("wrong event: {other:?}"),
+    }
+    let json = r#"{"kind":"auction.finalized","payload":{"auction_id":"a","seed":1,
+        "winners":[{"player":7,"amount":5,"for_main":true}]}}"#;
+    let back: Event = serde_json::from_str(json).unwrap();
+    match back {
+        Event::AuctionFinalized { winners, .. } => assert_eq!(winners[0].character, None),
+        other => panic!("wrong event: {other:?}"),
+    }
 }
 
 /// `raid.imported` gained the legacy raid's tick settings and RaidHelper link

@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::event::{
-    ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidRef, RosterCharacter, Secret,
+    ConfigPatch, Flavor, GuildId, Item, MainRank, PlayerId, RaidRef, RosterCharacter, Secret,
 };
 
 /// One line of a player's history (mirrors the legacy log shape).
@@ -60,6 +60,7 @@ pub struct Bid {
     pub amount: i64,
     pub for_main: bool,
     pub attendance: f64,
+    pub character: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +109,12 @@ pub struct GuildConfig {
     /// DKP awarded to signups who attended, when a linked raid ends. Legacy
     /// hardcoded 5; officers can set it.
     pub raidhelper_event_dkp: i64,
+    /// Character bids: a bid names a roster character, the picker offers only
+    /// characters that can use the item. Off until an officer turns it on.
+    pub character_bids: bool,
+    /// Attendance percent required to bid as MAIN / as ALT; 0 = none.
+    pub main_bid_min_attendance: i64,
+    pub alt_bid_min_attendance: i64,
 }
 
 pub const DAY_MS: i64 = 86_400_000;
@@ -129,6 +136,9 @@ impl Default for GuildConfig {
             over_bid_to_win_main: 0,
             raidhelper_api_key: None,
             raidhelper_event_dkp: 5,
+            character_bids: false,
+            main_bid_min_attendance: 0,
+            alt_bid_min_attendance: 0,
         }
     }
 }
@@ -167,7 +177,10 @@ impl GuildConfig {
             bid_time_s,
             min_bid,
             min_bid_to_lock_for_main,
-            over_bid_to_win_main
+            over_bid_to_win_main,
+            character_bids,
+            main_bid_min_attendance,
+            alt_bid_min_attendance
         );
     }
 }
@@ -323,6 +336,24 @@ impl GuildState {
             .iter()
             .fold((0u64, 0u64), |acc, w| (acc.0 + w.0, acc.1 + w.1));
         (attended as f64 / held as f64 * 100.0).floor()
+    }
+
+    /// The roster characters a player may bid with on one side of an auction:
+    /// the MAIN button offers Main-ranked characters, the ALT button every
+    /// other character on the row (Second-ranked and unranked). Item
+    /// usability is the Discord layer's filter on top of this; the rank rule
+    /// is the ledger's, so a bid naming a character the side does not allow
+    /// is refused even if a client forged the pick.
+    pub fn bid_characters(&self, player: PlayerId, for_main: bool) -> Vec<&RosterCharacter> {
+        self.roster
+            .get(&player)
+            .map(|chars| {
+                chars
+                    .values()
+                    .filter(|c| (c.main == Some(MainRank::Main)) == for_main)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// DKP a player has committed as standing bids on *other* open auctions —

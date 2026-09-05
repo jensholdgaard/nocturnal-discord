@@ -66,6 +66,8 @@ pub mod attr {
     pub const NOCTURNAL_TELEMETRY_ENDPOINT: &str = "nocturnal.telemetry.endpoint";
     pub const NOCTURNAL_TELEMETRY_PROTOCOL: &str = "nocturnal.telemetry.protocol";
     pub const ERROR_TYPE: &str = "error.type";
+    pub const FEATURE_FLAG_KEY: &str = "feature_flag.key";
+    pub const FEATURE_FLAG_RESULT_VARIANT: &str = "feature_flag.result.variant";
     pub const FILE_PATH: &str = "file.path";
     pub const HTTP_REQUEST_METHOD: &str = "http.request.method";
     pub const NOCTURNAL_FEEDBACK_ATTACHMENTS: &str = "nocturnal.feedback.attachments";

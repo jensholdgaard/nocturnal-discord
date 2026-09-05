@@ -181,6 +181,7 @@ fn run_scenario(seed: u64) {
                         player,
                         amount: 1 + rng.below(120) as i64,
                         for_main: rng.below(3) != 0,
+                        character: None,
                     },
                 );
             }

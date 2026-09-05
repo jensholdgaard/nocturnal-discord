@@ -42,6 +42,19 @@ pub enum Rejection {
     BidBelowMinimum {
         min_bid: i64,
     },
+    /// The guild requires a raid-attendance percentage to bid on this side
+    /// (`mainbidminra` / `altbidminra`), and the player is under it.
+    AttendanceBelowMinimum {
+        required: i64,
+        actual: i64,
+        for_main: bool,
+    },
+    /// A character bid named a character the side does not allow: a MAIN bid
+    /// with a non-main, an ALT bid with the main.
+    CharacterNotEligible {
+        name: String,
+        for_main: bool,
+    },
     AlreadyProvisioned {
         username: String,
     },
@@ -92,6 +105,8 @@ impl Rejection {
             Rejection::AuctionNotActive => "auction_not_active",
             Rejection::AuctionNotClosed => "auction_not_closed",
             Rejection::BidBelowMinimum { .. } => "bid_below_minimum",
+            Rejection::AttendanceBelowMinimum { .. } => "attendance_below_minimum",
+            Rejection::CharacterNotEligible { .. } => "character_not_eligible",
             Rejection::AlreadyProvisioned { .. } => "already_provisioned",
             Rejection::NotProvisioned { .. } => "not_provisioned",
             Rejection::InvalidConfig { .. } => "invalid_config",

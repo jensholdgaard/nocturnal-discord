@@ -118,6 +118,7 @@ fn raid_night_survives_kill_dash_nine() {
             player: 1,
             amount: 30,
             for_main: true,
+            character: None,
         },
     );
     run(
@@ -129,6 +130,7 @@ fn raid_night_survives_kill_dash_nine() {
             player: 2,
             amount: 20,
             for_main: true,
+            character: None,
         },
     );
     run(
@@ -140,6 +142,7 @@ fn raid_night_survives_kill_dash_nine() {
             player: 3,
             amount: 40,
             for_main: true,
+            character: None,
         },
     );
     run(
@@ -151,6 +154,7 @@ fn raid_night_survives_kill_dash_nine() {
             player: 4,
             amount: 10,
             for_main: false,
+            character: None,
         },
     );
 

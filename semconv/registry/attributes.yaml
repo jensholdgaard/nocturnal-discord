@@ -500,3 +500,13 @@ groups:
         stability: stable
         brief: Describes a class of error the operation ended with (semconv `error.type`; low cardinality).
         examples: ['storage', 'panic', 'timeout']
+      - id: feature_flag.key
+        type: string
+        stability: release_candidate
+        brief: The lookup key of the feature flag (semconv `feature_flag.key`) — an officer-toggled bot feature.
+        examples: ['characterbids']
+      - id: feature_flag.result.variant
+        type: string
+        stability: release_candidate
+        brief: A semantic identifier for the evaluated flag value (semconv `feature_flag.result.variant`).
+        examples: ['on', 'off']

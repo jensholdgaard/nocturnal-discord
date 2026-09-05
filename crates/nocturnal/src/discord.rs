@@ -741,6 +741,7 @@ pub async fn run(
         searchlogs(),
         configure(),
         showconfig(),
+        feature(),
         startraid(),
         endraid(),
         mergeraid(),
@@ -1206,6 +1207,23 @@ pub fn rejection_text(e: &ExecError) -> String {
         R::BidBelowMinimum { min_bid } => format!(
             ":no_entry: DKP Bot scowls at you. Bid amount is less than the minimum bid ({min_bid})"
         ),
+        R::AttendanceBelowMinimum {
+            required,
+            actual,
+            for_main,
+        } => format!(
+            ":no_entry: {} bids need **{required}%** raid attendance — yours is **{actual}%**.",
+            if *for_main { "MAIN" } else { "ALT" }
+        ),
+        R::CharacterNotEligible { name, for_main } => format!(
+            ":no_entry: **{name}** cannot bid as {}: {}",
+            if *for_main { "MAIN" } else { "ALT" },
+            if *for_main {
+                "only your main-ranked character can. An officer sets the rank with `/roster rank`."
+            } else {
+                "that is your main — use **Main bid**."
+            }
+        ),
         R::InvalidAmount => {
             ":no_entry: DKP Bot scowls at you. Bid amount must be a whole number greater than 0"
                 .to_owned()
@@ -1298,6 +1316,14 @@ pub async fn configure(
     #[description = "DKP awarded to signups who attended, when a linked raid ends (default 5)"]
     #[min = 0]
     raidhelpereventdkp: Option<i64>,
+    #[description = "Attendance % required to bid as MAIN (0 = none)"]
+    #[min = 0]
+    #[max = 100]
+    mainbidminra: Option<i64>,
+    #[description = "Attendance % required to bid as ALT (0 = none)"]
+    #[min = 0]
+    #[max = 100]
+    altbidminra: Option<i64>,
 ) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;
     // Every value here is validated by the decide step, which is the only
@@ -1319,9 +1345,76 @@ pub async fn configure(
         over_bid_to_win_main: overbidtowinmain,
         raidhelper_api_key: raidhelperapikey.map(nocturnal_core::Secret::from),
         raidhelper_event_dkp: raidhelpereventdkp,
+        // Toggled by `/feature`, never here: the switch deserves its own
+        // command so an officer can flip it mid-raid without re-sending the
+        // channels and the role.
+        character_bids: None,
+        main_bid_min_attendance: mainbidminra,
+        alt_bid_min_attendance: altbidminra,
     };
     match execute(&ctx, Command::UpdateConfig { patch }).await? {
         Ok(_) => ctx.say("Configuration saved").await?,
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
+    Ok(())
+}
+
+/// A feature an officer can switch on and off. One entry today; the list
+/// is what `/feature` offers, so adding a toggle is adding a variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, poise::ChoiceParameter)]
+pub enum Feature {
+    /// A bid names a roster character; the picker offers only characters
+    /// that can use the item, with the upgrade next to each.
+    #[name = "characterbids"]
+    CharacterBids,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, poise::ChoiceParameter)]
+pub enum Switch {
+    #[name = "on"]
+    On,
+    #[name = "off"]
+    Off,
+}
+
+/// Officers: turn a feature on or off. Takes effect on the next click.
+//
+// An auction already open keeps its buttons and picks up the change too.
+#[tracing::instrument(name = "command.feature", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, check = "officer_check")]
+pub async fn feature(
+    ctx: Context<'_>,
+    #[description = "Which feature"] feature: Feature,
+    #[description = "on or off"] state: Switch,
+) -> Result<(), Error> {
+    use poise::ChoiceParameter as _;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let on = state == Switch::On;
+    let patch = match feature {
+        Feature::CharacterBids => nocturnal_core::event::ConfigPatch {
+            character_bids: Some(on),
+            ..Default::default()
+        },
+    };
+    match execute(&ctx, Command::UpdateConfig { patch }).await? {
+        Ok(_) => {
+            tracing::info!(
+                { attr::FEATURE_FLAG_KEY } = feature.name(),
+                { attr::FEATURE_FLAG_RESULT_VARIANT } = if on { "on" } else { "off" },
+                "feature toggled"
+            );
+            ctx.say(format!(
+                "**{}** is now **{}**.{}",
+                feature.name(),
+                if on { "on" } else { "off" },
+                match feature {
+                    Feature::CharacterBids if on =>
+                        " Bids now name a character: Main bid offers the member's main, Alt bid the rest, filtered by what the item allows.",
+                    Feature::CharacterBids => " Bids are back to Main/Alt only.",
+                }
+            ))
+            .await?
+        }
         Err(e) => ctx.say(rejection_text(&e)).await?,
     };
     Ok(())
@@ -1334,6 +1427,14 @@ fn human_ms(ms: i64) -> String {
         format!("{} minutes", ms / 60_000)
     } else {
         format!("{} seconds", ms as f64 / 1000.0)
+    }
+}
+
+fn pct_or_none(v: i64) -> String {
+    if v > 0 {
+        format!("{v}%")
+    } else {
+        "No requirement".to_owned()
     }
 }
 
@@ -1403,6 +1504,25 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "RaidHelper event DKP",
             format!("{} DKP", cfg.raidhelper_event_dkp),
+            false,
+        )
+        .field(
+            "Character bids",
+            if cfg.character_bids {
+                "On (`/feature characterbids off`)"
+            } else {
+                "Off (`/feature characterbids on`)"
+            },
+            false,
+        )
+        .field(
+            "Attendance to bid as MAIN",
+            pct_or_none(cfg.main_bid_min_attendance),
+            false,
+        )
+        .field(
+            "Attendance to bid as ALT",
+            pct_or_none(cfg.alt_bid_min_attendance),
             false,
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))
@@ -2358,6 +2478,7 @@ pub async fn stresstest(
                                 player,
                                 amount: 1,
                                 for_main: true,
+                                character: None,
                             },
                         )
                         .await;

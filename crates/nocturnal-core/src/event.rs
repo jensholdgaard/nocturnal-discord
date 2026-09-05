@@ -52,6 +52,10 @@ pub struct Winner {
     pub player: PlayerId,
     pub amount: i64,
     pub for_main: bool,
+    /// The roster character the bid was for (2026-09-05, character bids).
+    /// Absent on bids placed before the feature, and while it is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub character: Option<String>,
 }
 
 /// A historical ledger line imported from the legacy bot (genesis only).
@@ -166,6 +170,16 @@ pub struct ConfigPatch {
     pub raidhelper_api_key: Option<Secret>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raidhelper_event_dkp: Option<i64>,
+    /// Feature toggle (2026-09-05): a bid names a roster character, the
+    /// picker offers only characters that can use the item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub character_bids: Option<bool>,
+    /// Attendance (percent, 0–100) a player needs to bid as MAIN / as ALT.
+    /// Zero means no requirement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_bid_min_attendance: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_bid_min_attendance: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -275,6 +289,9 @@ pub enum Event {
         for_main: bool,
         /// Attendance % captured at bid time (legacy semantics).
         attendance: f64,
+        /// The roster character the bid is for (additive, 2026-09-05).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        character: Option<String>,
     },
     #[serde(rename = "auction.bid_retracted")]
     BidRetracted {

@@ -261,7 +261,7 @@ async fn upsert(
 #[poise::command(
     slash_command,
     rename = "roster",
-    subcommands("add", "edit", "remove", "export")
+    subcommands("add", "edit", "remove", "rank", "export")
 )]
 pub async fn roster(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -366,6 +366,142 @@ pub async fn remove(
             ctx.say(rejection_text(&e)).await?;
         }
     };
+    Ok(())
+}
+
+/// The rank an officer gives a character.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, poise::ChoiceParameter)]
+pub enum Rank {
+    #[name = "main"]
+    Main,
+    #[name = "second"]
+    Second,
+    #[name = "alt"]
+    Alt,
+}
+
+/// Officers: rank a member's character as main, second or alt.
+//
+// The Main bid button offers a member's main; the rest bid as ALT. A ledger
+// event with the officer as actor, so the ranking has a history.
+#[tracing::instrument(name = "command.roster.rank", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, check = "crate::discord::officer_check")]
+pub async fn rank(
+    ctx: Context<'_>,
+    #[description = "The member"] member: serenity::User,
+    #[description = "Character name (on that member's row)"] name: String,
+    #[description = "main, second or alt"] rank: Rank,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let player = member.id.get();
+    let key = name.trim().to_lowercase();
+    let existing = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.roster.get(&player))
+                .and_then(|chars| chars.get(&key))
+                .cloned()
+        })
+        .await;
+    let Some(mut character) = existing else {
+        ctx.say(format!(
+            ":no_entry: **{}** is not on <@{player}>'s row — they add it with `/roster add`, or it appears once their Zeal reports it.",
+            name.trim()
+        ))
+        .await?;
+        return Ok(());
+    };
+    let main = match rank {
+        Rank::Main => Some(MainRank::Main),
+        Rank::Second => Some(MainRank::Second),
+        Rank::Alt => None,
+    };
+    // One main per member: ranking a new main demotes the old one to alt,
+    // so the Main bid button never has two answers.
+    let mut demote: Option<RosterCharacter> = None;
+    if main == Some(MainRank::Main) {
+        let key = character.name.to_lowercase();
+        demote = ctx
+            .data()
+            .driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .and_then(|g| g.roster.get(&player))
+                    .and_then(|chars| {
+                        chars
+                            .values()
+                            .find(|c| {
+                                c.main == Some(MainRank::Main) && c.name.to_lowercase() != key
+                            })
+                            .cloned()
+                    })
+            })
+            .await;
+    }
+    character.main = main;
+    let mut lines = Vec::new();
+    if let Some(mut old) = demote {
+        old.main = None;
+        let old_name = old.name.clone();
+        match execute(
+            &ctx,
+            Command::SetRosterCharacter {
+                player,
+                character: old,
+                replace: true,
+            },
+        )
+        .await?
+        {
+            Ok(_) => lines.push(format!("**{old_name}** is no longer the main.")),
+            Err(e) => {
+                ctx.say(rejection_text(&e)).await?;
+                return Ok(());
+            }
+        }
+    }
+    match execute(
+        &ctx,
+        Command::SetRosterCharacter {
+            player,
+            character: character.clone(),
+            replace: true,
+        },
+    )
+    .await?
+    {
+        Ok(_) => {
+            tracing::info!(
+                { attr::NOCTURNAL_PLAYER_ID } = player,
+                { attr::NOCTURNAL_COMMAND } = "roster.rank",
+                "roster character ranked"
+            );
+            lines.push(format!("<@{player}> • {}", describe(&character)));
+            ctx.say(lines.join("\n")).await?;
+            if let Some(out) = &ctx.data().roster_output {
+                crate::roster_page::rematerialize(
+                    ctx.serenity_context().http.as_ref(),
+                    ctx.guild_id().map_or(0, |g| g.get()),
+                    &ctx.data().driver,
+                    out,
+                    &ctx.data().members,
+                    ledger_guild,
+                    ctx.data().ourios.as_ref(),
+                    &ctx.data().item_mirror,
+                    &ctx.data().site,
+                )
+                .await;
+            }
+        }
+        Err(e) => {
+            ctx.say(rejection_text(&e)).await?;
+        }
+    }
     Ok(())
 }
 

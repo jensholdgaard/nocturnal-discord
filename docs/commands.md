@@ -47,6 +47,13 @@ by picker, role by picker):
 | minbidtolockformain | | Min bid for a MAIN bid to lock priority | 0 |
 | overbidtowinmain | | Amount an ALT must overbid the top MAIN to win | 0 |
 | raidhelperapikey | | RaidHelper API key (enables event integration) | never echoed; `/showconfig` shows presence only |
+| mainbidminra | | Attendance % a member needs to bid as MAIN (0 = none) | 0; refused outside 0–100 |
+| altbidminra | | Attendance % a member needs to bid as ALT (0 = none) | 0; refused outside 0–100 |
+
+Feature toggles are not `/configure` options: `/feature <name> on|off` (officer)
+flips one without re-sending the channels and the role. Today's only toggle is
+`characterbids` — see [character-bids.md](character-bids.md). Both live in the
+same `config.updated` event.
 
 `/showconfig` — admin-only; embed listing every setting with human units
 ("Not set" when absent).
@@ -76,6 +83,7 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/cancelauction` | officer role | auctionid | Void a running auction: no winner, no DKP. Bids stay readable, not republished |
 | `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |
 | `/searchitem` | all | search, database? | Item lookup without an auction |
+| `/feature` | officer | feature (`characterbids`), state (`on`/`off`) | Switch a feature on or off; takes effect on the next click, open auctions included |
 | `/searchlogs` | all | search | Paginated ledger search by comment; searches matching `/tick/i` are refused with flavor text |
 | `/backup` | admin | — | `backup.zip` containing `players.json` + `raids.json`, attached to a **public** reply: the roster bot watches the channel for that attachment and copies it to Drive, so both the names and the visibility are a contract |
 | `/addraideventdkp` | officer | dkp, raidid, eventid | Manually run the RaidHelper award for a past raid |
@@ -188,6 +196,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | `/roster add name class level [aa] [quarmy_link] [access] [main]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot) |
 | `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
 | `/roster remove name` | all | Remove a character from your row |
+| `/roster rank member name main\|second\|alt` | officer | Rank a character on another member's row. Ranking a new main demotes the old one, so a member has one main. The Main bid button offers it (character bids) |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
@@ -285,6 +294,13 @@ doesn't care where it runs). Paths and the dashboard URL are config
     30–1000 s, negative bid floors, a blank RaidHelper key, and a second raid
     channel equal to the first (which would double everyone's tick). Nothing
     is applied when a value is refused.
+20. Character bids (2026-09-05, behind `/feature characterbids`, off by
+    default): a bid names a roster character, the buttons offer only
+    characters that can use the item, with the upgrade next to each; winner
+    lines name the character. `/roster rank` lets officers rank a member's
+    characters (the sheet's M-/M2- prefixes, back in officer hands, with a
+    history). `mainbidminra` / `altbidminra` refuse bids under an attendance
+    percentage. See [character-bids.md](character-bids.md).
 
 ## Resolved decisions (2026-08-21: keep current behaviour throughout)
 

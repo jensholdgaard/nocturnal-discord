@@ -84,6 +84,9 @@ pub enum Command {
         player: PlayerId,
         amount: i64,
         for_main: bool,
+        /// The roster character the bid is for. `None` while character bids
+        /// are off; when on, the Discord layer always names one.
+        character: Option<String>,
     },
     RetractBid {
         auction_id: String,

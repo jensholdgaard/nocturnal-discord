@@ -13,6 +13,7 @@ mod feedback;
 mod health;
 mod items;
 mod lock;
+mod loot_fit;
 mod profiles;
 mod provision;
 mod raid_names;

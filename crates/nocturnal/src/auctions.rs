@@ -33,7 +33,7 @@ const EMBED_BLUE: u32 = 3_447_003;
 pub const LONG_AUCTION_GRACE_MS: i64 = 20 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// Component ids: "nb:<action>:<auction id>"
+// Component ids: "nb:<action>:<auction id>[:<character>]"
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +42,10 @@ pub enum Action {
     BidAlt,
     Cancel,
     Confirm,
+    /// The character select shown when a member has more than one eligible
+    /// character on a side (character bids). Its value is the character.
+    PickMain,
+    PickAlt,
 }
 
 impl Action {
@@ -51,6 +55,8 @@ impl Action {
             Action::BidAlt => "alt",
             Action::Cancel => "cancel",
             Action::Confirm => "confirm",
+            Action::PickMain => "pickm",
+            Action::PickAlt => "picka",
         }
     }
 
@@ -60,8 +66,14 @@ impl Action {
             "alt" => Some(Action::BidAlt),
             "cancel" => Some(Action::Cancel),
             "confirm" => Some(Action::Confirm),
+            "pickm" => Some(Action::PickMain),
+            "picka" => Some(Action::PickAlt),
             _ => None,
         }
+    }
+
+    fn for_main(self) -> bool {
+        matches!(self, Action::Bid | Action::PickMain)
     }
 }
 
@@ -69,10 +81,31 @@ pub fn custom_id(action: Action, auction_id: &str) -> String {
     format!("nb:{}:{auction_id}", action.tag())
 }
 
-pub fn parse_custom_id(id: &str) -> Option<(Action, &str)> {
+/// A bid modal's id names the character the bid is for, when there is one:
+/// the modal submission is a separate interaction and carries nothing else.
+/// Auction ids are `au-<hex>`, character names are letters, so the colon is
+/// free to separate them.
+pub fn bid_custom_id(for_main: bool, auction_id: &str, character: Option<&str>) -> String {
+    let action = if for_main {
+        Action::Bid
+    } else {
+        Action::BidAlt
+    };
+    match character {
+        Some(c) => format!("nb:{}:{auction_id}:{c}", action.tag()),
+        None => custom_id(action, auction_id),
+    }
+}
+
+/// `(action, auction id, character)` — the character only on a bid modal.
+pub fn parse_custom_id(id: &str) -> Option<(Action, &str, Option<&str>)> {
     let rest = id.strip_prefix("nb:")?;
-    let (tag, auction_id) = rest.split_once(':')?;
-    Some((Action::parse(tag)?, auction_id))
+    let (tag, rest) = rest.split_once(':')?;
+    let (auction_id, character) = match rest.split_once(':') {
+        Some((a, c)) if !c.is_empty() => (a, Some(c)),
+        _ => (rest, None),
+    };
+    Some((Action::parse(tag)?, auction_id, character))
 }
 
 // ---------------------------------------------------------------------------
@@ -113,8 +146,12 @@ fn winners_text(winners: &[nocturnal_core::event::Winner]) -> String {
             .iter()
             .map(|w| {
                 format!(
-                    "<@{}>{} for {} dkp",
+                    "<@{}>{}{} for {} dkp",
                     w.player,
+                    w.character
+                        .as_deref()
+                        .map(|c| format!(" ({c})"))
+                        .unwrap_or_default(),
                     if w.for_main { "" } else { " - alter" },
                     w.amount
                 )
@@ -642,6 +679,7 @@ async fn open_auction(
     };
 
     let auction_id = format!("au-{:x}", chrono_now_ms());
+    let item_id = item.id.clone();
     let cmd = Command::OpenAuction {
         auction_id: auction_id.clone(),
         item,
@@ -652,6 +690,15 @@ async fn open_auction(
         over_bid_to_win_main: over,
         duration_ms,
     };
+    // The item row for the character picker, fetched now so a click later
+    // reads it from disk. Fire and forget: a miss only costs the picker its
+    // usability filter.
+    if let Ok(id) = item_id.parse::<i64>() {
+        let mirror = ctx.data().item_mirror.clone();
+        tokio::spawn(async move {
+            mirror.get(id).await;
+        });
+    }
     match ctx
         .data()
         .driver
@@ -1201,30 +1248,310 @@ async fn open_bid_modal(
     interaction: &serenity::ComponentInteraction,
     auction_id: &str,
     for_main: bool,
+    character: Option<&crate::loot_fit::Candidate>,
 ) -> anyhow::Result<()> {
-    let action = if for_main {
-        Action::Bid
-    } else {
-        Action::BidAlt
+    let side = if for_main { "Main bid" } else { "Alt bid" };
+    // With a character: the title names it (45 chars max) and the field's
+    // placeholder carries the upgrade line (100 max) — the one place a modal
+    // can show text.
+    let (title, placeholder) = match character {
+        Some(c) => (
+            clip(format!("{side} · {}", c.name), 45),
+            clip(format!("DKP · {}", c.upgrade), 100),
+        ),
+        None => (
+            "Place a bid".to_owned(),
+            "Whole number of DKP — 0 withdraws your bid".to_owned(),
+        ),
     };
-    let input = serenity::CreateInputText::new(
-        serenity::InputTextStyle::Short,
-        if for_main { "Main bid" } else { "Alt bid" },
-        BID_INPUT_ID,
-    )
-    .placeholder("Whole number of DKP — 0 withdraws your bid")
-    .required(true)
-    .max_length(12);
+    let input = serenity::CreateInputText::new(serenity::InputTextStyle::Short, side, BID_INPUT_ID)
+        .placeholder(placeholder)
+        .required(true)
+        .max_length(12);
     interaction
         .create_response(
             ctx,
             serenity::CreateInteractionResponse::Modal(
-                serenity::CreateModal::new(custom_id(action, auction_id), "Place a bid")
-                    .components(vec![serenity::CreateActionRow::InputText(input)]),
+                serenity::CreateModal::new(
+                    bid_custom_id(for_main, auction_id, character.map(|c| c.name.as_str())),
+                    title,
+                )
+                .components(vec![serenity::CreateActionRow::InputText(input)]),
             ),
         )
         .await
         .context("opening the bid modal")?;
+    crate::discord::record_component_ack(interaction.id.get());
+    Ok(())
+}
+
+fn clip(s: String, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s;
+    }
+    let mut out: String = s.chars().take(max - 1).collect();
+    out.push('…');
+    out
+}
+
+/// What the picker knows about one member's side of one auction.
+pub struct Pick {
+    pub enabled: bool,
+    pub item_name: String,
+    /// "WAR CLR PAL" / "ERU HIE" as the item window prints them; `None`
+    /// without a row, and the race line also when every race may.
+    pub class_line: Option<String>,
+    pub race_line: Option<String>,
+    pub candidates: Vec<crate::loot_fit::Candidate>,
+    pub excluded: Vec<crate::loot_fit::Excluded>,
+}
+
+/// Resolve a member's eligible characters for one side of an auction. Reads
+/// only: the ledger projection, the item mirror's disk cache (the row was
+/// fetched when the auction opened) and the site's last snapshot for
+/// profiles — nothing here waits on the network, because the click has
+/// three seconds and a modal cannot follow a defer.
+pub async fn pick(
+    data: &Data,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    player: PlayerId,
+    for_main: bool,
+) -> Pick {
+    let aid = auction_id.to_owned();
+    let (enabled, item_id, item_name, chars): (
+        bool,
+        String,
+        String,
+        Vec<nocturnal_core::RosterCharacter>,
+    ) = data
+        .driver
+        .query(move |l| {
+            let g = l.state().guild(ledger_guild);
+            let item = g.and_then(|g| g.auctions.get(&aid)).map(|a| a.item.clone());
+            (
+                g.is_some_and(|g| g.config.character_bids),
+                item.as_ref().map(|i| i.id.clone()).unwrap_or_default(),
+                item.map(|i| i.name)
+                    .unwrap_or_else(|| "the item".to_owned()),
+                g.map(|g| {
+                    g.bid_characters(player, for_main)
+                        .into_iter()
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default(),
+            )
+        })
+        .await;
+    if !enabled {
+        return Pick {
+            enabled,
+            item_name,
+            class_line: None,
+            race_line: None,
+            candidates: Vec::new(),
+            excluded: Vec::new(),
+        };
+    }
+    let item = item_id
+        .parse::<i64>()
+        .ok()
+        .and_then(|id| data.item_mirror.cached(id))
+        .map(|row| crate::items::ItemSummary::from_row(&row));
+    let snapshot = data.site.read().ok().and_then(|s| s.clone());
+    let empty_profiles = Default::default();
+    let empty_gear = Default::default();
+    let (profiles, gear) = match &snapshot {
+        Some(s) => (&s.profiles, &s.gear_items),
+        None => (&empty_profiles, &empty_gear),
+    };
+    let fit = crate::loot_fit::Fit {
+        item: item.as_ref(),
+        profiles,
+        gear,
+    };
+    let refs: Vec<&nocturnal_core::RosterCharacter> = chars.iter().collect();
+    let (candidates, excluded) = fit.split(&refs);
+    Pick {
+        enabled,
+        item_name,
+        class_line: item.as_ref().map(crate::loot_fit::class_line),
+        race_line: item
+            .as_ref()
+            .map(crate::loot_fit::race_line)
+            .filter(|r| r != "ALL"),
+        candidates,
+        excluded,
+    }
+}
+
+/// A Main/Alt click with character bids on: straight to the modal for one
+/// eligible character, a select for several, a refusal for none.
+async fn character_bid_click(
+    ctx: &serenity::Context,
+    interaction: &serenity::ComponentInteraction,
+    data: &Data,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    for_main: bool,
+) -> anyhow::Result<()> {
+    let p = pick(
+        data,
+        ledger_guild,
+        auction_id,
+        interaction.user.id.get(),
+        for_main,
+    )
+    .await;
+    if !p.enabled {
+        return open_bid_modal(ctx, interaction, auction_id, for_main, None).await;
+    }
+    let side = if for_main { "main" } else { "other characters" };
+    match p.candidates.len() {
+        0 => {
+            let mut text = format!(
+                ":no_entry: None of your {side} can use **{}**{}{}.",
+                p.item_name,
+                p.class_line
+                    .as_deref()
+                    .map(|c| format!(" (Class: {c}"))
+                    .unwrap_or_default(),
+                match (&p.class_line, &p.race_line) {
+                    (Some(_), Some(r)) => format!(" · Race: {r})"),
+                    (Some(_), None) => ")".to_owned(),
+                    _ => String::new(),
+                }
+            );
+            if !p.excluded.is_empty() {
+                text.push_str("\nNot eligible: ");
+                text.push_str(
+                    &p.excluded
+                        .iter()
+                        .map(|e| format!("{} ({})", e.name, e.class))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+            }
+            text.push_str(if for_main {
+                "\nYour main is the character an officer ranked with `/roster rank`; other characters bid with **Alt bid**."
+            } else {
+                "\nA character not on your row: `/roster add`."
+            });
+            ephemeral_response(ctx, interaction, text, Vec::new()).await
+        }
+        1 => open_bid_modal(ctx, interaction, auction_id, for_main, p.candidates.first()).await,
+        _ => {
+            let action = if for_main {
+                Action::PickMain
+            } else {
+                Action::PickAlt
+            };
+            let options = p
+                .candidates
+                .iter()
+                .take(25)
+                .map(|c| {
+                    serenity::CreateSelectMenuOption::new(
+                        clip(format!("{} · {} {}", c.name, c.class, c.level), 100),
+                        c.name.clone(),
+                    )
+                    .description(clip(c.upgrade.clone(), 100))
+                })
+                .collect();
+            let menu = serenity::CreateSelectMenu::new(
+                custom_id(action, auction_id),
+                serenity::CreateSelectMenuKind::String { options },
+            )
+            .placeholder("Which character is this bid for?");
+            let text = format!(
+                "Which {} is **{}** for?",
+                if for_main { "main" } else { "character" },
+                p.item_name
+            );
+            ephemeral_response(
+                ctx,
+                interaction,
+                text,
+                vec![serenity::CreateActionRow::SelectMenu(menu)],
+            )
+            .await
+        }
+    }
+}
+
+/// The chosen character from the select, then the modal — the select
+/// interaction is the one the modal answers.
+async fn character_pick_selected(
+    ctx: &serenity::Context,
+    interaction: &serenity::ComponentInteraction,
+    data: &Data,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    for_main: bool,
+) -> anyhow::Result<()> {
+    let chosen = match &interaction.data.kind {
+        serenity::ComponentInteractionDataKind::StringSelect { values } => values.first().cloned(),
+        _ => None,
+    };
+    let Some(chosen) = chosen else {
+        return ephemeral_response(
+            ctx,
+            interaction,
+            ":no_entry: No character chosen.",
+            Vec::new(),
+        )
+        .await;
+    };
+    // Recomputed rather than trusted: the select's values are the client's.
+    let p = pick(
+        data,
+        ledger_guild,
+        auction_id,
+        interaction.user.id.get(),
+        for_main,
+    )
+    .await;
+    match p
+        .candidates
+        .iter()
+        .find(|c| c.name.eq_ignore_ascii_case(&chosen))
+    {
+        Some(c) => open_bid_modal(ctx, interaction, auction_id, for_main, Some(c)).await,
+        None => {
+            ephemeral_response(
+                ctx,
+                interaction,
+                format!(
+                    ":no_entry: **{chosen}** is not one of your eligible characters for this bid."
+                ),
+                Vec::new(),
+            )
+            .await
+        }
+    }
+}
+
+/// An ephemeral message as the *response* to a click (not a follow-up):
+/// used before any defer, on the same footing as opening a modal.
+async fn ephemeral_response(
+    ctx: &serenity::Context,
+    interaction: &serenity::ComponentInteraction,
+    text: impl Into<String>,
+    components: Vec<serenity::CreateActionRow>,
+) -> anyhow::Result<()> {
+    interaction
+        .create_response(
+            ctx,
+            serenity::CreateInteractionResponse::Message(
+                serenity::CreateInteractionResponseMessage::new()
+                    .content(text.into())
+                    .components(components)
+                    .ephemeral(true),
+            ),
+        )
+        .await
+        .context("character pick reply")?;
     crate::discord::record_component_ack(interaction.id.get());
     Ok(())
 }
@@ -1253,6 +1580,7 @@ pub async fn resolve_modal_bid(
     auction_id: &str,
     player: PlayerId,
     for_main: bool,
+    character: Option<&str>,
     raw: &str,
 ) -> (String, Option<String>) {
     let raw = raw.trim();
@@ -1274,6 +1602,7 @@ pub async fn resolve_modal_bid(
             player,
             amount,
             for_main,
+            character: character.map(str::to_owned),
         }
     };
     let outcome = data
@@ -1295,8 +1624,9 @@ pub async fn resolve_modal_bid(
     let text = match &outcome {
         Ok(_) if amount == 0 => format!("Bid withdrawn from **{item}**"),
         Ok(_) => format!(
-            "Bid **{amount}** as {} on **{item}**",
-            if for_main { "MAIN" } else { "ALT" }
+            "Bid **{amount}** as {}{} on **{item}**",
+            if for_main { "MAIN" } else { "ALT" },
+            character.map(|c| format!(" ({c})")).unwrap_or_default()
         ),
         Err(e) => rejection_text(e),
     };
@@ -1321,7 +1651,7 @@ pub async fn handle_modal(
     modal: &serenity::ModalInteraction,
     data: &Data,
 ) -> anyhow::Result<()> {
-    let Some((action, auction_id)) = parse_custom_id(&modal.data.custom_id) else {
+    let Some((action, auction_id, character)) = parse_custom_id(&modal.data.custom_id) else {
         return Ok(()); // not ours
     };
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
@@ -1354,6 +1684,7 @@ pub async fn handle_modal(
         auction_id,
         modal.user.id.get(),
         action == Action::Bid,
+        character,
         raw,
     )
     .await;
@@ -1400,19 +1731,10 @@ pub async fn handle_component(
     interaction: &serenity::ComponentInteraction,
     data: &Data,
 ) -> anyhow::Result<()> {
-    let Some((action, auction_id)) = parse_custom_id(&interaction.data.custom_id) else {
+    let Some((action, auction_id, _)) = parse_custom_id(&interaction.data.custom_id) else {
         return Ok(()); // not ours (item pickers, pagination, …)
     };
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
-    // A modal *is* the response to the click, so it cannot follow an
-    // acknowledge — this branch answers before the defer-first rule applies,
-    // and does no work of its own to stay inside the 3-second window. Every
-    // check the bid needs happens on submit, where the ledger decides.
-    if matches!(action, Action::Bid | Action::BidAlt) {
-        return open_bid_modal(ctx, interaction, auction_id, action == Action::Bid).await;
-    }
-    // Defer-first: nothing below this line races the 3-second window.
-    ack(ctx, interaction).await?;
     let Some(discord_guild) = interaction.guild_id.map(|g| g.get()) else {
         return Ok(());
     };
@@ -1420,6 +1742,35 @@ pub async fn handle_component(
         Some((from, to)) if from == discord_guild => to,
         _ => discord_guild,
     };
+    // A modal *is* the response to the click, so it cannot follow an
+    // acknowledge — these branches answer before the defer-first rule
+    // applies. With character bids off that is one API call; with it on, a
+    // ledger query and a disk read, still well inside the 3-second window.
+    // Every check the bid needs happens on submit, where the ledger decides.
+    if matches!(action, Action::Bid | Action::BidAlt) {
+        return character_bid_click(
+            ctx,
+            interaction,
+            data,
+            ledger_guild,
+            auction_id,
+            action.for_main(),
+        )
+        .await;
+    }
+    if matches!(action, Action::PickMain | Action::PickAlt) {
+        return character_pick_selected(
+            ctx,
+            interaction,
+            data,
+            ledger_guild,
+            auction_id,
+            action.for_main(),
+        )
+        .await;
+    }
+    // Defer-first: nothing below this line races the 3-second window.
+    ack(ctx, interaction).await?;
 
     let aid = auction_id.to_owned();
     let status = data
@@ -1437,7 +1788,7 @@ pub async fn handle_component(
 
     match action {
         // Answered above: a bid opens a modal instead of being acknowledged.
-        Action::Bid | Action::BidAlt => Ok(()),
+        Action::Bid | Action::BidAlt | Action::PickMain | Action::PickAlt => Ok(()),
         Action::Cancel => {
             if !component_is_officer(interaction, &data.driver, ledger_guild).await {
                 return reply(
@@ -1556,7 +1907,7 @@ mod tests {
         for action in [Action::Bid, Action::BidAlt, Action::Cancel, Action::Confirm] {
             let id = custom_id(action, "au-1234abcd");
             assert!(id.len() <= 100, "Discord custom_id limit");
-            assert_eq!(parse_custom_id(&id), Some((action, "au-1234abcd")));
+            assert_eq!(parse_custom_id(&id), Some((action, "au-1234abcd", None)));
         }
     }
 
@@ -1632,6 +1983,7 @@ mod tests {
             player: 7,
             amount: 12,
             for_main: true,
+            character: None,
         }];
         let (_, rows) = closed_message("au-3", &auction, &winners);
         let json = serde_json::to_value(&rows).expect("rows serialize");
@@ -1716,7 +2068,8 @@ mod tests {
             .await
             .expect("open");
 
-        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, " 40 ").await;
+        let (text, refresh) =
+            resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, None, " 40 ").await;
         assert!(text.contains("40"), "{text}");
         assert!(text.contains("Cloak"), "the item is named: {text}");
         assert_eq!(refresh.as_deref(), Some("au-1"));
@@ -1732,7 +2085,7 @@ mod tests {
         assert_eq!(bids[0].amount, 40);
 
         // Re-bidding replaces rather than stacking.
-        resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "55").await;
+        resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, None, "55").await;
         let bids = driver
             .query(|l| {
                 l.state()
@@ -1745,7 +2098,8 @@ mod tests {
         assert_eq!(bids[0].amount, 55);
 
         // 0 withdraws.
-        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "0").await;
+        let (text, refresh) =
+            resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, None, "0").await;
         assert!(text.contains("withdrawn"), "{text}");
         assert_eq!(refresh.as_deref(), Some("au-1"));
         let bids = driver
@@ -1760,13 +2114,15 @@ mod tests {
 
         // Anything that is not a whole number is a typo, not a bid.
         for raw in ["50abc", "", "twelve", "3.5"] {
-            let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, raw).await;
+            let (text, refresh) =
+                resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, None, raw).await;
             assert!(refresh.is_none(), "{raw} changed the ledger");
             assert!(text.contains("not a whole number"), "{raw}: {text}");
         }
 
         // More than the bidder has is refused by the ledger, not by the modal.
-        let (text, refresh) = resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, "500").await;
+        let (text, refresh) =
+            resolve_modal_bid(&data, GUILD, "au-1", PLAYER, true, None, "500").await;
         assert!(refresh.is_none());
         assert!(text.contains("greater than your current DKP"), "{text}");
     }

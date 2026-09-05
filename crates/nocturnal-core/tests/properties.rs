@@ -67,6 +67,7 @@ fn arb_command() -> impl Strategy<Value = Command> {
                 player,
                 amount,
                 for_main,
+                character: None,
             }
         ),
         (auction_id.clone(), player).prop_map(|(id, player)| Command::RetractBid {
