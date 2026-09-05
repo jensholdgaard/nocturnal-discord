@@ -1,6 +1,6 @@
 # Ourios: the log backend for the bot's OTLP logs. The path is
 #   bot --(OTLP/http, standard OTEL_* env)--> eq-gateway collector
-#        --(otlphttp/ourios)--> ourios receiver :4318
+#        --(otlp_http/ourios)--> ourios receiver :4318
 #        --(compaction, ~30s)--> Parquet --> querier :4320
 #
 # Port 4320, not the documented 4319: 4319 already belongs to the eq-gateway

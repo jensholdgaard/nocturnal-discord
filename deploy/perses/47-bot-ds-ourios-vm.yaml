@@ -1,0 +1,27 @@
+# Ourios, the VM's own tenant (2026-09-06): journald lines from the services on
+# eq-perses (caddy, perses, prometheus, jaeger, ourios, the gateway, the timers,
+# fail2ban, sshd, unattended-upgrades) plus systemd's and the kernel's warnings,
+# shipped by the gateway's journald receivers. Same querier as the guild tenant;
+# the header keeps the two apart.
+apiVersion: perses.dev/v1alpha1
+kind: Datasource
+metadata:
+  name: ourios-vm
+  project: nocturnal
+spec:
+  display:
+    name: Ourios (VM logs)
+  default: false
+  plugin:
+    kind: OuriosDatasource
+    spec:
+      tenant: eq-perses
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://127.0.0.1:4320
+          allowedEndpoints:
+            - endpointPattern: /v1/query
+              method: POST
+            - endpointPattern: /mcp
+              method: POST
