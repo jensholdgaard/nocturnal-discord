@@ -625,7 +625,7 @@ spec:
           kind: TraceTable
           spec:
             links:
-              trace: /projects/nocturnal/dashboards/trace?var-trace=${traceId}
+              trace: /projects/nocturnal/dashboards/spans?var-trace=${traceId}
         queries:
         - kind: TraceQuery
           spec:

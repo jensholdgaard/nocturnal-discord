@@ -1,0 +1,49 @@
+# Spans of one trace. Reached from a row on the Trace dashboard (or the overview's
+# trace table); the id arrives as ?var-trace=. Opened bare, the Gantt says it needs
+# a trace id - that is the plugin's text and expected here, unlike on the list page.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: spans
+  project: nocturnal
+spec:
+  display:
+    name: Spans
+  duration: 6h
+  variables:
+  - kind: TextVariable
+    spec:
+      name: trace
+      display:
+        name: Trace id
+        description: Set by the link you came from; paste another to switch.
+      value: ''
+  panels:
+    gantt:
+      kind: Panel
+      spec:
+        display:
+          name: Spans
+        plugin:
+          kind: TracingGanttChart
+          spec: {}
+        queries:
+        - kind: TraceQuery
+          spec:
+            plugin:
+              kind: JaegerTraceQuery
+              spec:
+                datasource:
+                  kind: JaegerDatasource
+                  name: jaeger
+                traceId: $trace
+  layouts:
+  - kind: Grid
+    spec:
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 18
+        content:
+          $ref: '#/spec/panels/gantt'

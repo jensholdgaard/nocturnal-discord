@@ -1,7 +1,7 @@
-# Traces: the recent ones listed first, one click to the span view. Pick a service
-# (the bot, Caddy, Prometheus, or members' Zeal), and the table lists the newest
-# traces Jaeger has for it; clicking a row fills the trace id and the Gantt below.
-# A trace id can still be pasted into the variable, as before.
+# Traces: the recent ones, listed. Pick a service (the bot, Caddy, Prometheus, or
+# members' Zeal) and the table shows the newest traces Jaeger has for it; a row's
+# link opens the Spans dashboard for that trace. The Gantt lives there and not
+# here on purpose: with no id chosen it renders an error, not an empty panel.
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
@@ -30,25 +30,18 @@ spec:
           - caddy
           - prometheus
           - everquest
-  - kind: TextVariable
-    spec:
-      name: trace
-      display:
-        name: Trace id
-        description: Filled in by clicking a row in the table, or paste one.
-      value: ''
   panels:
     recent:
       kind: Panel
       spec:
         display:
           name: Recent traces
-          description: Newest first, up to 50, within the dashboard's time range. Click a row to open it below.
+          description: Newest first, up to 50, within the time range. The trace id in a row is a link to its spans.
         plugin:
           kind: TraceTable
           spec:
             links:
-              trace: /projects/nocturnal/dashboards/trace?var-trace=${traceId}
+              trace: /projects/nocturnal/dashboards/spans?var-trace=${traceId}
         queries:
         - kind: TraceQuery
           spec:
@@ -60,24 +53,6 @@ spec:
                   name: jaeger
                 service: $service
                 limit: 50
-    gantt:
-      kind: Panel
-      spec:
-        display:
-          name: Spans
-        plugin:
-          kind: TracingGanttChart
-          spec: {}
-        queries:
-        - kind: TraceQuery
-          spec:
-            plugin:
-              kind: JaegerTraceQuery
-              spec:
-                datasource:
-                  kind: JaegerDatasource
-                  name: jaeger
-                traceId: $trace
   layouts:
   - kind: Grid
     spec:
@@ -85,12 +60,6 @@ spec:
       - x: 0
         y: 0
         width: 24
-        height: 10
+        height: 16
         content:
           $ref: '#/spec/panels/recent'
-      - x: 0
-        y: 10
-        width: 24
-        height: 14
-        content:
-          $ref: '#/spec/panels/gantt'
