@@ -1,4 +1,7 @@
-# Trace detail view: reached by clicking a trace on the overview dashboard.
+# Traces: the recent ones listed first, one click to the span view. Pick a service
+# (the bot, Caddy, Prometheus, or members' Zeal), and the table lists the newest
+# traces Jaeger has for it; clicking a row fills the trace id and the Gantt below.
+# A trace id can still be pasted into the variable, as before.
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
@@ -8,14 +11,55 @@ spec:
   display:
     name: Trace
   duration: 6h
+  refreshInterval: 30s
   variables:
+  - kind: ListVariable
+    spec:
+      name: service
+      display:
+        name: Service
+        description: Who emitted the trace. nocturnal = the DKP bot; caddy = every request to the site and the OTLP ingest; prometheus = PromQL evaluations (sampled); everquest = members' Zeal fights.
+      allowAllValue: false
+      allowMultiple: false
+      defaultValue: nocturnal
+      plugin:
+        kind: StaticListVariable
+        spec:
+          values:
+          - nocturnal
+          - caddy
+          - prometheus
+          - everquest
   - kind: TextVariable
     spec:
       name: trace
       display:
         name: Trace id
+        description: Filled in by clicking a row in the table, or paste one.
       value: ''
   panels:
+    recent:
+      kind: Panel
+      spec:
+        display:
+          name: Recent traces
+          description: Newest first, up to 50, within the dashboard's time range. Click a row to open it below.
+        plugin:
+          kind: TraceTable
+          spec:
+            links:
+              trace: /projects/nocturnal/dashboards/trace?var-trace=${traceId}
+        queries:
+        - kind: TraceQuery
+          spec:
+            plugin:
+              kind: JaegerTraceQuery
+              spec:
+                datasource:
+                  kind: JaegerDatasource
+                  name: jaeger
+                service: $service
+                limit: 50
     gantt:
       kind: Panel
       spec:
@@ -40,6 +84,12 @@ spec:
       items:
       - x: 0
         y: 0
+        width: 24
+        height: 10
+        content:
+          $ref: '#/spec/panels/recent'
+      - x: 0
+        y: 10
         width: 24
         height: 14
         content:
