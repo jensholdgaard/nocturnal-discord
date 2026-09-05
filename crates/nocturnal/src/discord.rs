@@ -787,7 +787,8 @@ pub async fn run(
     let members: std::sync::Arc<
         std::sync::Mutex<std::collections::HashMap<u64, crate::roster_page::MemberInfo>>,
     > = Default::default();
-    let auction_ui = std::sync::Arc::new(crate::auctions::AuctionUi::default());
+    let auction_ui =
+        std::sync::Arc::new(crate::auctions::AuctionUi::with_mirror(item_mirror.clone()));
     let bell_cfg = cfg.bell.clone();
     let provisioning = crate::provision::Provisioning::from_config(&cfg.provision);
     if provisioning.is_none() {

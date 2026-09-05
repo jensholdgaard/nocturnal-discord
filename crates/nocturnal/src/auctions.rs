@@ -258,18 +258,39 @@ pub fn closed_message(
     auction_id: &str,
     auction: &Auction,
     proposed: &[nocturnal_core::event::Winner],
+    warnings: &[String],
 ) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
-    let embed = item_embed(&auction.item, EMBED_GREEN).fields([
+    // A winner whose character cannot use the item turns the embed orange
+    // and puts the reason above the button. Discord has four button
+    // colours and none is orange (red already means cancelled), so the
+    // button changes its words instead.
+    let colour = if warnings.is_empty() {
+        EMBED_GREEN
+    } else {
+        EMBED_ORANGE
+    };
+    let mut embed = item_embed(&auction.item, colour).fields([
         ("Winner/s", winners_text(proposed), false),
         ("Bids", bids_text(auction), false),
-        ("Auction ID", format!("```{auction_id}```"), false),
     ]);
+    if !warnings.is_empty() {
+        embed = embed.field(
+            "⚠️ Check before confirming",
+            field_lines(warnings.to_vec(), ""),
+            false,
+        );
+    }
+    embed = embed.field("Auction ID", format!("```{auction_id}```"), false);
     let rows = if proposed.is_empty() {
         Vec::new()
     } else {
         vec![serenity::CreateActionRow::Buttons(vec![
             serenity::CreateButton::new(custom_id(Action::Confirm, auction_id))
-                .label("Confirm Winner/s")
+                .label(if warnings.is_empty() {
+                    "Confirm Winner/s"
+                } else {
+                    "Confirm anyway"
+                })
                 .style(serenity::ButtonStyle::Primary),
         ])]
     };
@@ -336,9 +357,26 @@ pub struct AuctionUi {
     /// auction id → (channel, message) of its posted embed. Presentation
     /// state: lost on restart, rebuilt by re-posting open auctions.
     messages: Mutex<HashMap<String, (u64, u64)>>,
+    /// The item mirror, for the officer's warning at close (a winner whose
+    /// character cannot use the item). `None` in tests: no warnings.
+    mirror: Option<std::sync::Arc<crate::items::ItemMirror>>,
 }
 
 impl AuctionUi {
+    pub fn with_mirror(mirror: std::sync::Arc<crate::items::ItemMirror>) -> Self {
+        AuctionUi {
+            messages: Mutex::default(),
+            mirror: Some(mirror),
+        }
+    }
+
+    /// The mirrored row for an auction's item, from disk only.
+    fn item_summary(&self, item_id: &str) -> Option<crate::items::ItemSummary> {
+        let id = item_id.parse::<i64>().ok()?;
+        let row = self.mirror.as_ref()?.cached(id)?;
+        Some(crate::items::ItemSummary::from_row(&row))
+    }
+
     pub fn remember(&self, auction_id: &str, channel: u64, message: u64) {
         if let Ok(mut m) = self.messages.lock() {
             m.insert(auction_id.to_owned(), (channel, message));
@@ -389,15 +427,32 @@ pub async fn refresh(
         }
         AuctionStatus::Closed => {
             let aid = auction_id.to_owned();
-            let proposed = driver
+            // Winners, and the roster class of every winner's character,
+            // in one query: the class check is the officer's safety net
+            // for a bid the picker let through (a rank changed, the row
+            // arrived late), not a second gate.
+            let (proposed, classes) = driver
                 .query(move |l| {
-                    l.state()
-                        .guild(ledger_guild)
-                        .map(|g| nocturnal_core::compute_winners(g, &aid, 0))
-                        .unwrap_or_default()
+                    let Some(g) = l.state().guild(ledger_guild) else {
+                        return (Vec::new(), HashMap::new());
+                    };
+                    let winners = nocturnal_core::compute_winners(g, &aid, 0);
+                    let classes: HashMap<String, String> = winners
+                        .iter()
+                        .filter_map(|w| {
+                            let name = w.character.as_deref()?;
+                            let c = g.roster.get(&w.player)?.get(&name.to_lowercase())?;
+                            Some((name.to_lowercase(), c.class.clone()))
+                        })
+                        .collect();
+                    (winners, classes)
                 })
                 .await;
-            closed_message(auction_id, &auction, &proposed)
+            let warnings = ui
+                .item_summary(&auction.item.id)
+                .map(|item| crate::loot_fit::winner_warnings(&item, &proposed, &classes))
+                .unwrap_or_default();
+            closed_message(auction_id, &auction, &proposed, &warnings)
         }
         AuctionStatus::Finalized | AuctionStatus::Cancelled => {
             ui.forget(auction_id);
@@ -1985,12 +2040,42 @@ mod tests {
             for_main: true,
             character: None,
         }];
-        let (_, rows) = closed_message("au-3", &auction, &winners);
+        let (_, rows) = closed_message("au-3", &auction, &winners, &[]);
         let json = serde_json::to_value(&rows).expect("rows serialize");
         assert_eq!(json[0]["components"][0]["custom_id"], "nb:confirm:au-3");
+        assert_eq!(json[0]["components"][0]["label"], "Confirm Winner/s");
         // …and none when there is nothing to confirm.
-        let (_, rows) = closed_message("au-3", &auction, &[]);
+        let (_, rows) = closed_message("au-3", &auction, &[], &[]);
         assert!(rows.is_empty());
+    }
+
+    /// A winner who cannot use the item: the embed turns orange, says why,
+    /// and the button reads "Confirm anyway" — still the same custom id, so
+    /// the officer's click does what it always did.
+    #[test]
+    fn an_ineligible_winner_warns_the_officer() {
+        let mut auction = sample_auction(Flavor::Short);
+        auction.status = nocturnal_core::state::AuctionStatus::Closed;
+        let winners = vec![nocturnal_core::event::Winner {
+            player: 7,
+            amount: 12,
+            for_main: true,
+            character: Some("Thurgo".into()),
+        }];
+        let warning = "**Thurgo** (Warrior) cannot use Tome of Secrets — Class: NEC WIZ MAG ENC";
+        let (embed, rows) = closed_message("au-3", &auction, &winners, &[warning.to_owned()]);
+        let e = serde_json::to_value(&embed).expect("embed serializes");
+        assert_eq!(e["color"], crate::discord::EMBED_ORANGE);
+        let fields = e["fields"].as_array().expect("fields");
+        assert!(
+            fields
+                .iter()
+                .any(|f| f["name"] == "⚠️ Check before confirming" && f["value"] == warning),
+            "{fields:?}"
+        );
+        let json = serde_json::to_value(&rows).expect("rows serialize");
+        assert_eq!(json[0]["components"][0]["custom_id"], "nb:confirm:au-3");
+        assert_eq!(json[0]["components"][0]["label"], "Confirm anyway");
     }
 
     /// End to end over a real ledger and WAL, minus Discord: the same

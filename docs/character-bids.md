@@ -15,7 +15,10 @@ modal opens:
    row, cached on disk when the auction opened) carries the class, race and
    slot bitmasks. A character whose class the item excludes is not offered;
    race is checked when the character has sent a profile, since the roster
-   does not store race.
+   does not store race. **Only equipment is gated**: a row with no
+   equipment slot — tradeskill drops, quest pieces, spells — offers every
+   character on the side, because the class bits on such rows mean nothing
+   to a bidder (Ziglax, 2026-09-05).
 3. **Show the upgrade.** For each offered character: the slot the item
    would go in, what is worn there now (from the character's last Zeal
    profile, via the site snapshot) and the stat delta. Paired slots (ears,
@@ -49,7 +52,21 @@ side the bid claims (`character_not_eligible`). Usability is the Discord
 layer's filter only — the item row is not in the ledger.
 
 Winner lines become `@member (Vexira) for 12 dkp`; bid lists stay
-anonymous.
+anonymous. The upgrade comparison is shown to the bidder only — never in
+the channel.
+
+## The officer's safety net at close
+
+When a short auction closes, the bot checks each proposed winner's
+character against the item once more, from the roster's class. A winner
+who cannot use it turns the closed embed **orange**, adds a "Check before
+confirming" field naming the character, its class and the item's class
+line, and relabels the button **Confirm anyway** (Discord's four button
+colours have no orange; red already means cancelled). The custom id is
+unchanged, so confirming works exactly as before. This catches what the
+picker cannot: a rank changed after the bid, an item row that arrived
+after the click, or a bid placed while the feature was off and turned on
+before close.
 
 ## Attendance requirements
 

@@ -113,6 +113,41 @@ pub fn race_can_use(item: &ItemSummary, race_id: Option<i64>) -> bool {
         .map_or(true, |bit| item.races & (1 << bit) != 0)
 }
 
+/// Whether the item goes in an equipment slot at all. Only equipment is
+/// gated by class and race; everything else is loot anyone may bid on.
+pub fn is_equipment(item: &ItemSummary) -> bool {
+    item.slots & ((1 << SLOT_NAMES.len()) - 1) != 0
+}
+
+/// A warning line per winner whose character cannot use the item, for
+/// the officer confirming the auction. `classes` maps a lowercase
+/// character name to its roster class. A winner without a character, or
+/// with one the roster does not know, produces no line: there is nothing
+/// to check against.
+pub fn winner_warnings(
+    item: &ItemSummary,
+    winners: &[nocturnal_core::event::Winner],
+    classes: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
+    if !is_equipment(item) {
+        return Vec::new();
+    }
+    winners
+        .iter()
+        .filter_map(|w| {
+            let name = w.character.as_deref()?;
+            let class = classes.get(&name.to_lowercase())?;
+            (!class_can_use(item, class)).then(|| {
+                format!(
+                    "**{name}** ({class}) cannot use {} — Class: {}",
+                    item.name,
+                    class_line(item)
+                )
+            })
+        })
+        .collect()
+}
+
 /// "WAR CLR PAL" or "ALL", as the item window prints it.
 pub fn class_line(item: &ItemSummary) -> String {
     if all_classes(item.classes) {
@@ -196,6 +231,18 @@ impl Fit<'_> {
                 });
                 continue;
             };
+            // Not equipment — a tradeskill drop, a quest piece, a spell:
+            // the class and race masks on such rows mean nothing to a
+            // bidder, so nobody is gated (Ziglax, 2026-09-05).
+            if !is_equipment(item) {
+                ok.push(Candidate {
+                    name: c.name.clone(),
+                    class: c.class.clone(),
+                    level: c.level,
+                    upgrade: "not equipment — no class or race limit".to_owned(),
+                });
+                continue;
+            }
             if !class_can_use(item, &c.class) {
                 out.push(Excluded {
                     name: c.name.clone(),
@@ -456,6 +503,58 @@ mod tests {
         );
         assert_eq!(out.len(), 1);
         assert_eq!((out[0].name.as_str(), out[0].reason), ("Thurgo", "class"));
+    }
+
+    /// A tradeskill or quest drop has no slot; its class bits are noise.
+    #[test]
+    fn non_equipment_gates_nobody() {
+        let mut ore = tome();
+        ore.slots = 0;
+        ore.classes = 1 << 11; // a "WIZ only" mask on a thing nobody wears
+        assert!(!is_equipment(&ore));
+        let profiles = Default::default();
+        let gear = Default::default();
+        let fit = Fit {
+            item: Some(&ore),
+            profiles: &profiles,
+            gear: &gear,
+        };
+        let thu = toon("Thurgo", "Warrior");
+        let (ok, out) = fit.split(&[&thu]);
+        assert_eq!(ok.len(), 1);
+        assert_eq!(ok[0].upgrade, "not equipment — no class or race limit");
+        assert!(out.is_empty());
+        assert!(winner_warnings(&ore, &[], &Default::default()).is_empty());
+    }
+
+    /// The officer's safety net at close: a winner whose character cannot
+    /// use the item gets a line; no character, or no roster class, none.
+    #[test]
+    fn a_winner_who_cannot_use_the_item_is_flagged() {
+        use nocturnal_core::event::Winner;
+        let win = |c: Option<&str>| Winner {
+            player: 7,
+            amount: 5,
+            for_main: true,
+            character: c.map(str::to_owned),
+        };
+        let mut classes = std::collections::HashMap::new();
+        classes.insert("thurgo".to_owned(), "Warrior".to_owned());
+        classes.insert("vexira".to_owned(), "Wizard".to_owned());
+        let lines = winner_warnings(
+            &tome(),
+            &[
+                win(Some("Thurgo")),
+                win(Some("Vexira")),
+                win(None),
+                win(Some("Ghost")),
+            ],
+            &classes,
+        );
+        assert_eq!(
+            lines,
+            vec!["**Thurgo** (Warrior) cannot use Tome of Secrets — Class: NEC WIZ MAG ENC"]
+        );
     }
 
     #[test]
