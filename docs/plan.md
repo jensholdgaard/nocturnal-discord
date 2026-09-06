@@ -219,9 +219,11 @@ knew in August, and these changes are live in the bot they use now.
 `deploy/`: static musl binary via cargo-zigbuild, `nocturnal.toml` for the
 observability VM (data on the host at `/var/lib/nocturnal`, OTLP through the
 on-box gateway with a dedicated bearer token), hardened systemd unit,
-Perses dashboard (`Nocturnal Bot` in project everquest: ledger head, command
-rates/outcomes, commit + fsync latency percentiles, events by kind), and the
-idempotent `install-vm.sh`.
+Perses dashboards in project `nocturnal` — Business (ledger head, command
+rates/outcomes, events by kind, raids), Platform (commit + fsync and ack
+latency percentiles, failures, saturation, Discord, traces, logs) and
+Infrastructure (the VM, the services on it, its journal) — and the idempotent
+`install-vm.sh`.
 
 **Deploy access (changed 2026-08-29).** Agent SSH to the observability VM was
 policy-blocked; it is not any more. `deploy/tokens.sh`'s key

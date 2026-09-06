@@ -1,0 +1,478 @@
+# The box: eq-perses as the gateway collector sees it (host metrics, unit states,
+# restarts, its own queues), the services on it as their traces and journals reveal
+# them (request rate, latency, errors - derived in the collector by the span-metrics
+# and count connectors, everquest-observability/collector/gateway.yaml), and the VM's
+# journal. The bot itself is on Business (43) and Platform (48). Project 'nocturnal';
+# metrics from the default Prometheus datasource, logs from the ourios-vm datasource.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: infrastructure
+  project: nocturnal
+spec:
+  display:
+    name: Infrastructure
+  duration: 6h
+  refreshInterval: 1m
+  panels:
+    vm_cpu:
+      kind: Panel
+      spec:
+        display:
+          name: CPU busy
+          description: 1 minus the idle share, averaged over both cores (host_metrics via the gateway, no scrape).
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+              - value: 0.7
+                color: orange
+              - value: 0.9
+                color: red
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: 1 - avg(system_cpu_utilization_ratio{state="idle"})
+    vm_mem:
+      kind: Panel
+      spec:
+        display:
+          name: Memory used
+          description: Used share of the 3.8 GB, cache excluded. The box has swapped nothing so far; watch this before it starts.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+              - value: 0.8
+                color: orange
+              - value: 0.92
+                color: red
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: system_memory_utilization_ratio{state="used"}
+    vm_disk:
+      kind: Panel
+      spec:
+        display:
+          name: Disk used (/)
+          description: The one filesystem that matters. Prometheus, Jaeger, Ourios' WAL, the bot's WAL and the journal all live on it.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+              - value: 0.7
+                color: orange
+              - value: 0.85
+                color: red
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(system_filesystem_utilization_ratio{mountpoint="/"})
+    vm_load:
+      kind: Panel
+      spec:
+        display:
+          name: Load (1m)
+          description: Runnable threads; the box has 2 cores.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 2
+            thresholds:
+              steps:
+              - value: 2
+                color: orange
+              - value: 4
+                color: red
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: system_cpu_load_average_1m
+    vm_units_down:
+      kind: Panel
+      spec:
+        display:
+          name: Units not active
+          description: >-
+            Of the watched services (caddy, perses, prometheus, jaeger, ourios, the gateway, the bot,
+            fail2ban, sshd, unattended-upgrades), how many are not "active" right now — from systemd
+            over D-Bus. The watchdog is a oneshot and is left out of the count.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+              - value: 1
+                color: red
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: count(systemd_unit_state{systemd_unit_active_state="active", systemd_unit_name!="nocturnal-watchdog.service"} == 0) or vector(0)
+    vm_units:
+      kind: Panel
+      spec:
+        display:
+          name: Unit state
+          description: 1 = active. A dip is a restart; a flat 0 is an outage.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: systemd_unit_state{systemd_unit_active_state="active", systemd_unit_name!="nocturnal-watchdog.service"}
+                seriesNameFormat: '{{systemd_unit_name}}'
+    vm_restarts:
+      kind: Panel
+      spec:
+        display:
+          name: Automatic restarts / h
+          description: systemd's NRestarts per service — a process that died and was brought back. Manual restarts (deploys) do not count.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: increase(systemd_service_restarts_total[1h])
+                seriesNameFormat: '{{systemd_unit_name}}'
+    vm_cpu_by_service:
+      kind: Panel
+      spec:
+        display:
+          name: CPU by service (cores)
+          description: From each service's cgroup, via systemd. Who is eating the box.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (systemd_unit_name) (rate(systemd_service_cpu_time_microseconds_total[5m])) / 1e6
+                seriesNameFormat: '{{systemd_unit_name}}'
+    vm_collector:
+      kind: Panel
+      spec:
+        display:
+          name: Gateway exporter queues
+          description: >-
+            The collector's own metrics, pushed over OTLP. A queue that grows is a sink that stopped
+            answering (Prometheus, Jaeger or Ourios); it drains on its own when the sink is back.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: otelcol_exporter_queue_size
+                seriesNameFormat: '{{exporter}}'
+    vm_logs:
+      kind: Panel
+      spec:
+        display:
+          name: VM logs (warnings and up)
+          description: >-
+            journald lines from the services on the box, systemd and the kernel, shipped by the
+            gateway into Ourios under the VM's own tenant. Perses' per-query access lines are
+            dropped at the gateway; everything else at info is there too — lower the severity to see it.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios-vm
+                query: severity >= warn
+
+    svc_journal_errors:
+      kind: Panel
+      spec:
+        display:
+          name: Journal errors / h by unit
+          description: >-
+            Lines at error or worse in each service's journal, counted by the gateway's count
+            connector as they are shipped. The lines themselves are in the VM logs panel below.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (systemd_unit_name) (increase(vm_journal_errors_total[1h]))
+                seriesNameFormat: '{{systemd_unit_name}}'
+    svc_requests:
+      kind: Panel
+      spec:
+        display:
+          name: Requests / s by service
+          description: >-
+            Server spans per second, derived from traces by the gateway's span-metrics connector:
+            Caddy's requests, Prometheus's and Ourios's query API calls. Prometheus samples its
+            own traces at 25 %, so its line is a quarter of the truth.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (service_name) (rate(gateway_span_calls_total{span_kind="SPAN_KIND_SERVER"}[5m]))
+                seriesNameFormat: '{{service_name}}'
+    svc_latency:
+      kind: Panel
+      spec:
+        display:
+          name: Request latency p95 by service
+          description: >-
+            95th percentile of server span duration per service, from the same span metrics.
+            A slow Perses panel shows here as Prometheus or Ourios before anyone complains.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le, service_name) (rate(gateway_span_duration_seconds_bucket{span_kind="SPAN_KIND_SERVER"}[5m])))
+                seriesNameFormat: '{{service_name}}'
+    svc_span_errors:
+      kind: Panel
+      spec:
+        display:
+          name: Failed spans / h by service
+          description: Spans that ended with an error status, any kind, per service.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (service_name) (increase(gateway_span_calls_total{status_code="STATUS_CODE_ERROR"}[1h]))
+                seriesNameFormat: '{{service_name}}'
+    svc_promql:
+      kind: Panel
+      spec:
+        display:
+          name: PromQL evaluation p50 / p95
+          description: >-
+            Duration of Prometheus's promqlEval spans, i.e. what every panel on every dashboard
+            waits for. Sampled at 25 %.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.5, sum by (le) (rate(gateway_span_duration_seconds_bucket{service_name="prometheus", span_name="promqlEval"}[5m])))
+                seriesNameFormat: p50
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(gateway_span_duration_seconds_bucket{service_name="prometheus", span_name="promqlEval"}[5m])))
+                seriesNameFormat: p95
+  layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: The VM
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/vm_cpu'
+      - x: 4
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/vm_mem'
+      - x: 8
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/vm_disk'
+      - x: 12
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/vm_load'
+      - x: 16
+        y: 0
+        width: 8
+        height: 4
+        content:
+          $ref: '#/spec/panels/vm_units_down'
+      - x: 0
+        y: 4
+        width: 12
+        height: 7
+        content:
+          $ref: '#/spec/panels/vm_units'
+      - x: 12
+        y: 4
+        width: 12
+        height: 7
+        content:
+          $ref: '#/spec/panels/vm_restarts'
+      - x: 0
+        y: 11
+        width: 12
+        height: 7
+        content:
+          $ref: '#/spec/panels/vm_cpu_by_service'
+      - x: 12
+        y: 11
+        width: 12
+        height: 7
+        content:
+          $ref: '#/spec/panels/vm_collector'
+  - kind: Grid
+    spec:
+      display:
+        title: Services
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/svc_journal_errors'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/svc_span_errors'
+      - x: 0
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/svc_requests'
+      - x: 12
+        y: 8
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/svc_latency'
+      - x: 0
+        y: 16
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/svc_promql'
+  - kind: Grid
+    spec:
+      display:
+        title: Logs
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 10
+        content:
+          $ref: '#/spec/panels/vm_logs'

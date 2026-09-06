@@ -1,4 +1,4 @@
-# Spans of one trace. Reached from a row on the Trace dashboard (or the overview's
+# Spans of one trace. Reached from a row on the Trace dashboard (or the Platform dashboard's
 # trace table); the id arrives as ?var-trace=. Opened bare, the Gantt says it needs
 # a trace id - that is the plugin's text and expected here, unlike on the list page.
 apiVersion: perses.dev/v1alpha1
