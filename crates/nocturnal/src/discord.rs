@@ -866,7 +866,7 @@ pub async fn run(
                                     path,
                                 )
                                 .await;
-                                crate::raid_names::record_missing_kills(
+                                crate::raid_names::record_recent_kills(
                                     &driver,
                                     ledger_guild,
                                     url,

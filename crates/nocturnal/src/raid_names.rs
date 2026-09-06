@@ -248,8 +248,35 @@ pub async fn targets_in_window(query_url: &str, start_ms: i64, end_ms: i64) -> V
 
 /// The reduce half of [`targets_in_window`] (a `query_range` matrix),
 /// pinned by a fixture: damage is the sum over steps, first-seen the first
-/// step with any.
+/// step with any. Rows that are the same NPC — the client prefixes `#` on
+/// an instanced spawn for some samples and not others — are one target,
+/// or a boss would be two kills and half its damage.
 pub fn parse_targets(body: &serde_json::Value) -> Vec<TargetDamage> {
+    let raw = parse_target_rows(body);
+    let mut merged: BTreeMap<String, TargetDamage> = BTreeMap::new();
+    for r in raw {
+        let key = normalize(&r.target);
+        match merged.get_mut(&key) {
+            Some(m) => {
+                m.damage += r.damage;
+                m.first_seen_ms = m.first_seen_ms.min(r.first_seen_ms);
+                m.last_seen_ms = m.last_seen_ms.max(r.last_seen_ms);
+            }
+            None => {
+                merged.insert(
+                    key,
+                    TargetDamage {
+                        target: r.target.trim().trim_start_matches('#').trim().to_owned(),
+                        ..r
+                    },
+                );
+            }
+        }
+    }
+    merged.into_values().collect()
+}
+
+fn parse_target_rows(body: &serde_json::Value) -> Vec<TargetDamage> {
     body["data"]["result"]
         .as_array()
         .map(|rows| {
@@ -326,12 +353,13 @@ pub async fn record_kills(
 /// pre-telemetry history is not re-queried every half hour.
 const KILL_LOOKBACK_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
-/// Every ended raid of the last month with no kills recorded gets a pass.
-/// Kills already recorded from damage are re-checked once a lockout could
-/// improve them? No: a recorded list is left alone until the next raid pass
-/// changes it — `/endraid` and this loop both run [`record_kills`], and the
-/// ledger only takes a list that differs.
-pub async fn record_missing_kills(
+/// Every ended raid of the last month gets a pass, recorded or not: a
+/// lockout notice that arrived late, a reporter's data that Prometheus had
+/// not ingested at `/endraid`, or a better table entry all improve the
+/// list, and the ledger takes only a list that differs (NothingToRecord
+/// otherwise), so this is two Prometheus queries per raid per half hour and
+/// no events.
+pub async fn record_recent_kills(
     driver: &crate::driver::DriverHandle,
     ledger_guild: u64,
     query_url: &str,
@@ -346,9 +374,7 @@ pub async fn record_missing_kills(
                     g.raids
                         .iter()
                         .filter(|(_, r)| {
-                            !r.active
-                                && r.kills.is_empty()
-                                && r.ended_ms.is_some_and(|e| now_ms - e < KILL_LOOKBACK_MS)
+                            !r.active && r.ended_ms.is_some_and(|e| now_ms - e < KILL_LOOKBACK_MS)
                         })
                         .map(|(id, r)| (id.clone(), r.date_ms, r.ended_ms.unwrap_or(r.date_ms)))
                         .collect()
@@ -586,10 +612,28 @@ mod tests {
             1,
             "a target that never took damage is not a row"
         );
-        assert_eq!(rows[0].target, "#Vulak`Aerr");
+        assert_eq!(
+            rows[0].target, "Vulak`Aerr",
+            "the instance marker is dropped"
+        );
         assert_eq!(rows[0].damage, 9578.0);
         assert_eq!(rows[0].first_seen_ms, 160_000);
         assert_eq!(rows[0].last_seen_ms, 220_000);
+        // The same boss with and without the instance marker is one row.
+        let body = json!({"data": {"result": [
+            {"metric": {"everquest_combat_target": "#Lord Inquisitor Seru"},
+             "values": [[100.0, "4000"], [160.0, "0"]]},
+            {"metric": {"everquest_combat_target": "Lord Inquisitor Seru"},
+             "values": [[100.0, "0"], [160.0, "6000"], [220.0, "1000"]]},
+        ]}});
+        let rows = parse_targets(&body);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].target, "Lord Inquisitor Seru");
+        assert_eq!(rows[0].damage, 11000.0);
+        assert_eq!(
+            (rows[0].first_seen_ms, rows[0].last_seen_ms),
+            (100_000, 220_000)
+        );
         let dir = std::env::temp_dir().join(format!("bosses-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("b.yaml");
