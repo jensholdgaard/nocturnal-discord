@@ -139,6 +139,28 @@ pub struct RosterCharacter {
     pub main: Option<MainRank>,
 }
 
+/// One boss that died on a raid, as the bot worked it out after the fact
+/// (2026-09-06): the NPC as the server names it, the shorthand the guild uses
+/// (the boss table), when, and how the bot knows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RaidKill {
+    pub target: String,
+    pub name: String,
+    pub killed_ms: i64,
+    pub evidence: KillEvidence,
+}
+
+/// How a kill was established. `Lockout` is the server's own word (the
+/// lockout notice is sent at the kill, with its timestamp); `Damage` is the
+/// inference the raid's name is built on: a boss from the table took a real
+/// share of the night's boss damage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KillEvidence {
+    Lockout,
+    Damage,
+}
+
 /// Patch to per-guild behavioural config (`/configure`). Absent = unchanged.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConfigPatch {
@@ -251,6 +273,14 @@ pub enum Event {
     /// on every log line that references the raid.
     #[serde(rename = "raid.renamed")]
     RaidRenamed { raid_id: String, name: String },
+    /// The bosses a raid killed, as established from telemetry (2026-09-06).
+    /// The whole list, replacing what was recorded before: a later pass with
+    /// better evidence (a lockout after a damage inference) rewrites it.
+    #[serde(rename = "raid.kills_recorded")]
+    RaidKillsRecorded {
+        raid_id: String,
+        kills: Vec<RaidKill>,
+    },
     #[serde(rename = "raid.imported")]
     RaidImported {
         raid_id: String,
@@ -394,6 +424,7 @@ impl Event {
             Event::RaidEnded { .. } => "raid.ended",
             Event::RaidMerged { .. } => "raid.merged",
             Event::RaidRenamed { .. } => "raid.renamed",
+            Event::RaidKillsRecorded { .. } => "raid.kills_recorded",
             Event::RaidImported { .. } => "raid.imported",
             Event::AuctionOpened { .. } => "auction.opened",
             Event::BidPlaced { .. } => "auction.bid_placed",

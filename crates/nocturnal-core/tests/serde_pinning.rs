@@ -80,6 +80,15 @@ fn samples() -> Vec<Event> {
             raid_id: "r".into(),
             name: "Vulak, Cursed and Ringwar".into(),
         },
+        Event::RaidKillsRecorded {
+            raid_id: "r".into(),
+            kills: vec![nocturnal_core::RaidKill {
+                target: "Vulak`Aerr".into(),
+                name: "Vulak".into(),
+                killed_ms: 1_700_000_000_000,
+                evidence: nocturnal_core::KillEvidence::Lockout,
+            }],
+        },
         Event::RaidImported {
             raid_id: "r0".into(),
             name: "Old".into(),
@@ -182,6 +191,7 @@ const PINNED_KINDS: &[&str] = &[
     "raid.ended",
     "raid.merged",
     "raid.renamed",
+    "raid.kills_recorded",
     "raid.imported",
     "auction.opened",
     "auction.bid_placed",

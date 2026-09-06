@@ -17,6 +17,7 @@ fn raid(name: &str, start: i64, end: i64) -> Raid {
         event_id: None,
         entries: Vec::new(),
         ended_ms: Some(end),
+        kills: Vec::new(),
     }
 }
 

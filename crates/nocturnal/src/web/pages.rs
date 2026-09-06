@@ -57,6 +57,7 @@ fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: boo
                     a class="tab" href="/me" aria-current=[(current == "me").then_some("page")] { "Me" }
                     a class="tab" href="/roster" aria-current=[(current == "roster").then_some("page")] { "Roster" }
                     a class="tab" href="/loot" aria-current=[(current == "loot").then_some("page")] { "Loot" }
+                    a class="tab" href="/kills" aria-current=[(current == "kills").then_some("page")] { "Kills" }
                     a class="tab" href="/perses/" title="The full Perses dashboards" { "Dashboards ↗" }
                     span class="who" id="who" { "…" }
                 } }
@@ -296,6 +297,13 @@ pub fn raid(data: &SiteData, id: Option<&str>, island: bool) -> String {
         }
         div class="read" {
             p class="mut" style="font-size:13px" { "Only characters running the DPS meter show up — set yours up with " code { "/dpstoken" } " in Discord." }
+        }
+        @if !r.kills.is_empty() {
+            div class="read" {
+                h2 { "What died" }
+                p { @for (i, k) in r.kills.iter().enumerate() { @if i > 0 { " · " } b { (k.name) } " " span class="mut" { (hm(k.killed_ms)) @if k.evidence == "damage" { "~" } } } }
+                p class="mut" style="font-size:13px" { "From the meters and the server's lockout notices; a time with ~ is when the boss last took damage, not the kill itself. Bosses only — the table officers keep." }
+            }
         }
         div class="columns" {
             div class="col" {
@@ -695,6 +703,30 @@ pub fn loot(data: &SiteData) -> String {
         (discord_box("Disputing a line? Officers use /searchlogs"))
     };
     layout_full("Loot", "loot", body, false, true)
+}
+
+/// The kill board: every boss the ledger knows a kill for, most kills first.
+pub fn kills(data: &SiteData) -> String {
+    let total: usize = data.kill_board.iter().map(|r| r.kills).sum();
+    let body = html! {
+        div class="eyebrow" { "The kill board" }
+        h1 { "Kills" }
+        p class="lede" { (total) " kills of " (data.kill_board.len()) " bosses, from the raids the bot has recorded. Counted from the DPS meters and the server's lockout notices at " code { "/endraid" } " — bosses from the officers' table only, never trash." }
+        @if data.kill_board.is_empty() { p class="empty" { "No kill recorded yet. The first raid ended with the meters running will start the board." } } @else {
+            div class="tablewrap" { table {
+                thead { tr { th { "Boss" } th { "As we call it" } th class="num" { "Kills" } th { "First" } th { "Last" } } }
+                tbody { @for r in &data.kill_board { tr {
+                    td { (r.target) }
+                    td { (r.name) }
+                    td class="num brassx" { (r.kills) }
+                    td class="mut" { (day(r.first_ms)) }
+                    td class="mut" { a href={ "/raid/" (enc(&r.last_raid)) } { (day(r.last_ms)) } }
+                } } }
+            } }
+        }
+        (discord_box("A boss missing from the table? Officers edit raid-bosses.yaml"))
+    };
+    layout_full("Kills", "kills", body, false, true)
 }
 
 pub fn item(data: &SiteData, name: &str) -> String {

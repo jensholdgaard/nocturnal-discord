@@ -195,6 +195,7 @@ mod tests {
             tick_no: entries.len() as u32,
             event_id: None,
             ended_ms: None,
+            kills: Vec::new(),
             entries: entries
                 .into_iter()
                 .map(|players| AttendanceEntry {

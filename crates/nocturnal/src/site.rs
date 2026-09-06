@@ -22,6 +22,28 @@ pub struct LootView {
     pub cost: i64,
 }
 
+/// A boss that died on a raid night, from the ledger's kill record.
+#[derive(Debug, Clone, Serialize)]
+pub struct KillView {
+    pub target: String,
+    pub name: String,
+    pub killed_ms: i64,
+    /// `lockout` = the server's own timestamp; `damage` = inferred from the meters.
+    pub evidence: String,
+}
+
+/// One row of the kill board: a boss, how many times, when last.
+#[derive(Debug, Clone, Serialize)]
+pub struct KillBoardRow {
+    pub target: String,
+    pub name: String,
+    pub kills: usize,
+    pub first_ms: i64,
+    pub last_ms: i64,
+    /// The raid the last kill was on, for the link.
+    pub last_raid: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RaidView {
     pub id: String,
@@ -42,6 +64,8 @@ pub struct RaidView {
     /// Roster characters of everyone who attended, lowercased.
     pub attendee_characters: Vec<String>,
     pub loot: Vec<LootView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kills: Vec<KillView>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -121,6 +145,9 @@ pub struct SiteData {
     pub profiles: BTreeMap<String, Profile>,
     /// Keyed by item id, for the gear pages.
     pub gear_items: BTreeMap<String, ItemSummary>,
+    /// Every boss the ledger has a kill for, most kills first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kill_board: Vec<KillBoardRow>,
 }
 
 /// One squished line of a member's ledger: a raid's ticks as one entry
@@ -255,6 +282,21 @@ impl SiteData {
                     }
                 }
                 loot.sort_by_key(|l| l.ts_ms);
+                let mut kills: Vec<KillView> = group
+                    .iter()
+                    .flat_map(|(_, r)| r.kills.iter())
+                    .map(|k| KillView {
+                        target: k.target.clone(),
+                        name: k.name.clone(),
+                        killed_ms: k.killed_ms,
+                        evidence: match k.evidence {
+                            nocturnal_core::KillEvidence::Lockout => "lockout",
+                            nocturnal_core::KillEvidence::Damage => "damage",
+                        }
+                        .to_owned(),
+                    })
+                    .collect();
+                kills.sort_by_key(|k| k.killed_ms);
                 let mut entries: Vec<&nocturnal_core::state::AttendanceEntry> =
                     group.iter().flat_map(|(_, r)| r.entries.iter()).collect();
                 entries.sort_by_key(|e| e.ts_ms);
@@ -307,9 +349,36 @@ impl SiteData {
                         .flat_map(|cs| cs.values().map(|c| c.name.to_lowercase()))
                         .collect(),
                     loot,
+                    kills,
                 }
             })
             .collect();
+
+        // The kill board is over every raid in the ledger, not the eight
+        // the pages show: a count is only worth something over the history.
+        let mut board: BTreeMap<String, KillBoardRow> = BTreeMap::new();
+        for (rid, r) in &g.raids {
+            for k in &r.kills {
+                let row = board
+                    .entry(k.target.to_lowercase())
+                    .or_insert_with(|| KillBoardRow {
+                        target: k.target.clone(),
+                        name: k.name.clone(),
+                        kills: 0,
+                        first_ms: k.killed_ms,
+                        last_ms: k.killed_ms,
+                        last_raid: rid.clone(),
+                    });
+                row.kills += 1;
+                row.first_ms = row.first_ms.min(k.killed_ms);
+                if k.killed_ms >= row.last_ms {
+                    row.last_ms = k.killed_ms;
+                    row.last_raid = rid.clone();
+                }
+            }
+        }
+        let mut kill_board: Vec<KillBoardRow> = board.into_values().collect();
+        kill_board.sort_by(|a, b| b.kills.cmp(&a.kills).then(b.last_ms.cmp(&a.last_ms)));
 
         let mut members_out = BTreeMap::new();
         for (id, p) in g.raiding_players(now_ms) {
@@ -391,6 +460,7 @@ impl SiteData {
             items,
             profiles: BTreeMap::new(),
             gear_items: BTreeMap::new(),
+            kill_board,
         }
     }
 }

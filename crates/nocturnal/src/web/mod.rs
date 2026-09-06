@@ -71,6 +71,7 @@ pub fn respond(path: &str, site: &SiteHandle, assets_dir: Option<&Path>) -> Resp
             | ("me", 1)
             | ("roster", 1)
             | ("loot", 1)
+            | ("kills", 1)
             | ("raid", 2)
             | ("member", 2)
             | ("who", 2)
@@ -93,6 +94,7 @@ pub fn respond(path: &str, site: &SiteHandle, assets_dir: Option<&Path>) -> Resp
         ("char", Some(name)) => pages::character(&data, name),
         ("roster", None) => pages::roster(&data),
         ("loot", None) => pages::loot(&data),
+        ("kills", None) => pages::kills(&data),
         ("item", Some(name)) => pages::item(&data, name),
         _ => return Response::not_found(),
     };
@@ -157,6 +159,20 @@ mod tests {
                 winner: "Shaku".into(),
                 cost: 18,
             }],
+            kills: vec![crate::site::KillView {
+                target: "Vulak`Aerr".into(),
+                name: "Vulak".into(),
+                killed_ms: 1_787_856_000_000,
+                evidence: "lockout".into(),
+            }],
+        });
+        data.kill_board.push(crate::site::KillBoardRow {
+            target: "Vulak`Aerr".into(),
+            name: "Vulak".into(),
+            kills: 3,
+            first_ms: 1_786_000_000_000,
+            last_ms: 1_787_856_000_000,
+            last_raid: "r1".into(),
         });
         data.members.insert(
             "bisben_".into(),
@@ -208,6 +224,7 @@ mod tests {
             ("/who/Shaku", "Asberdies"),
             ("/roster", "Roster"),
             ("/loot", "Wistful Tunic"),
+            ("/kills", "kill board"),
             ("/item/Wistful%20Tunic%20of%20the%20Void", "AC: 32"),
             ("/me", "whoami"),
         ] {

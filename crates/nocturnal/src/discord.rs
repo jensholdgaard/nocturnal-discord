@@ -866,6 +866,14 @@ pub async fn run(
                                     path,
                                 )
                                 .await;
+                                crate::raid_names::record_missing_kills(
+                                    &driver,
+                                    ledger_guild,
+                                    url,
+                                    path,
+                                    chrono_now_ms(),
+                                )
+                                .await;
                             }
                             crate::roster_page::rematerialize(
                                 http.as_ref(),
@@ -1188,6 +1196,7 @@ pub fn rejection_text(e: &ExecError) -> String {
     match rejection {
         R::SameRaid => ":no_entry: That is the same raid on both sides.".to_owned(),
         R::EmptyName => ":no_entry: A raid needs a name.".to_owned(),
+        R::NothingToRecord => "Nothing new to record.".to_owned(),
         R::RaidStillActive { name } => {
             format!(":no_entry: **{name}** is still running — `/endraid` it first.")
         }
@@ -1919,6 +1928,48 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
         })
         .await;
     ctx.say(format!("Raid {raid_name} ended")).await?;
+    // What the raid killed goes into the ledger from telemetry: the bosses
+    // from the table that took real damage, timed by the server's lockout
+    // notice where a reporter got one. Best-effort; the half-hourly pass
+    // retries a night Prometheus missed.
+    if let (Some(url), Some(path)) = (
+        ctx.data().prometheus_query_url.as_deref(),
+        ctx.data().raid_bosses_path.as_deref(),
+    ) {
+        let rid2 = raid_id.clone();
+        let window = ctx
+            .data()
+            .driver
+            .query(move |l| {
+                let g = l.state().guild(ledger_guild)?;
+                let r = g.raids.get(&rid2)?;
+                Some((r.date_ms, r.ended_ms.unwrap_or(r.date_ms)))
+            })
+            .await;
+        if let Some((start_ms, end_ms)) = window {
+            let bosses = crate::raid_names::load_bosses(path);
+            if let Some(kills) = crate::raid_names::record_kills(
+                &ctx.data().driver,
+                ledger_guild,
+                &raid_id,
+                start_ms,
+                end_ms,
+                url,
+                &bosses,
+            )
+            .await
+            {
+                let mut names: Vec<&str> = Vec::new();
+                for k in &kills {
+                    if !names.contains(&k.name.as_str()) {
+                        names.push(&k.name);
+                    }
+                }
+                ctx.say(format!("Killed tonight: **{}**.", names.join(", ")))
+                    .await?;
+            }
+        }
+    }
     // An unnamed raid names itself from what it fought: bosses in the table
     // only, so trash can never make the name. Best-effort; /renameraid
     // overrides.

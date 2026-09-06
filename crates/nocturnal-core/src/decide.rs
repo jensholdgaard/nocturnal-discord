@@ -191,6 +191,24 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
+        Command::RecordRaidKills { raid_id, kills } => {
+            let raid = g.raids.get(raid_id).ok_or(Rejection::RaidNotFound)?;
+            if kills.is_empty() || kills.iter().any(|k| k.target.trim().is_empty()) {
+                return Err(Rejection::EmptyName);
+            }
+            // The pass runs at every boot and every half hour; only a change
+            // is an event, or the log would fill with the same list.
+            if raid.kills == *kills {
+                return Err(Rejection::NothingToRecord);
+            }
+            let mut kills = kills.clone();
+            kills.sort_by_key(|k| k.killed_ms);
+            Ok(vec![Event::RaidKillsRecorded {
+                raid_id: raid_id.clone(),
+                kills,
+            }])
+        }
+
         Command::RenameRaid { raid_id, name } => {
             if name.trim().is_empty() {
                 return Err(Rejection::EmptyName);

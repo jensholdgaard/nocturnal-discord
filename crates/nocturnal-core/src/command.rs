@@ -65,6 +65,12 @@ pub enum Command {
     /// `/renameraid`: correct a raid's name after the fact (a `/startraid`
     /// without one gets a placeholder). Every log line that names the raid
     /// follows; nothing else moves.
+    /// Record what a raid killed (the whole list; replaces). From the bot's
+    /// telemetry pass, never typed.
+    RecordRaidKills {
+        raid_id: String,
+        kills: Vec<crate::event::RaidKill>,
+    },
     RenameRaid {
         raid_id: String,
         name: String,
@@ -168,6 +174,7 @@ impl Command {
             Command::EndRaid { .. } => "end_raid",
             Command::MergeRaid { .. } => "merge_raid",
             Command::RenameRaid { .. } => "rename_raid",
+            Command::RecordRaidKills { .. } => "record_raid_kills",
             Command::OpenAuction { .. } => "open_auction",
             Command::PlaceBid { .. } => "place_bid",
             Command::RetractBid { .. } => "retract_bid",

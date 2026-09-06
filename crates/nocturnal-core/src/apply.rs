@@ -85,6 +85,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     event_id: event_id.clone(),
                     entries: Vec::new(),
                     ended_ms: None,
+                    kills: Vec::new(),
                 },
             );
             g.active_raid = Some(raid_id.clone());
@@ -131,6 +132,17 @@ pub fn apply(state: &mut State, env: &Envelope) {
             dst.entries.extend(src.entries);
             dst.entries.sort_by_key(|e| e.ts_ms); // stable: same-ts order kept
             dst.date_ms = dst.date_ms.min(src.date_ms);
+            // A kill recorded on the false start belongs to the night.
+            for k in src.kills {
+                if !dst
+                    .kills
+                    .iter()
+                    .any(|d| d.target == k.target && d.killed_ms == k.killed_ms)
+                {
+                    dst.kills.push(k);
+                }
+            }
+            dst.kills.sort_by_key(|k| k.killed_ms);
             let re = crate::event::RaidRef {
                 raid_id: into.clone(),
                 name: dst.name.clone(),
@@ -144,6 +156,12 @@ pub fn apply(state: &mut State, env: &Envelope) {
             }
             if g.active_raid.as_deref() == Some(from) {
                 g.active_raid = None;
+            }
+        }
+
+        Event::RaidKillsRecorded { raid_id, kills } => {
+            if let Some(r) = g.raids.get_mut(raid_id) {
+                r.kills = kills.clone();
             }
         }
 
@@ -182,6 +200,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     active: false,
                     tick_no: entries.len() as u32,
                     ended_ms: None,
+                    kills: Vec::new(),
                     event_id: event_id.clone(),
                     entries: entries
                         .iter()

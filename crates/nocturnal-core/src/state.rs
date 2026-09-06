@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::event::{
-    ConfigPatch, Flavor, GuildId, Item, MainRank, PlayerId, RaidRef, RosterCharacter, Secret,
+    ConfigPatch, Flavor, GuildId, Item, MainRank, PlayerId, RaidKill, RaidRef, RosterCharacter,
+    Secret,
 };
 
 /// One line of a player's history (mirrors the legacy log shape).
@@ -52,6 +53,9 @@ pub struct Raid {
     /// window is start-to-end, not first-tick-to-last-tick-plus-a-guess.
     /// `None` for imported raids and while active.
     pub ended_ms: Option<i64>,
+    /// What died, as the bot established after the fact; empty until the
+    /// telemetry pass has run (or found nothing).
+    pub kills: Vec<RaidKill>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
