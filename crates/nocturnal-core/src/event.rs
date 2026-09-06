@@ -150,13 +150,17 @@ pub struct RaidKill {
     pub evidence: KillEvidence,
 }
 
-/// How a kill was established. `Lockout` is the server's own word (the
-/// lockout notice is sent at the kill, with its timestamp); `Damage` is the
-/// inference the raid's name is built on: a boss from the table took a real
-/// share of the night's boss damage.
+/// How a kill was established, best first. `Death` is the server's death
+/// packet for that spawn id, seen by every meter in the zone (2026-09-06,
+/// NewZeal 56010a4+): exact, and one per individual, so a boss killed twice
+/// in a night is two. `Lockout` is the server's lockout notice at the kill,
+/// with its timestamp, but only the raiders who earned one receive it.
+/// `Damage` is the inference the raid's name is built on: a boss from the
+/// table took a real share of the night's boss damage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KillEvidence {
+    Death,
     Lockout,
     Damage,
 }

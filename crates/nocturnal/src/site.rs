@@ -28,7 +28,8 @@ pub struct KillView {
     pub target: String,
     pub name: String,
     pub killed_ms: i64,
-    /// `lockout` = the server's own timestamp; `damage` = inferred from the meters.
+    /// `death` = the server's death packet for that spawn; `lockout` = the
+    /// lockout notice's timestamp; `damage` = inferred from the meters.
     pub evidence: String,
 }
 
@@ -290,6 +291,7 @@ impl SiteData {
                         name: k.name.clone(),
                         killed_ms: k.killed_ms,
                         evidence: match k.evidence {
+                            nocturnal_core::KillEvidence::Death => "death",
                             nocturnal_core::KillEvidence::Lockout => "lockout",
                             nocturnal_core::KillEvidence::Damage => "damage",
                         }

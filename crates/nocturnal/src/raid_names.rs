@@ -106,28 +106,47 @@ pub fn pick(rows: &[TargetDamage], bosses: &BTreeMap<String, String>) -> Option<
 pub fn kills(
     rows: &[TargetDamage],
     lockouts: &BTreeMap<String, i64>,
+    deaths: &BTreeMap<String, Vec<i64>>,
     bosses: &BTreeMap<String, String>,
 ) -> Vec<nocturnal_core::RaidKill> {
-    let mut out: Vec<nocturnal_core::RaidKill> = boss_hits(rows, bosses)
-        .into_iter()
-        .map(|h| {
-            let clean = h.target.trim().trim_start_matches('#').trim();
-            match lockouts.get(&normalize(clean)) {
-                Some(kill_ms) => nocturnal_core::RaidKill {
-                    target: clean.to_owned(),
-                    name: h.short.to_owned(),
-                    killed_ms: *kill_ms,
-                    evidence: nocturnal_core::KillEvidence::Lockout,
-                },
-                None => nocturnal_core::RaidKill {
-                    target: clean.to_owned(),
-                    name: h.short.to_owned(),
-                    killed_ms: h.last_seen_ms,
-                    evidence: nocturnal_core::KillEvidence::Damage,
-                },
-            }
+    // The death packet is the server saying "this spawn died": every one of
+    // them is a kill, whether or not any meter saw the damage. A table boss
+    // with deaths takes nothing from the other two sources.
+    let mut out: Vec<nocturnal_core::RaidKill> = deaths
+        .iter()
+        .filter_map(|(target, times)| bosses.get(target).map(|short| (target, short, times)))
+        .flat_map(|(target, short, times)| {
+            times.iter().map(move |t| nocturnal_core::RaidKill {
+                target: target.clone(),
+                name: short.clone(),
+                killed_ms: *t,
+                evidence: nocturnal_core::KillEvidence::Death,
+            })
         })
         .collect();
+    let dead = |name: &str| deaths.contains_key(&normalize(name));
+    out.extend(
+        boss_hits(rows, bosses)
+            .into_iter()
+            .filter(|h| !dead(h.target))
+            .map(|h| {
+                let clean = h.target.trim().trim_start_matches('#').trim();
+                match lockouts.get(&normalize(clean)) {
+                    Some(kill_ms) => nocturnal_core::RaidKill {
+                        target: clean.to_owned(),
+                        name: h.short.to_owned(),
+                        killed_ms: *kill_ms,
+                        evidence: nocturnal_core::KillEvidence::Lockout,
+                    },
+                    None => nocturnal_core::RaidKill {
+                        target: clean.to_owned(),
+                        name: h.short.to_owned(),
+                        killed_ms: h.last_seen_ms,
+                        evidence: nocturnal_core::KillEvidence::Damage,
+                    },
+                }
+            }),
+    );
     // A lockout notice for a boss nobody's meter saw take damage (every
     // reporter was elsewhere) is still a kill.
     for (target, kill_ms) in lockouts {
@@ -144,6 +163,111 @@ pub fn kills(
         }
     }
     out.sort_by_key(|k| k.killed_ms);
+    out
+}
+
+/// Deaths from the death packet, as the meters reported them into Ourios,
+/// in `[start_ms, end_ms]`: by normalized target, the kill times, one per
+/// individual spawn. Several meters in the zone report the same death, so
+/// a spawn id seen within a minute of itself is one kill. Ourios is asked
+/// for the raid's window exactly (RFC 3339 bounds); failure is empty.
+pub async fn deaths_in_window(
+    query_url: &str,
+    tenant: &str,
+    start_ms: i64,
+    end_ms: i64,
+) -> BTreeMap<String, Vec<i64>> {
+    let (Some(from), Some(to)) = (rfc3339(start_ms), rfc3339(end_ms + 60_000)) else {
+        return BTreeMap::new();
+    };
+    let query =
+        format!("event_name == \"everquest.combat.death\" | range({from}, {to}) | limit 20000");
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return BTreeMap::new(),
+    };
+    let resp = client
+        .post(query_url)
+        .header("content-type", "application/json")
+        .header("x-ourios-tenant", tenant)
+        .json(&serde_json::json!({ "query": query }))
+        .send()
+        .await;
+    let body: serde_json::Value = match resp {
+        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+        Ok(r) => {
+            tracing::warn!(status = %r.status(), "ourios refused the death query");
+            return BTreeMap::new();
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "ourios unreachable for deaths");
+            return BTreeMap::new();
+        }
+    };
+    let records = body["records"].as_array().cloned().unwrap_or_default();
+    parse_deaths(&records, start_ms, end_ms)
+}
+
+/// An RFC 3339 instant at second precision, UTC, without a date crate: the
+/// civil-from-days arithmetic (Hinnant), pinned by a test against a known
+/// instant. `None` before the epoch.
+fn rfc3339(ms: i64) -> Option<String> {
+    if ms < 0 {
+        return None;
+    }
+    let secs = ms / 1000;
+    let days = secs / 86_400;
+    let rem = secs % 86_400;
+    let (h, mi, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    Some(format!("{y:04}-{m:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z"))
+}
+
+/// The reduce half of [`deaths_in_window`], pinned by a test: records
+/// outside the window are dropped, and the same spawn id reported by several
+/// meters within a minute is one death.
+pub fn parse_deaths(
+    records: &[serde_json::Value],
+    start_ms: i64,
+    end_ms: i64,
+) -> BTreeMap<String, Vec<i64>> {
+    // (target, spawn id) -> kill times, deduped by the minute
+    let mut seen: BTreeMap<(String, String), Vec<i64>> = BTreeMap::new();
+    for r in records {
+        let attrs = &r["attributes"];
+        let Some(target) = crate::profiles::string_attr(attrs, "everquest.combat.target") else {
+            continue;
+        };
+        let spawn = crate::profiles::string_attr(attrs, "everquest.spawn.id").unwrap_or_default();
+        let ms = crate::profiles::nanos(&r["time_unix_nano"]) / 1_000_000;
+        if ms < start_ms || ms > end_ms + 60_000 {
+            continue;
+        }
+        let times = seen.entry((normalize(&target), spawn)).or_default();
+        if times.iter().any(|t| (t - ms).abs() < 60_000) {
+            continue;
+        }
+        times.push(ms);
+    }
+    let mut out: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+    for ((target, _), times) in seen {
+        out.entry(target).or_default().extend(times);
+    }
+    for times in out.values_mut() {
+        times.sort_unstable();
+    }
     out
 }
 
@@ -310,6 +434,7 @@ fn parse_target_rows(body: &serde_json::Value) -> Vec<TargetDamage> {
 /// Work out and record what one raid killed. Returns the kills recorded, or
 /// `None` when nothing could be established or nothing changed. Best-effort
 /// like naming: a Prometheus outage means the next pass tries again.
+#[allow(clippy::too_many_arguments)] // one per source of truth: ledger, the two stores, the table
 pub async fn record_kills(
     driver: &crate::driver::DriverHandle,
     ledger_guild: u64,
@@ -317,11 +442,16 @@ pub async fn record_kills(
     start_ms: i64,
     end_ms: i64,
     query_url: &str,
+    ourios: Option<&(String, String)>,
     bosses: &BTreeMap<String, String>,
 ) -> Option<Vec<nocturnal_core::RaidKill>> {
     let rows = targets_in_window(query_url, start_ms, end_ms).await;
     let lockouts = lockouts_in_window(query_url, start_ms, end_ms).await;
-    let list = kills(&rows, &lockouts, bosses);
+    let deaths = match ourios {
+        Some((url, tenant)) => deaths_in_window(url, tenant, start_ms, end_ms).await,
+        None => BTreeMap::new(),
+    };
+    let list = kills(&rows, &lockouts, &deaths, bosses);
     if list.is_empty() {
         return None;
     }
@@ -363,6 +493,7 @@ pub async fn record_recent_kills(
     driver: &crate::driver::DriverHandle,
     ledger_guild: u64,
     query_url: &str,
+    ourios: Option<&(String, String)>,
     bosses_path: &Path,
     now_ms: i64,
 ) -> usize {
@@ -395,6 +526,7 @@ pub async fn record_recent_kills(
             start_ms,
             end_ms,
             query_url,
+            ourios,
             &bosses,
         )
         .await
@@ -513,7 +645,7 @@ mod tests {
         ];
         let mut lockouts = BTreeMap::new();
         lockouts.insert(normalize("Vulak`Aerr"), 1_500_000i64);
-        let k = kills(&rows, &lockouts, &table());
+        let k = kills(&rows, &lockouts, &BTreeMap::new(), &table());
         let got: Vec<(&str, &str, i64, KillEvidence)> = k
             .iter()
             .map(|k| (k.target.as_str(), k.name.as_str(), k.killed_ms, k.evidence))
@@ -539,11 +671,82 @@ mod tests {
         // A lockout for a boss no meter saw is still a kill; trash never is.
         lockouts.insert(normalize("Thall Va Kelun"), 700_000);
         lockouts.insert(normalize("a cerulean warden"), 800_000);
-        let k = kills(&rows, &lockouts, &table());
+        let k = kills(&rows, &lockouts, &BTreeMap::new(), &table());
         assert!(k
             .iter()
             .any(|k| k.target == "thall va kelun" && k.name == "VT"));
         assert!(!k.iter().any(|k| k.target.contains("warden")));
+    }
+
+    /// The death packet beats both other sources, and counts individuals: the
+    /// Cursed died twice tonight, and the second one is a kill of its own.
+    #[test]
+    fn deaths_win_and_count_each_spawn() {
+        use nocturnal_core::KillEvidence;
+        let rows = vec![
+            at("#Vyzh`dra the Cursed", 60118.0, 2_000),
+            at("#Vulak`Aerr", 9578.0, 1_000),
+        ];
+        let mut lockouts = BTreeMap::new();
+        lockouts.insert(normalize("Vyzh`dra the Cursed"), 900_000i64);
+        let mut deaths = BTreeMap::new();
+        deaths.insert(
+            normalize("Vyzh`dra the Cursed"),
+            vec![650_000i64, 3_000_000],
+        );
+        deaths.insert(normalize("a cerulean warden"), vec![700_000]);
+        let k = kills(&rows, &lockouts, &deaths, &table());
+        let got: Vec<(&str, i64, KillEvidence)> = k
+            .iter()
+            .map(|k| (k.name.as_str(), k.killed_ms, k.evidence))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Vulak", 601_000, KillEvidence::Damage),
+                ("Cursed", 650_000, KillEvidence::Death),
+                ("Cursed", 3_000_000, KillEvidence::Death),
+            ]
+        );
+    }
+
+    /// Several meters report one death; one spawn id within a minute is one.
+    #[test]
+    fn death_records_dedupe_by_spawn_and_stay_in_the_window() {
+        let rec = |t: i64, target: &str, spawn: &str| {
+            json!({
+                "time_unix_nano": t * 1_000_000,
+                "attributes": [
+                    {"key": "everquest.combat.target", "value": {"stringValue": target}},
+                    {"key": "everquest.spawn.id", "value": {"stringValue": spawn}},
+                ]
+            })
+        };
+        let records = vec![
+            rec(500_000, "Vulak`Aerr", "40211"),
+            rec(500_400, "Vulak`Aerr", "40211"), // another reporter, same death
+            rec(4_000_000, "Vulak`Aerr", "40999"), // a respawn, much later
+            rec(50_000, "Vulak`Aerr", "1"),      // before the raid
+            rec(600_000, "a cerulean warden", "7"),
+        ];
+        let d = parse_deaths(&records, 100_000, 5_000_000);
+        assert_eq!(d.get("vulak`aerr"), Some(&vec![500_000, 4_000_000]));
+        assert_eq!(d.get("a cerulean warden"), Some(&vec![600_000]));
+    }
+
+    #[test]
+    fn rfc3339_matches_a_known_instant() {
+        // 2026-09-05T22:26:53Z: the instant Prometheus logged its tracer install.
+        assert_eq!(
+            rfc3339(1_788_647_213_000).as_deref(),
+            Some("2026-09-05T22:26:53Z")
+        );
+        assert_eq!(rfc3339(0).as_deref(), Some("1970-01-01T00:00:00Z"));
+        assert_eq!(
+            rfc3339(951_782_400_000).as_deref(),
+            Some("2000-02-29T00:00:00Z")
+        );
+        assert!(rfc3339(-1).is_none());
     }
 
     #[test]

@@ -93,7 +93,7 @@ struct Record {
 }
 
 /// One string attribute out of Ourios' `[{key, value: {stringValue}}]` list.
-fn string_attr(attrs: &serde_json::Value, key: &str) -> Option<String> {
+pub(crate) fn string_attr(attrs: &serde_json::Value, key: &str) -> Option<String> {
     attrs.as_array()?.iter().find_map(|a| {
         (a["key"].as_str() == Some(key)).then(|| {
             a["value"]["stringValue"]
@@ -117,7 +117,7 @@ fn body_text(v: &serde_json::Value) -> Option<String> {
     }
 }
 
-fn nanos(v: &serde_json::Value) -> i64 {
+pub(crate) fn nanos(v: &serde_json::Value) -> i64 {
     match v {
         serde_json::Value::Number(n) => n.as_i64().unwrap_or(0),
         serde_json::Value::String(s) => s.parse().unwrap_or(0),

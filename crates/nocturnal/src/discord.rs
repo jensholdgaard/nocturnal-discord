@@ -870,6 +870,7 @@ pub async fn run(
                                     &driver,
                                     ledger_guild,
                                     url,
+                                    ourios.as_ref(),
                                     path,
                                     chrono_now_ms(),
                                 )
@@ -1955,6 +1956,7 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
                 start_ms,
                 end_ms,
                 url,
+                ctx.data().ourios.as_ref(),
                 &bosses,
             )
             .await

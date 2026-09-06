@@ -334,9 +334,10 @@ at the box-local Prometheus. Old placeholder names (`<t:…:D>`) count as
 unnamed. `/renameraid` overrides.
 
 **Kills (2026-09-06).** The same pass records what the raid killed as a
-`raid.kills_recorded` event: every table boss that made the name, timed by the
-server's lockout notice when a raider's Zeal reported one (the
-`everquest.raid.kill.timestamp` gauge, exact) and otherwise by the last damage
-it took. `/endraid` says "Killed tonight: Vulak, Cursed, Ring War"; the raid
+`raid.kills_recorded` event. Best evidence first: the server's death packet as
+the meters report it into Ourios (`everquest.combat.death`, NewZeal 56010a4+:
+exact, per spawn, so a boss killed twice is two kills); else the lockout
+notice's timestamp (the `everquest.raid.kill.timestamp` gauge); else a table
+boss that took a real share of the night's boss damage, timed by its last hit. `/endraid` says "Killed tonight: Vulak, Cursed, Ring War"; the raid
 page shows "What died"; `/kills` on the site is the all-time board. A night
 Prometheus missed is retried every half hour for 30 days. Nothing to type.
