@@ -247,6 +247,111 @@ spec:
                   name: ourios-vm
                 query: severity >= warn
 
+    head_cpu:
+      kind: Panel
+      spec:
+        display:
+          name: CPU busy
+          description: >-
+            Share of all cores not idle, averaged over a minute. Yellow at 70 %, red at 90 %: the CpuSaturated alert fires after 15 minutes above red.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+            yAxis:
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              min: 0
+              max: 1
+            thresholds:
+              mode: absolute
+              steps:
+              - value: 0.7
+                color: '#e6a700'
+                name: warning
+              - value: 0.9
+                color: '#d9534f'
+                name: critical
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: 1 - avg(system_cpu_utilization_ratio{state="idle"})
+                seriesNameFormat: busy
+    head_mem:
+      kind: Panel
+      spec:
+        display:
+          name: Memory used
+          description: >-
+            Used memory as the kernel counts it (cache and buffers excluded). Yellow at 80 %, red at 90 %: MemoryPressure fires after 15 minutes above red.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+            yAxis:
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              min: 0
+              max: 1
+            thresholds:
+              mode: absolute
+              steps:
+              - value: 0.8
+                color: '#e6a700'
+                name: warning
+              - value: 0.9
+                color: '#d9534f'
+                name: critical
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: system_memory_utilization_ratio{state="used"}
+                seriesNameFormat: used
+    head_disk:
+      kind: Panel
+      spec:
+        display:
+          name: Disk used (/)
+          description: >-
+            Root filesystem. Yellow at 85 % (DiskFilling), red at 95 % (DiskAlmostFull); Prometheus, Jaeger and Ourios all grow here.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+            yAxis:
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              min: 0
+              max: 1
+            thresholds:
+              mode: absolute
+              steps:
+              - value: 0.85
+                color: '#e6a700'
+                name: warning
+              - value: 0.95
+                color: '#d9534f'
+                name: critical
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max(system_filesystem_utilization_ratio{mountpoint="/"})
+                seriesNameFormat: used
     svc_journal_errors:
       kind: Panel
       spec:
@@ -426,6 +531,31 @@ spec:
         height: 7
         content:
           $ref: '#/spec/panels/vm_collector'
+  - kind: Grid
+    spec:
+      display:
+        title: Headroom
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 8
+        height: 8
+        content:
+          $ref: '#/spec/panels/head_cpu'
+      - x: 8
+        y: 0
+        width: 8
+        height: 8
+        content:
+          $ref: '#/spec/panels/head_mem'
+      - x: 16
+        y: 0
+        width: 8
+        height: 8
+        content:
+          $ref: '#/spec/panels/head_disk'
   - kind: Grid
     spec:
       display:
