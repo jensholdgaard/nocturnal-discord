@@ -171,6 +171,105 @@ spec:
               kind: PrometheusTimeSeriesQuery
               spec:
                 query: max(process_uptime_seconds) or vector(0)
+    slo_ack:
+      kind: Panel
+      spec:
+        display:
+          name: Ack SLO (30d)
+          description: >-
+            Share of interactions acknowledged within 2 s over the last 30 days. Target 99 %;
+            Discord gives up at 3 s. From the recording rules in deploy/prometheus/nocturnal-rules.yml.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 2
+            thresholds:
+              steps:
+                - value: 0
+                  color: '#d9534f'
+                - value: 0.99
+                  color: '#5cb85c'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: (1 - nocturnal:ack_slow:increase30d / clamp_min(nocturnal:ack:increase30d, 1)) or vector(1)
+    slo_ack_budget:
+      kind: Panel
+      spec:
+        display:
+          name: Ack budget left (30d)
+          description: >-
+            How many more slow acknowledgments the 30-day window can absorb before the SLO is
+            missed. Negative means it already is.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: (floor(0.01 * nocturnal:ack:increase30d) - nocturnal:ack_slow:increase30d) or vector(0)
+    slo_command:
+      kind: Panel
+      spec:
+        display:
+          name: Command SLO (30d)
+          description: >-
+            Share of commands not failed by infrastructure over the last 30 days. Target 99.5 %.
+            A rejection (attendance, eligibility, a bid too low) is the product working and
+            does not count.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 2
+            thresholds:
+              steps:
+                - value: 0
+                  color: '#d9534f'
+                - value: 0.995
+                  color: '#5cb85c'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: (1 - nocturnal:command_failed:increase30d / clamp_min(nocturnal:command:increase30d, 1)) or vector(1)
+    slo_command_budget:
+      kind: Panel
+      spec:
+        display:
+          name: Command budget left (30d)
+          description: How many more infrastructure failures the 30-day window can absorb.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: (floor(0.005 * nocturnal:command:increase30d) - nocturnal:command_failed:increase30d) or vector(0)
     ts_latency:
       kind: Panel
       spec:
@@ -469,6 +568,37 @@ spec:
                   name: ourios
                 query: severity >= info
   layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: SLOs (30 days)
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/slo_ack'
+      - x: 6
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/slo_ack_budget'
+      - x: 12
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/slo_command'
+      - x: 18
+        y: 0
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/slo_command_budget'
   - kind: Grid
     spec:
       display:

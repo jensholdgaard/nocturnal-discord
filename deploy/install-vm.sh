@@ -31,6 +31,7 @@ echo "== copying artifacts =="
 "${SCP[@]}" deploy/nocturnal-deploy.service "root@$VM_IP:/tmp/nocturnal-deploy.service"
 "${SCP[@]}" deploy/nocturnal-deploy.timer "root@$VM_IP:/tmp/nocturnal-deploy.timer"
 "${SCP[@]}" deploy/perses/4*.yaml "root@$VM_IP:/tmp/"
+"${SCP[@]}" deploy/prometheus/nocturnal-rules.yml "root@$VM_IP:/tmp/nocturnal-rules.yml"
 tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events wal 2>/dev/null || tar -C localdata/migrated -czf /tmp/nocturnal-data.tgz events
 "${SCP[@]}" /tmp/nocturnal-data.tgz "root@$VM_IP:/tmp/nocturnal-data.tgz"
 rm -f /tmp/nocturnal-data.tgz
@@ -133,7 +134,13 @@ for f in /tmp/4*-bot-*.yaml; do
   [ -e "$f" ] || continue   # unmatched glob under `set -u` would abort the deploy
   install -m 0644 "$f" "/etc/perses/provisioning/$(basename "$f")"
 done
-rm -f /tmp/nocturnal.yaml /tmp/nocturnal.service /tmp/4*-bot-*.yaml
+# Alerting rules (routed to the bot's Discord channel by the Alertmanager that
+# everquest-observability's install-alerting.sh runs; harmless before it exists).
+if [ -d /etc/prometheus/rules ]; then
+  install -m 0644 /tmp/nocturnal-rules.yml /etc/prometheus/rules/nocturnal.yml
+  systemctl kill -s HUP prometheus 2>/dev/null || true
+fi
+rm -f /tmp/nocturnal.yaml /tmp/nocturnal.service /tmp/4*-bot-*.yaml /tmp/nocturnal-rules.yml
 
 # Pre-flight, then run.
 sudo -u nocturnal /usr/local/bin/nocturnal --config /etc/nocturnal/nocturnal.yaml --check

@@ -1,0 +1,99 @@
+# Prometheus alerting rules for the bot (2026-09-06). Installed to /etc/prometheus/rules/nocturnal.yml
+# by install-vm.sh (and by everquest-observability's install-alerting.sh when the file is beside
+# it); routed by team=bot to the bot's Discord channel. Thresholds are counts where the traffic
+# is too low for a ratio to mean anything: a raid night is a few hundred interactions.
+#
+# The two SLOs (docs/runbook.md, "Alerting and SLOs"):
+#   ack     99 % of interactions acknowledged within 2 s over 30 days (Discord gives up at 3 s)
+#   command 99.5 % of commands not failed by infrastructure over 30 days (rejections are not failures)
+groups:
+  - name: nocturnal
+    rules:
+      # ---- recording rules: the SLO numbers, cheap to chart -------------------------------
+      - record: nocturnal:ack_slow:increase30d
+        expr: (sum(increase(nocturnal_interaction_ack_duration_seconds_count[30d])) - sum(increase(nocturnal_interaction_ack_duration_seconds_bucket{le="2"}[30d]))) or vector(0)
+      - record: nocturnal:ack:increase30d
+        expr: sum(increase(nocturnal_interaction_ack_duration_seconds_count[30d])) or vector(0)
+      - record: nocturnal:command_failed:increase30d
+        expr: sum(increase(nocturnal_commands_total{nocturnal_decision_outcome="error"}[30d])) or vector(0)
+      - record: nocturnal:command:increase30d
+        expr: sum(increase(nocturnal_commands_total[30d])) or vector(0)
+
+      # ---- availability -----------------------------------------------------------------
+      - alert: NocturnalDown
+        expr: max(systemd_unit_state{systemd_unit_name="nocturnal.service", systemd_unit_active_state="active"}) == 0
+        for: 2m
+        labels: { team: bot, severity: critical }
+        annotations:
+          summary: The bot is not running
+          description: systemd reports nocturnal.service not active for 2 minutes. journalctl -u nocturnal -n 50; the deploy puller (nocturnal-deploy.timer) may be mid-rollout, but not for 2 minutes.
+
+      - alert: NocturnalWriterStalled
+        expr: (absent_over_time(nocturnal_ledger_writer_heartbeat_total[5m]) or sum(increase(nocturnal_ledger_writer_heartbeat_total[5m])) == 0) and on() max(systemd_unit_state{systemd_unit_name="nocturnal.service", systemd_unit_active_state="active"}) == 1
+        for: 3m
+        labels: { team: bot, severity: critical }
+        annotations:
+          summary: Ledger writer heartbeat stopped
+          description: The process is up but its writer thread is not beating - commands will hang or fail. This is the 2026-09-03 compaction incident's shape; readyz should be red too.
+
+      - alert: NocturnalSchedulerStalled
+        expr: sum(increase(nocturnal_scheduler_heartbeat_total[10m])) == 0 and on() max(systemd_unit_state{systemd_unit_name="nocturnal.service", systemd_unit_active_state="active"}) == 1
+        for: 5m
+        labels: { team: bot, severity: critical }
+        annotations:
+          summary: Scheduler not cycling
+          description: Auctions will not close and raids will not tick while the scheduler loop is stuck.
+
+      # ---- correctness -------------------------------------------------------------------
+      - alert: NocturnalStorageErrors
+        expr: sum(increase(nocturnal_commands_total{nocturnal_decision_outcome="error"}[10m])) > 0
+        labels: { team: bot, severity: critical }
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} command(s) failed on storage in 10 minutes"
+          description: A command that failed for infrastructure reasons, not a rejection. The bot's logs on the Platform dashboard have the error; the member saw a failure message.
+
+      - alert: NocturnalCompactionErrors
+        expr: sum(increase(nocturnal_compaction_runs_total{nocturnal_decision_outcome="error"}[1h])) > 0
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: Compaction failed
+          description: The WAL keeps growing until compaction succeeds (WAL awaiting compaction on the Platform dashboard). S3 upload is the usual suspect.
+
+      # ---- the SLOs, as budget burn ------------------------------------------------------
+      - alert: NocturnalAckSlow
+        expr: (sum(increase(nocturnal_interaction_ack_duration_seconds_count[1h])) - sum(increase(nocturnal_interaction_ack_duration_seconds_bucket{le="2"}[1h]))) >= 3
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} interactions took over 2 s to acknowledge in the last hour"
+          description: Discord fails an interaction at 3 s; these were close. Ack p95 by kind on the Platform dashboard says which command.
+
+      - alert: NocturnalAckSLOBudgetSpent
+        expr: nocturnal:ack_slow:increase30d > 0.01 * nocturnal:ack:increase30d and nocturnal:ack:increase30d > 100
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: Ack SLO missed over the last 30 days
+          description: More than 1 % of interactions in the last 30 days took over 2 s to acknowledge.
+
+      - alert: NocturnalCommandSLOBudgetSpent
+        expr: nocturnal:command_failed:increase30d > 0.005 * nocturnal:command:increase30d and nocturnal:command:increase30d > 100
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: Command SLO missed over the last 30 days
+          description: More than 0.5 % of commands in the last 30 days failed for infrastructure reasons.
+
+      # ---- capacity ----------------------------------------------------------------------
+      - alert: NocturnalDiskLow
+        expr: max(system_filesystem_usage_bytes{system_filesystem_state="free"}) < 3e9
+        for: 10m
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: "Under {{ $value | humanize1024 }}B free on the event store"
+          description: /var/lib/nocturnal shares the root filesystem; see the Infrastructure dashboard for who is growing.
+
+      - alert: NocturnalCommitSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[10m]))) > 1 and on() sum(rate(nocturnal_interaction_commit_duration_seconds_count[10m])) > 0
+        for: 10m
+        labels: { team: bot, severity: warning }
+        annotations:
+          summary: "Commit p95 at {{ $value | printf \"%.2f\" }} s"
+          description: fsync or the WAL is slow; the disk is the usual reason.

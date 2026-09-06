@@ -138,3 +138,31 @@ looked fine and `/readyz` said 200 for hours; every command failed with
   `command.*` spans with status ERROR and an `exception` event.
 - Which build: every span, metric and log carries `service.version`
   (`0.1.0+<commit>`) and `service.instance.id` (one per boot).
+
+## Alerting and SLOs
+
+Since 2026-09-06 Prometheus on the VM evaluates `deploy/prometheus/nocturnal-rules.yml`
+(installed to `/etc/prometheus/rules/nocturnal.yml` by `install-vm.sh`) and hands
+firing alerts to an Alertmanager on the box, which posts to Discord through a
+webhook — deliberately not through the bot, so "the bot is down" can be delivered
+while the bot is down. The VM's own rules and the Alertmanager config live in
+everquest-observability (`deploy/alerting/`); `team=bot` alerts go to the bot
+channel, everything else to the VM channel. The box itself going silent is caught
+by an outside heartbeat (Healthchecks.io, `eq-heartbeat.timer`), which also turns
+into an alert when a critical unit is not active.
+
+Two SLOs, judged over 30 days, with the numbers as recording rules and a row on the
+Platform dashboard:
+
+| SLO | Target | Why this number |
+|---|---|---|
+| Interactions acknowledged within 2 s | 99 % | Discord fails an interaction at 3 s; a slow ack is a bid that did not happen. |
+| Commands not failed by infrastructure | 99.5 % | A rejection is the product working; a storage or Discord failure is a broken promise. |
+
+Traffic is a few hundred interactions per raid night, so the budgets are shown as
+counts ("N more slow acks this month") rather than nines, and the alerts fire on
+counts too: three slow acks in an hour, any storage failure at all. Pages
+(`severity=critical`): `NocturnalDown`, `NocturnalWriterStalled`,
+`NocturnalSchedulerStalled`, `NocturnalStorageErrors`. Everything else is a warning
+that repeats every 6 h until resolved.
+
