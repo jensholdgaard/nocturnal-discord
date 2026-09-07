@@ -371,6 +371,34 @@ impl GuildState {
             .map(|b| b.amount)
             .sum()
     }
+
+    /// The last `limit` auctions of `item_id` that actually paid a winner —
+    /// the "what has this item gone for" history a bidder can learn from.
+    ///
+    /// Only `Finalized` auctions with at least one winner count: a running or
+    /// closed auction paid nobody, and a cancelled one paid nobody either.
+    /// `exclude` drops the auction being bid on right now (its own outcome is
+    /// not history). Auction ids are `<open-ms>`, so reverse key order is
+    /// recency of the win; newer auctions open later and win later.
+    pub fn recent_won_auctions<'a>(
+        &'a self,
+        item_id: &str,
+        exclude: Option<&str>,
+        limit: usize,
+    ) -> Vec<&'a Auction> {
+        self.auctions
+            .iter()
+            .rev()
+            .filter(|(id, a)| {
+                id.as_str() != exclude.unwrap_or_default()
+                    && a.item.id == item_id
+                    && a.status == AuctionStatus::Finalized
+                    && !a.winners.is_empty()
+            })
+            .map(|(_, a)| a)
+            .take(limit)
+            .collect()
+    }
 }
 
 /// A week of raid attendance.
@@ -416,4 +444,97 @@ pub fn same_raid(a: &Raid, b: &Raid) -> bool {
     let (sa, ea) = raid_window(a);
     let (sb, eb) = raid_window(b);
     sb <= ea + SAME_RAID_GAP_MS && sa <= eb + SAME_RAID_GAP_MS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::{Flavor, Item, Winner};
+
+    /// An auction of `item_id`, in the given state; a finalized one carries a
+    /// single winner at `amount` so results are distinguishable.
+    fn auction(item_id: &str, status: AuctionStatus, amount: i64) -> Auction {
+        Auction {
+            item: Item {
+                id: item_id.into(),
+                name: item_id.into(),
+                url: None,
+                data: None,
+                image: None,
+            },
+            flavor: Flavor::Short,
+            min_bid: 0,
+            num_items: 1,
+            min_bid_to_lock_for_main: 0,
+            over_bid_to_win_main: 0,
+            deadline_ts_ms: 0,
+            status,
+            bids: Vec::new(),
+            winners: if status == AuctionStatus::Finalized {
+                vec![Winner {
+                    player: 7,
+                    amount,
+                    for_main: true,
+                    character: None,
+                }]
+            } else {
+                Vec::new()
+            },
+            cancelled_by: None,
+            cancelled_ts_ms: None,
+        }
+    }
+
+    fn guild(auctions: &[(&str, &str, AuctionStatus, i64)]) -> GuildState {
+        let mut g = GuildState::default();
+        for (id, item, status, amount) in auctions {
+            g.auctions
+                .insert((*id).into(), auction(item, *status, *amount));
+        }
+        g
+    }
+
+    /// The item history a bidder sees: finalized auctions only, newest first
+    /// (auction ids are `<open-ms>`, so reverse key order is recency), the
+    /// running auction excluded, capped at the requested count.
+    #[test]
+    fn recent_won_auctions_sees_finalized_wins_newest_first() {
+        let g = guild(&[
+            ("au-3", "cloak", AuctionStatus::Finalized, 30),
+            ("au-2", "cloak", AuctionStatus::Finalized, 20),
+            ("au-1", "cloak", AuctionStatus::Cancelled, 10),
+            ("au-0", "cloak", AuctionStatus::Open, 0),
+            ("au-x", "staff", AuctionStatus::Finalized, 99), // different item
+        ]);
+        let won: Vec<&Auction> = g.recent_won_auctions("cloak", None, 3);
+        let amounts: Vec<i64> = won.iter().map(|a| a.winners[0].amount).collect();
+        assert_eq!(amounts, vec![30, 20], "cancelled and open paid nobody");
+    }
+
+    /// The live auction itself is not its own history.
+    #[test]
+    fn recent_won_auctions_excludes_the_calling_auction() {
+        let g = guild(&[
+            ("au-2", "cloak", AuctionStatus::Finalized, 20),
+            ("au-1", "cloak", AuctionStatus::Finalized, 10),
+        ]);
+        let won: Vec<&Auction> = g.recent_won_auctions("cloak", Some("au-2"), 3);
+        let amounts: Vec<i64> = won.iter().map(|a| a.winners[0].amount).collect();
+        assert_eq!(amounts, vec![10]);
+    }
+
+    /// The caller asks for three and the ledger has more: only the newest
+    /// three come back.
+    #[test]
+    fn recent_won_auctions_is_capped() {
+        let g = guild(&[
+            ("au-4", "cloak", AuctionStatus::Finalized, 40),
+            ("au-3", "cloak", AuctionStatus::Finalized, 30),
+            ("au-2", "cloak", AuctionStatus::Finalized, 20),
+            ("au-1", "cloak", AuctionStatus::Finalized, 10),
+        ]);
+        let won = g.recent_won_auctions("cloak", None, 3);
+        let amounts: Vec<i64> = won.iter().map(|a| a.winners[0].amount).collect();
+        assert_eq!(amounts, vec![40, 30, 20]);
+    }
 }
