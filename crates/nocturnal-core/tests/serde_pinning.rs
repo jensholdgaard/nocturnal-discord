@@ -112,6 +112,7 @@ fn samples() -> Vec<Event> {
             min_bid_to_lock_for_main: 10,
             over_bid_to_win_main: 100,
             deadline_ts_ms: 99,
+            debit_dkp: false,
         },
         Event::BidPlaced {
             auction_id: "a".into(),

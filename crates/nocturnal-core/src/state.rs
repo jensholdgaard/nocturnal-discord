@@ -84,6 +84,8 @@ pub struct Auction {
     pub min_bid_to_lock_for_main: i64,
     pub over_bid_to_win_main: i64,
     pub deadline_ts_ms: i64,
+    /// `false`: a free auction, the winners keep their DKP (2026-09-08).
+    pub debit_dkp: bool,
     pub status: AuctionStatus,
     pub bids: Vec<Bid>,
     pub winners: Vec<crate::event::Winner>,

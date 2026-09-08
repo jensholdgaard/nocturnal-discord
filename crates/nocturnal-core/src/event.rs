@@ -138,6 +138,10 @@ impl ProfileSource {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// One character on the guild roster, as the member last described it. The
 /// event carries the whole record rather than a patch, so replay never has
 /// to merge and an `edit` that leaves a field out means "as before" only at
@@ -335,6 +339,12 @@ pub enum Event {
         min_bid_to_lock_for_main: i64,
         over_bid_to_win_main: i64,
         deadline_ts_ms: i64,
+        /// Whether the winners pay (2026-09-08). `false` is a free auction:
+        /// bids and winners as usual, the loot recorded, no DKP taken - a
+        /// farewell auction, a giveaway. Absent on every earlier event, and
+        /// absent means the winners paid.
+        #[serde(default = "default_true")]
+        debit_dkp: bool,
     },
     #[serde(rename = "auction.bid_placed")]
     BidPlaced {

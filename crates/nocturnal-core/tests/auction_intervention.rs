@@ -33,6 +33,10 @@ fn exec(l: &mut Ledger, ctx: &Ctx, cmd: Command) -> Result<(), Rejection> {
 
 /// An open long auction with one bid from a player who can afford it.
 fn running_auction() -> Ledger {
+    running_auction_with(true)
+}
+
+fn running_auction_with(debit_dkp: bool) -> Ledger {
     let mut l = Ledger::new();
     let ctx = ctx_at(1_000_000, Actor::System);
     exec(
@@ -66,6 +70,7 @@ fn running_auction() -> Ledger {
             min_bid_to_lock_for_main: 0,
             over_bid_to_win_main: 0,
             duration_ms: DEADLINE - 1_000_000,
+            debit_dkp,
         },
     )
     .unwrap();
@@ -328,4 +333,35 @@ fn an_intervention_replays_identically() {
     let a = &replayed.state().guild(GUILD).unwrap().auctions["au-1"];
     assert_eq!(a.cancelled_by, Some(OFFICER));
     assert_eq!(a.deadline_ts_ms, 1_500_000);
+}
+
+/// A free auction (Ziglax, 2026-09-08): the close names a winner and records
+/// the loot, and the winner's DKP does not move.
+#[test]
+fn a_free_auction_names_a_winner_and_charges_nothing() {
+    let mut l = running_auction_with(false);
+    let now = 1_500_000;
+    for cmd in [
+        Command::CloseAuction {
+            auction_id: "au-1".into(),
+            ended_ts_ms: Some(now),
+        },
+        Command::FinalizeAuction {
+            auction_id: "au-1".into(),
+            seed: now as u64,
+        },
+    ] {
+        exec(&mut l, &ctx_at(now, Actor::User(OFFICER)), cmd).unwrap();
+    }
+    let g = l.state().guild(GUILD).unwrap();
+    let a = &g.auctions["au-1"];
+    assert!(!a.debit_dkp);
+    assert_eq!(a.status, AuctionStatus::Finalized);
+    assert_eq!(a.winners[0].player, BIDDER);
+    assert_eq!(a.winners[0].amount, 100, "the bid is still the bid");
+    assert_eq!(g.balance(BIDDER), 500, "and it cost nothing");
+    let last = g.players[&BIDDER].log.last().unwrap();
+    assert_eq!(last.dkp, 0);
+    assert!(last.comment.ends_with("(free auction)"), "{}", last.comment);
+    assert!(last.item.is_some(), "the loot is still on record");
 }

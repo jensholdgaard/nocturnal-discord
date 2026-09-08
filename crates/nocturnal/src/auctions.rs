@@ -188,12 +188,17 @@ pub fn live_message(
     match auction.flavor {
         Flavor::Short => {
             let content = format!(
-                "Bid started - **{} DKP** minimum bid.{}",
+                "Bid started - **{} DKP** minimum bid.{}{}",
                 auction.min_bid,
                 if auction.num_items > 1 {
                     format!(" Top **{}** bids win", auction.num_items)
                 } else {
                     String::new()
+                },
+                if auction.debit_dkp {
+                    ""
+                } else {
+                    " **Free auction: the winner keeps their DKP.**"
                 }
             );
             let embed = item_embed(&auction.item, EMBED_ORANGE).field(
@@ -216,7 +221,7 @@ pub fn live_message(
         }
         Flavor::Long => {
             let content = format!(
-                "Bid started - **{} DKP** minimum bid.{}",
+                "Bid started - **{} DKP** minimum bid.{}{}",
                 auction.min_bid,
                 if auction.num_items > 1 {
                     format!(
@@ -226,6 +231,11 @@ pub fn live_message(
                     )
                 } else {
                     String::new()
+                },
+                if auction.debit_dkp {
+                    ""
+                } else {
+                    " **Free auction: the winner keeps their DKP.**"
                 }
             );
             let embed = item_embed(&auction.item, EMBED_BLUE)
@@ -707,6 +717,7 @@ async fn open_auction(
     min_bid: Option<i64>,
     num_items: Option<u32>,
     duration_ms: i64,
+    debit_dkp: bool,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(ctx)?;
     let (cfg_min_bid, lock, over, short_channel, long_channel) = ctx
@@ -744,6 +755,7 @@ async fn open_auction(
         min_bid_to_lock_for_main: lock,
         over_bid_to_win_main: over,
         duration_ms,
+        debit_dkp,
     };
     // The item row for the character picker, fetched now so a click later
     // reads it from disk. Fire and forget: a miss only costs the picker its
@@ -853,6 +865,7 @@ pub async fn startbid(
         minbid,
         numitems,
         bid_time_s * 1000,
+        true,
     )
     .await
 }
@@ -878,6 +891,9 @@ pub async fn startlongbid(
     #[min = 1]
     duration: Option<i64>,
     #[description = "quarm | takp"] database: Option<String>,
+    #[description = "Debit the winners' DKP (default true; false = a free auction)"] debit: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;
     let Some(item) = pick_item(&ctx, &search, database).await? else {
@@ -887,6 +903,8 @@ pub async fn startlongbid(
         return Ok(());
     }
     let hours = duration.unwrap_or(48);
+    // Ziglax, feedback channel, 2026-09-08: a farewell auction where the
+    // winner keeps their DKP. Bids and winners as usual; the close takes nothing.
     open_auction(
         &ctx,
         item,
@@ -894,6 +912,7 @@ pub async fn startlongbid(
         minbid,
         numitems,
         hours * 3_600_000,
+        debit.unwrap_or(true),
     )
     .await
 }
@@ -1990,6 +2009,7 @@ mod tests {
             winners: Vec::new(),
             cancelled_by: None,
             cancelled_ts_ms: None,
+            debit_dkp: true,
         }
     }
 
@@ -2152,6 +2172,7 @@ mod tests {
                     min_bid_to_lock_for_main: 0,
                     over_bid_to_win_main: 0,
                     duration_ms: 600_000,
+                    debit_dkp: true,
                 },
             )
             .await

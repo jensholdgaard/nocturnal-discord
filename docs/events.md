@@ -59,7 +59,7 @@ Rules:
 ### Auctions (one unified model; `flavor: short | long`)
 | Kind | Payload | Notes |
 |---|---|---|
-| `auction.opened` | auction_id, item, flavor, min_bid, deadline, quantity | The legacy ~80 % duplicated short/long code paths collapse into one state machine |
+| `auction.opened` | auction_id, item, flavor, min_bid, deadline, quantity, debit_dkp (absent = true) | The legacy ~80 % duplicated short/long code paths collapse into one state machine |
 | `auction.bid_placed` | auction_id, player, amount, channel (button \| dm) | Re-bid by same player replaces; decide step enforces bid ≤ current balance − committed bids on *other* open auctions (kills cross-auction double-spend at bid time too) |
 | `auction.bid_retracted` | auction_id, player | |
 | `auction.closed` | auction_id, `ended_ts_ms`? | Deadline reached — bidding ends deterministically at this seq; "bid during close window" ambiguity gone. `ended_ts_ms` (added 2026-08-26) is set only by `/endauction` and becomes the deadline, so the recap names when bidding actually stopped |

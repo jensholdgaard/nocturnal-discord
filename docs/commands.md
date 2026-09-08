@@ -78,7 +78,7 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/renameraid` | officer | raid (ended raids), name | Escape hatch: correct a raid's name (`raid.renamed`; every DKP line follows). Normally unnecessary — see automatic naming below |
 | `/dpsstatus` | officer | — | Who is sending telemetry, on what Zeal build, last seen (from Ourios, 14 days) |
 | `/startbid` | officer | search, minbid?, numitems?, database? | Short auction flow (below) |
-| `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database? | Long auction; bids via `/bid` |
+| `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database?, debit? | Long auction; bids via `/bid`. `debit:false` is a free auction (feedback, 2026-09-08): bids and winners as usual, the loot recorded at 0 DKP, nobody charged; the post says so |
 | `/auctiondetails` | officer | auctionid | Dump bids/winners of a **settled** auction; refused while it is still running; publicly announces the peek in the auction channel (only when it actually showed something) |
 | `/cancelauction` | officer role | auctionid | Void a running auction: no winner, no DKP. Bids stay readable, not republished |
 | `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |

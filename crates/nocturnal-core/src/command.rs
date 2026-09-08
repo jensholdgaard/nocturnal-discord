@@ -84,6 +84,8 @@ pub enum Command {
         min_bid_to_lock_for_main: i64,
         over_bid_to_win_main: i64,
         duration_ms: i64,
+        /// `false` opens a free auction: nobody is debited at the close.
+        debit_dkp: bool,
     },
     PlaceBid {
         auction_id: String,

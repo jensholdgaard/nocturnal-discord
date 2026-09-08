@@ -229,6 +229,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             min_bid_to_lock_for_main,
             over_bid_to_win_main,
             duration_ms,
+            debit_dkp,
         } => {
             if g.auctions.contains_key(auction_id) {
                 return Err(Rejection::AuctionIdTaken);
@@ -245,6 +246,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 min_bid_to_lock_for_main: *min_bid_to_lock_for_main,
                 over_bid_to_win_main: *over_bid_to_win_main,
                 deadline_ts_ms: ctx.now_ms + *duration_ms,
+                debit_dkp: *debit_dkp,
             }])
         }
 

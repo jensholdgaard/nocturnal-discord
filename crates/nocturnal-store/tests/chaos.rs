@@ -160,6 +160,7 @@ fn run_scenario(seed: u64) {
                         min_bid_to_lock_for_main: 0,
                         over_bid_to_win_main: 0,
                         duration_ms: 30_000,
+                        debit_dkp: true,
                     },
                 )
                 .is_some()

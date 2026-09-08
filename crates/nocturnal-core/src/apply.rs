@@ -224,6 +224,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             min_bid_to_lock_for_main,
             over_bid_to_win_main,
             deadline_ts_ms,
+            debit_dkp,
         } => {
             g.auctions.insert(
                 auction_id.clone(),
@@ -235,6 +236,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     min_bid_to_lock_for_main: *min_bid_to_lock_for_main,
                     over_bid_to_win_main: *over_bid_to_win_main,
                     deadline_ts_ms: *deadline_ts_ms,
+                    debit_dkp: *debit_dkp,
                     status: AuctionStatus::Open,
                     bids: Vec::new(),
                     winners: Vec::new(),
@@ -298,6 +300,10 @@ pub fn apply(state: &mut State, env: &Envelope) {
             ..
         } => {
             let item = g.auctions.get(auction_id).map(|a| a.item.clone());
+            // A free auction (2026-09-08): the loot is recorded against the
+            // winner at 0 DKP, so history says who got it, and the balance
+            // stands. Auctions from before the flag existed always debit.
+            let debit = g.auctions.get(auction_id).map_or(true, |a| a.debit_dkp);
             // Attribute the loot to the raid it was won in, exactly like the
             // legacy `removeDKP(..., raid, item)` call. Without this the raid
             // summary and /dkphistory cannot say who won what.
@@ -315,10 +321,17 @@ pub fn apply(state: &mut State, env: &Envelope) {
             // charged, atomically with the announcement fact (audit E2/#46).
             for w in winners {
                 let p = g.players.entry(w.player).or_insert_with(|| new_player(ts));
-                p.balance -= w.amount;
+                let charged = if debit { w.amount } else { 0 };
+                p.balance -= charged;
                 p.log.push(LogEntry {
-                    dkp: -w.amount,
-                    comment: item.as_ref().map_or_else(String::new, |i| i.name.clone()),
+                    dkp: -charged,
+                    comment: item.as_ref().map_or_else(String::new, |i| {
+                        if debit {
+                            i.name.clone()
+                        } else {
+                            format!("{} (free auction)", i.name)
+                        }
+                    }),
                     ts_ms: ts,
                     raid: raid_ref.clone(),
                     item: item.clone(),

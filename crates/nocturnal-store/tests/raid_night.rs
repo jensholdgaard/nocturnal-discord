@@ -106,6 +106,7 @@ fn raid_night_survives_kill_dash_nine() {
                 min_bid_to_lock_for_main: 0,
                 over_bid_to_win_main: 0,
                 duration_ms: 60_000,
+                debit_dkp: true,
             },
         );
     }
