@@ -11,6 +11,7 @@ use nocturnal_core::{Actor, Command, Ctx, Ledger, MainRank, Rejection, RosterCha
 
 const GUILD: u64 = 42;
 const P: u64 = 7;
+const NOW: i64 = 1_700_000_000_000;
 
 fn ctx() -> Ctx {
     Ctx {
@@ -55,14 +56,10 @@ fn add_edit_remove_is_the_whole_lifecycle() {
 
     let mut edited = shaman("Shaku", 60);
     edited.aa = Some(120);
-    edited.main = Some(MainRank::Main);
     edited.access = vec!["VP".into()];
     exec(&mut l, set(edited, true)).unwrap();
     let got = &l.state().guild(GUILD).unwrap().roster[&P]["shaku"];
-    assert_eq!(
-        (got.level, got.aa, got.main),
-        (60, Some(120), Some(MainRank::Main))
-    );
+    assert_eq!((got.level, got.aa, got.main), (60, Some(120), None));
     assert_eq!(got.access, vec!["VP"]);
 
     exec(
@@ -187,4 +184,86 @@ fn replay_reproduces_the_roster_exactly() {
         replayed.replay(e);
     }
     assert_eq!(live.state().guild(GUILD), replayed.state().guild(GUILD));
+}
+
+/// Ranks are the officers' (2026-09-08): a member's own write may not set
+/// or change main/second, an officer's `/roster rank` command may, and a
+/// new main demotes the old one in the same decision.
+#[test]
+fn ranks_come_from_the_rank_command_not_the_member() {
+    const OFFICER: u64 = 99;
+    let mut l = Ledger::new();
+    exec(&mut l, set(shaman("Shaku", 60), false)).unwrap();
+    exec(&mut l, set(shaman("Shakalt", 50), false)).unwrap();
+
+    let mut mine = shaman("Shaku", 60);
+    mine.main = Some(MainRank::Second);
+    assert_eq!(
+        exec(&mut l, set(mine, true)),
+        Err(Rejection::RankIsOfficers {
+            name: "Shaku".into()
+        }),
+        "a member cannot rank their own character"
+    );
+    let mut new_main = shaman("Shakthree", 1);
+    new_main.main = Some(MainRank::Main);
+    assert_eq!(
+        exec(&mut l, set(new_main, false)),
+        Err(Rejection::RankIsOfficers {
+            name: "Shakthree".into()
+        }),
+        "nor add one already ranked"
+    );
+
+    let officer = Ctx {
+        guild: GUILD,
+        actor: Actor::User(OFFICER),
+        now_ms: NOW,
+    };
+    let rank = |l: &mut Ledger, name: &str, main: Option<MainRank>| {
+        let envs = l
+            .propose(
+                &officer,
+                &Command::RankRosterCharacter {
+                    player: P,
+                    name: name.into(),
+                    main,
+                },
+            )
+            .unwrap();
+        l.commit(&envs);
+    };
+    rank(&mut l, "Shaku", Some(MainRank::Main));
+    rank(&mut l, "Shakalt", Some(MainRank::Second));
+    let row = &l.state().guild(GUILD).unwrap().roster[&P];
+    assert_eq!(row["shaku"].main, Some(MainRank::Main));
+    assert_eq!(row["shakalt"].main, Some(MainRank::Second));
+
+    rank(&mut l, "Shakalt", Some(MainRank::Main));
+    let row = &l.state().guild(GUILD).unwrap().roster[&P];
+    assert_eq!(row["shakalt"].main, Some(MainRank::Main));
+    assert_eq!(row["shaku"].main, None, "the previous main stepped down");
+
+    // The member's own edit keeps the rank the officer set.
+    let mut mine = shaman("Shakalt", 51);
+    mine.main = Some(MainRank::Main);
+    exec(&mut l, set(mine, true)).unwrap();
+    assert_eq!(
+        l.state().guild(GUILD).unwrap().roster[&P]["shakalt"].level,
+        51
+    );
+    assert_eq!(
+        l.propose(
+            &officer,
+            &Command::RankRosterCharacter {
+                player: P,
+                name: "Nobody".into(),
+                main: None,
+            },
+        )
+        .unwrap_err(),
+        Rejection::RosterCharacterMissing {
+            name: "Nobody".into()
+        }
+    );
 }

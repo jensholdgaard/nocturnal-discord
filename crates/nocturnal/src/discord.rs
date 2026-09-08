@@ -1271,7 +1271,10 @@ pub fn rejection_text(e: &ExecError) -> String {
             format!(":no_entry: **{name}** is not on your row — use `/roster add`")
         }
         R::RosterCharacterExists { name } => {
-            format!(":no_entry: **{name}** is already on your row — use `/roster edit`")
+            format!(":no_entry: **{name}** is already on your row — `/roster remove` it first, or `/roster upload` a fresh export to update it")
+        }
+        R::RankIsOfficers { name } => {
+            format!(":no_entry: main and second are set by officers (`/roster rank`) — **{name}** keeps the rank it has")
         }
         R::InvalidRosterEntry { field, reason } => {
             format!(":no_entry: `{field}` {reason}")

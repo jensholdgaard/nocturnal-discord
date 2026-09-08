@@ -11,8 +11,8 @@ modal opens:
    Main and Second; Alt bid offers the unranked rest of their row. (Until
    2026-09-06 a Second was on the Alt side, and members with an M2 were
    refused on the Main button; the sheet's M2 was always a second main.)
-   Officers set ranks with `/roster rank`; members can still type one into
-   `/roster add|edit` until the officers decide otherwise.
+   Officers set ranks with `/roster rank`, and only officers: since
+   2026-09-08 the ledger refuses a member's own write that changes a rank.
 2. **Filter by the item.** The mirrored item row (pqdi's EQEmu `items`
    row, cached on disk when the auction opened) carries the class, race and
    slot bitmasks. A character whose class the item excludes is not offered;

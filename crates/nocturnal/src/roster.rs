@@ -114,18 +114,6 @@ fn parse_access(raw: Option<&str>, allowed: &[String]) -> Result<Option<Vec<Stri
     Ok(Some(picked))
 }
 
-fn main_rank(raw: Option<&str>) -> Result<Option<Option<MainRank>>, String> {
-    Ok(
-        match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
-            None => None,
-            Some("main") => Some(Some(MainRank::Main)),
-            Some("second") | Some("m2") => Some(Some(MainRank::Second)),
-            Some("alt") | Some("none") | Some("") => Some(None),
-            Some(other) => return Err(format!("`{other}` — use main, second or alt")),
-        },
-    )
-}
-
 fn describe(c: &RosterCharacter) -> String {
     let rank = match c.main {
         Some(MainRank::Main) => "M-",
@@ -158,7 +146,6 @@ async fn upsert(
     aa: Option<i64>,
     quarmy_link: Option<String>,
     access: Option<String>,
-    main: Option<String>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     crate::discord::ack_ephemeral(&ctx).await?;
@@ -172,14 +159,6 @@ async fn upsert(
             return Ok(());
         }
     };
-    let main = match main_rank(main.as_deref()) {
-        Ok(m) => m,
-        Err(e) => {
-            ctx.say(format!(":no_entry: {e}")).await?;
-            return Ok(());
-        }
-    };
-
     // On edit, fields left out mean "as before". On add there is no before.
     let key = name.to_lowercase();
     let existing = ctx
@@ -210,7 +189,9 @@ async fn upsert(
                 .map(|e| e.access.clone())
                 .unwrap_or_default()
         }),
-        main: main.unwrap_or(existing.as_ref().and_then(|e| e.main)),
+        // Ranks are the officers' (/roster rank); a member's write keeps
+        // whatever the row has, and the ledger refuses anything else.
+        main: existing.as_ref().and_then(|e| e.main),
     };
 
     match execute(
@@ -261,7 +242,7 @@ async fn upsert(
 #[poise::command(
     slash_command,
     rename = "roster",
-    subcommands("add", "edit", "remove", "rank", "export", "upload")
+    subcommands("add", "remove", "rank", "export", "upload")
 )]
 pub async fn roster(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -285,44 +266,8 @@ pub async fn add(
     aa: Option<i64>,
     #[description = "Quarmy character page (https://quarmy.com/...)"] quarmy_link: Option<String>,
     #[description = "Raid access, comma-separated: VP, ST, Emp, VT"] access: Option<String>,
-    #[description = "main, second or alt"] main: Option<String>,
 ) -> Result<(), Error> {
-    upsert(
-        ctx,
-        false,
-        name,
-        class,
-        level,
-        aa,
-        quarmy_link,
-        access,
-        main,
-    )
-    .await
-}
-
-/// Edit a character already on your roster row. Fields left out stay as they were.
-#[allow(clippy::too_many_arguments)]
-#[tracing::instrument(name = "command.roster.edit", skip_all, err, fields(otel.kind = "server"))]
-#[poise::command(slash_command, ephemeral)]
-pub async fn edit(
-    ctx: Context<'_>,
-    #[description = "Character name"] name: String,
-    #[description = "Class"] class: Class,
-    #[description = "Level 1–65"]
-    #[min = 1]
-    #[max = 65]
-    level: i64,
-    #[description = "Alternate Abilities 1–1000"]
-    #[min = 1]
-    #[max = 1000]
-    aa: Option<i64>,
-    #[description = "Quarmy character page; leave empty to keep the existing one"]
-    quarmy_link: Option<String>,
-    #[description = "Raid access, comma-separated; `none` clears"] access: Option<String>,
-    #[description = "main, second or alt"] main: Option<String>,
-) -> Result<(), Error> {
-    upsert(ctx, true, name, class, level, aa, quarmy_link, access, main).await
+    upsert(ctx, false, name, class, level, aa, quarmy_link, access).await
 }
 
 /// Remove a character from your roster row.
@@ -474,57 +419,36 @@ pub async fn rank(
         Rank::Second => Some(MainRank::Second),
         Rank::Alt => None,
     };
-    // One main per member: ranking a new main demotes the old one to alt,
+    // One command: the ledger demotes a previous main in the same decision,
     // so the Main bid button never has two answers.
-    let mut demote: Option<RosterCharacter> = None;
-    if main == Some(MainRank::Main) {
-        let key = character.name.to_lowercase();
-        demote = ctx
-            .data()
-            .driver
-            .query(move |l| {
-                l.state()
-                    .guild(ledger_guild)
-                    .and_then(|g| g.roster.get(&player))
-                    .and_then(|chars| {
-                        chars
-                            .values()
-                            .find(|c| {
-                                c.main == Some(MainRank::Main) && c.name.to_lowercase() != key
-                            })
-                            .cloned()
-                    })
-            })
-            .await;
-    }
-    character.main = main;
+    let previous_main = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.roster.get(&player))
+                .and_then(|chars| {
+                    chars
+                        .values()
+                        .find(|c| c.main == Some(MainRank::Main))
+                        .map(|c| c.name.clone())
+                })
+        })
+        .await;
     let mut lines = Vec::new();
-    if let Some(mut old) = demote {
-        old.main = None;
-        let old_name = old.name.clone();
-        match execute(
-            &ctx,
-            Command::SetRosterCharacter {
-                player,
-                character: old,
-                replace: true,
-            },
-        )
-        .await?
-        {
-            Ok(_) => lines.push(format!("**{old_name}** is no longer the main.")),
-            Err(e) => {
-                ctx.say(rejection_text(&e)).await?;
-                return Ok(());
-            }
+    if main == Some(MainRank::Main) {
+        if let Some(old) = previous_main.filter(|o| !o.eq_ignore_ascii_case(&character.name)) {
+            lines.push(format!("**{old}** is no longer the main."));
         }
     }
+    character.main = main;
     match execute(
         &ctx,
-        Command::SetRosterCharacter {
+        Command::RankRosterCharacter {
             player,
-            character: character.clone(),
-            replace: true,
+            name: character.name.clone(),
+            main,
         },
     )
     .await?
@@ -666,15 +590,6 @@ mod tests {
     fn the_picker_and_the_ledger_agree_on_the_classes() {
         let picked: Vec<&str> = Class::ALL.iter().map(|c| c.as_str()).collect();
         assert_eq!(picked, CLASSES.to_vec());
-    }
-
-    #[test]
-    fn main_rank_reads_the_three_words() {
-        assert_eq!(main_rank(Some("Main")).unwrap(), Some(Some(MainRank::Main)));
-        assert_eq!(main_rank(Some("m2")).unwrap(), Some(Some(MainRank::Second)));
-        assert_eq!(main_rank(Some("alt")).unwrap(), Some(None));
-        assert_eq!(main_rank(None).unwrap(), None);
-        assert!(main_rank(Some("boss")).is_err());
     }
 }
 

@@ -67,21 +67,30 @@ fn ledger() -> Ledger {
         },
     )
     .unwrap();
+    // Ranked rows are the officers' doing (2026-09-08): seeded as the system,
+    // the way a sheet import wrote them, since a member's own write may not
+    // carry a rank.
     for c in [
         toon("Vexira", "Wizard", Some(MainRank::Main)),
         toon("Solenne", "Enchanter", Some(MainRank::Second)),
         toon("Thurgo", "Warrior", None),
     ] {
-        exec(
-            &mut l,
-            NOW,
-            Command::SetRosterCharacter {
-                player: P,
-                character: c,
-                replace: false,
-            },
-        )
-        .unwrap();
+        let system = Ctx {
+            guild: GUILD,
+            actor: Actor::System,
+            now_ms: NOW,
+        };
+        let envs = l
+            .propose(
+                &system,
+                &Command::SetRosterCharacter {
+                    player: P,
+                    character: c,
+                    replace: false,
+                },
+            )
+            .unwrap();
+        l.commit(&envs);
     }
     exec(
         &mut l,

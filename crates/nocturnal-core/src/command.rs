@@ -127,6 +127,15 @@ pub enum Command {
         player: PlayerId,
         name: String,
     },
+    /// `/roster rank` (officers): main, second or alt for a character on a
+    /// member's row. Ranking a main demotes the row's previous main, so a
+    /// member has one; the rank is the one thing a member's own
+    /// `SetRosterCharacter` may not change (2026-09-08).
+    RankRosterCharacter {
+        player: PlayerId,
+        name: String,
+        main: Option<crate::event::MainRank>,
+    },
     /// `/roster upload`: a profile parsed from a Zeal output file, as the
     /// JSON body a client's profile event would carry. The character must
     /// already be on the player's row.
@@ -192,6 +201,7 @@ impl Command {
             Command::CancelAuction { .. } => "cancel_auction",
             Command::UpdateConfig { .. } => "update_config",
             Command::SetRosterCharacter { .. } => "set_roster_character",
+            Command::RankRosterCharacter { .. } => "rank_roster_character",
             Command::UploadRosterProfile { .. } => "upload_roster_profile",
             Command::RemoveRosterCharacter { .. } => "remove_roster_character",
             Command::IssueToken { .. } => "issue_token",

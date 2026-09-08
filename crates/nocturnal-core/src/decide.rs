@@ -4,7 +4,7 @@
 
 use crate::auction::{winners, Rng};
 use crate::command::{Command, Ctx};
-use crate::event::{ConfigPatch, Event, RaidRef, Winner};
+use crate::event::{Actor, ConfigPatch, Event, MainRank, RaidRef, Winner};
 use crate::reject::Rejection;
 use crate::state::{AuctionStatus, Bid, State};
 
@@ -408,11 +408,8 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
         } => {
             validate_roster_character(character)?;
             let key = character.name.to_lowercase();
-            let exists = g
-                .roster
-                .get(player)
-                .is_some_and(|chars| chars.contains_key(&key));
-            match (exists, *replace) {
+            let existing = g.roster.get(player).and_then(|chars| chars.get(&key));
+            match (existing.is_some(), *replace) {
                 (true, false) => {
                     return Err(Rejection::RosterCharacterExists {
                         name: character.name.clone(),
@@ -425,10 +422,52 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 }
                 _ => {}
             }
+            // The rank is the officers' (2026-09-08): a member writing their
+            // own row keeps whatever rank it has, and a new character has
+            // none. The system (profile sync, imports) and other users
+            // (officers, through /roster rank's own command) are not bound.
+            if ctx.actor == Actor::User(*player) && character.main != existing.and_then(|e| e.main)
+            {
+                return Err(Rejection::RankIsOfficers {
+                    name: character.name.clone(),
+                });
+            }
             Ok(vec![Event::RosterCharacterSet {
                 player: *player,
                 character: character.clone(),
             }])
+        }
+
+        Command::RankRosterCharacter { player, name, main } => {
+            let key = name.to_lowercase();
+            let Some(row) = g.roster.get(player) else {
+                return Err(Rejection::RosterCharacterMissing { name: name.clone() });
+            };
+            let Some(character) = row.get(&key) else {
+                return Err(Rejection::RosterCharacterMissing { name: name.clone() });
+            };
+            let mut events = Vec::new();
+            // One main per member: the previous main steps down to alt in
+            // the same decision, so the Main bid button never has two answers.
+            if *main == Some(MainRank::Main) {
+                for other in row.values() {
+                    if other.main == Some(MainRank::Main) && other.name.to_lowercase() != key {
+                        let mut demoted = other.clone();
+                        demoted.main = None;
+                        events.push(Event::RosterCharacterSet {
+                            player: *player,
+                            character: demoted,
+                        });
+                    }
+                }
+            }
+            let mut ranked = character.clone();
+            ranked.main = *main;
+            events.push(Event::RosterCharacterSet {
+                player: *player,
+                character: ranked,
+            });
+            Ok(events)
         }
 
         Command::UploadRosterProfile {

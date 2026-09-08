@@ -673,7 +673,7 @@ mod tests {
         let now = 1_787_853_613_551;
         let ctx = Ctx {
             guild: 1,
-            actor: Actor::User(7),
+            actor: Actor::System,
             now_ms: now,
         };
         for (name, main) in [("Eklavdra", None), ("Shaku", Some(MainRank::Main))] {
@@ -741,7 +741,7 @@ mod tests {
         let mut l = Ledger::new();
         let ctx = Ctx {
             guild: 1,
-            actor: Actor::User(7),
+            actor: Actor::System,
             now_ms: 1_787_853_613_551,
         };
         let c = RosterCharacter {

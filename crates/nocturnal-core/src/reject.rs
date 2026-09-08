@@ -72,6 +72,11 @@ pub enum Rejection {
     RosterCharacterExists {
         name: String,
     },
+    /// Main and second are officer decisions (2026-09-08): a member's own
+    /// `roster.character.set` may not change a rank on their row.
+    RankIsOfficers {
+        name: String,
+    },
     /// A roster value the ledger refuses: unknown class, level or AA out of
     /// range, a profile link that is not a quarmy.com page.
     InvalidRosterEntry {
@@ -116,6 +121,7 @@ impl Rejection {
             Rejection::InvalidConfig { .. } => "invalid_config",
             Rejection::RosterCharacterMissing { .. } => "roster_character_missing",
             Rejection::RosterCharacterExists { .. } => "roster_character_exists",
+            Rejection::RankIsOfficers { .. } => "rank_is_officers",
             Rejection::InvalidRosterEntry { .. } => "invalid_roster_entry",
         }
     }

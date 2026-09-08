@@ -193,10 +193,9 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 
 | Command | Access | Behaviour |
 |---|---|---|
-| `/roster add name class level [aa] [quarmy_link] [access] [main]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot) |
-| `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
+| `/roster add name class level [aa] [quarmy_link] [access]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot). No rank option: main and second are the officers' (`/roster rank`) |
 | `/roster remove name` | all | Remove a character from your row |
-| `/roster rank member name main\|second\|alt` | officer | Rank a character on another member's row. Ranking a new main demotes the old one, so a member has one main. The Main bid button offers the main and the second (character bids) |
+| `/roster rank member name main\|second\|alt` | officer | Rank a character on a member's row - its own ledger command, the one way a rank changes. Ranking a new main demotes the old one in the same decision, so a member has one main. The Main bid button offers the main and the second (character bids) |
 | `/roster upload file` | all | Upload a character from a Zeal export: `/outputfile quarmy` in game, then attach `<Name>Quarmy.txt` (or `<Name>-Inventory.txt`, gear only). Works on any Zeal build. A Quarmy file adds a missing character to your row; level and AA update the row; the site's character page and the bid buttons' upgrade line use it. Bags, bank and coin are dropped before anything is stored (2026-09-08). The same file can be dropped on your own member page on the site, which asks Perses who you are before it writes |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
@@ -274,12 +273,15 @@ doesn't care where it runs). Paths and the dashboard URL are config
     spaces collapsed, blank rows dropped, and the 56-dash rule slimmed. It is
     read on a phone during a raid.
 17. The guild roster lives in the ledger (2026-08-31), not a Google Sheet.
-    `/roster add|edit|remove` are the roster bot's commands with the same
-    options, ranges and refusals. Three deliberate differences: raid-access
-    flags are a typed option (`access: VP, ST`, checked against the
-    configured labels) instead of a second interactive menu; the main / second
-    marker is set by the member (`main: main|second|alt`) rather than typed
-    into the sheet by an officer; and the roster page is rendered by the bot
+    `/roster add|remove` are the roster bot's commands with the same
+    options, ranges and refusals (`/roster edit` existed until 2026-09-08;
+    a character is updated by the game, by `/roster upload`, or by remove
+    and add). Three deliberate differences: raid-access flags are a typed
+    option (`access: VP, ST`, checked against the configured labels) instead
+    of a second interactive menu; the main / second marker is an officer's
+    `/roster rank` (until 2026-09-08 a member could set it on `add|edit`;
+    the ledger now refuses a member's own write that changes a rank); and
+    the roster page is rendered by the bot
     from the ledger — the sheet, the Apps Script, the Drive relay and the
     roster bot retire. Discord IDs no longer appear in the page payload.
 18. The roster updates itself from the game (2026-08-31). A member running
@@ -309,6 +311,11 @@ doesn't care where it runs). Paths and the dashboard URL are config
     The site's member page has a drop zone for the same file (`POST /upload`,
     behind Caddy's forward-auth; the bot asks Perses whoami with the
     browser's cookies and maps the login to the ledger player).
+22. Ranks are the officers' (2026-09-08). `/roster edit` is gone and
+    `/roster add` has no rank option; `/roster rank` is its own ledger
+    command (`rank_roster_character`), and a member's own
+    `roster.character.set` that would change main/second is refused
+    (`rank_is_officers`). Profile sync and uploads carry the rank unchanged.
 
 ## Resolved decisions (2026-08-21: keep current behaviour throughout)
 
