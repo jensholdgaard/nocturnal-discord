@@ -49,6 +49,8 @@ by picker, role by picker):
 | raidhelperapikey | | RaidHelper API key (enables event integration) | never echoed; `/showconfig` shows presence only |
 | mainbidminra | | Attendance % a member needs to bid as MAIN (0 = none) | 0; refused outside 0–100 |
 | altbidminra | | Attendance % a member needs to bid as ALT (0 = none) | 0; refused outside 0–100 |
+| mainbidminlevel | | Level a named character needs to bid as MAIN (0 = none) | 0; refused outside 0–65 |
+| altbidminlevel | | Level a named character needs to bid as ALT (0 = none); Bubblie, 2026-09-08 | 0; refused outside 0–65 |
 
 Feature toggles are not `/configure` options: `/feature <name> on|off` (officer)
 flips one without re-sending the channels and the role. Today's only toggle is
@@ -319,6 +321,16 @@ doesn't care where it runs). Paths and the dashboard URL are config
     dashboard shows the share with an 80 % line, the roster page and
     `/roster stale` name who is missing. Deliberately not an SLO: it
     measures the guild, not the bot, so nothing alerts on it.
+25. Names read the way the game prints them (2026-09-08): the projection
+    spells every roster character first-letter-up, the rest down, whatever
+    a member typed; keys stay lowercase and no event is rewritten. The site,
+    `/roster list`, the bid picker and the winner lines all read the
+    projection, so "dogs" is "Dogs" everywhere at once.
+26. Minimum bid level per side (2026-09-08): `mainbidminlevel` /
+    `altbidminlevel` refuse a bid whose named character is under the level
+    on the roster (`character_below_min_level`), and the picker lists such a
+    character among the not-eligible with its level. A bare bid (feature
+    off) names no character and is not gated.
 22. Ranks are the officers' (2026-09-08). `/roster edit` is gone and
     `/roster add` has no rank option; `/roster rank` is its own ledger
     command (`rank_roster_character`), and a member's own

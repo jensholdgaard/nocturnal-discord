@@ -267,3 +267,18 @@ fn ranks_come_from_the_rank_command_not_the_member() {
         }
     );
 }
+
+/// Members asked for a roster that reads like the game (2026-09-08): the
+/// projection spells every name first-letter-up, whatever was typed, and the
+/// lowercase key is untouched.
+#[test]
+fn names_read_the_way_the_game_prints_them() {
+    let mut l = Ledger::new();
+    exec(&mut l, set(shaman("dogs", 60), false)).unwrap();
+    exec(&mut l, set(shaman("SHAKU", 55), false)).unwrap();
+    let row = &l.state().guild(GUILD).unwrap().roster[&P];
+    assert_eq!(row["dogs"].name, "Dogs");
+    assert_eq!(row["shaku"].name, "Shaku");
+    assert_eq!(nocturnal_core::pretty_character_name("  elena "), "Elena");
+    assert_eq!(nocturnal_core::pretty_character_name(""), "");
+}

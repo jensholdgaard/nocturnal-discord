@@ -121,6 +121,9 @@ pub struct GuildConfig {
     /// Attendance percent required to bid as MAIN / as ALT; 0 = none.
     pub main_bid_min_attendance: i64,
     pub alt_bid_min_attendance: i64,
+    /// Level a named character needs to bid as MAIN / as ALT; 0 = none.
+    pub main_bid_min_level: i64,
+    pub alt_bid_min_level: i64,
 }
 
 pub const DAY_MS: i64 = 86_400_000;
@@ -145,6 +148,8 @@ impl Default for GuildConfig {
             character_bids: false,
             main_bid_min_attendance: 0,
             alt_bid_min_attendance: 0,
+            main_bid_min_level: 0,
+            alt_bid_min_level: 0,
         }
     }
 }
@@ -186,7 +191,9 @@ impl GuildConfig {
             over_bid_to_win_main,
             character_bids,
             main_bid_min_attendance,
-            alt_bid_min_attendance
+            alt_bid_min_attendance,
+            main_bid_min_level,
+            alt_bid_min_level
         );
     }
 }

@@ -1226,6 +1226,15 @@ pub fn rejection_text(e: &ExecError) -> String {
             ":no_entry: {} bids need **{required}%** raid attendance — yours is **{actual}%**.",
             if *for_main { "MAIN" } else { "ALT" }
         ),
+        R::CharacterBelowMinLevel {
+            name,
+            level,
+            required,
+            for_main,
+        } => format!(
+            ":no_entry: **{name}** is level **{level}**; {} bids need level **{required}** or more.",
+            if *for_main { "MAIN" } else { "ALT" }
+        ),
         R::CharacterNotEligible { name, for_main } => format!(
             ":no_entry: **{name}** cannot bid as {}: {}",
             if *for_main { "MAIN" } else { "ALT" },
@@ -1338,6 +1347,14 @@ pub async fn configure(
     #[min = 0]
     #[max = 100]
     altbidminra: Option<i64>,
+    #[description = "Level a character needs to bid as MAIN (0 = none)"]
+    #[min = 0]
+    #[max = 65]
+    mainbidminlevel: Option<i64>,
+    #[description = "Level a character needs to bid as ALT (0 = none)"]
+    #[min = 0]
+    #[max = 65]
+    altbidminlevel: Option<i64>,
 ) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;
     // Every value here is validated by the decide step, which is the only
@@ -1365,6 +1382,8 @@ pub async fn configure(
         character_bids: None,
         main_bid_min_attendance: mainbidminra,
         alt_bid_min_attendance: altbidminra,
+        main_bid_min_level: mainbidminlevel,
+        alt_bid_min_level: altbidminlevel,
     };
     match execute(&ctx, Command::UpdateConfig { patch }).await? {
         Ok(_) => ctx.say("Configuration saved").await?,
@@ -1441,6 +1460,14 @@ fn human_ms(ms: i64) -> String {
         format!("{} minutes", ms / 60_000)
     } else {
         format!("{} seconds", ms as f64 / 1000.0)
+    }
+}
+
+fn level_or_none(v: i64) -> String {
+    if v > 0 {
+        format!("{v}+")
+    } else {
+        "none".to_owned()
     }
 }
 
@@ -1537,6 +1564,16 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "Attendance to bid as ALT",
             pct_or_none(cfg.alt_bid_min_attendance),
+            false,
+        )
+        .field(
+            "Level to bid as MAIN",
+            level_or_none(cfg.main_bid_min_level),
+            false,
+        )
+        .field(
+            "Level to bid as ALT",
+            level_or_none(cfg.alt_bid_min_level),
             false,
         );
     ctx.send(poise::CreateReply::default().embed(embed).ephemeral(true))

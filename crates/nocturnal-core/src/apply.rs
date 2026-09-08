@@ -354,10 +354,12 @@ pub fn apply(state: &mut State, env: &Envelope) {
         }
 
         Event::RosterCharacterSet { player, character } => {
+            let mut character = character.clone();
+            character.name = crate::event::pretty_character_name(&character.name);
             g.roster
                 .entry(*player)
                 .or_default()
-                .insert(character.name.to_lowercase(), character.clone());
+                .insert(character.name.to_lowercase(), character);
         }
 
         Event::RosterProfileUploaded {
@@ -377,7 +379,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     key,
                     crate::state::UploadedProfile {
                         player: *player,
-                        name: name.clone(),
+                        name: crate::event::pretty_character_name(name),
                         source: *source,
                         body: body.clone(),
                         uploaded_ms: *uploaded_ms,

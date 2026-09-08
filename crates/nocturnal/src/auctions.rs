@@ -1414,12 +1414,13 @@ pub async fn pick(
     for_main: bool,
 ) -> Pick {
     let aid = auction_id.to_owned();
-    let (enabled, item_id, item_name, chars, mains_elsewhere): (
+    let (enabled, item_id, item_name, chars, mains_elsewhere, min_level): (
         bool,
         String,
         String,
         Vec<nocturnal_core::RosterCharacter>,
         Vec<String>,
+        i64,
     ) = data
         .driver
         .query(move |l| {
@@ -1457,6 +1458,13 @@ pub async fn pick(
                     })
                     .unwrap_or_default()
                 },
+                g.map_or(0, |g| {
+                    if for_main {
+                        g.config.main_bid_min_level
+                    } else {
+                        g.config.alt_bid_min_level
+                    }
+                }),
             )
         })
         .await;
@@ -1488,8 +1496,17 @@ pub async fn pick(
         profiles,
         gear,
     };
-    let refs: Vec<&nocturnal_core::RosterCharacter> = chars.iter().collect();
-    let (candidates, excluded) = fit.split(&refs);
+    // The side's minimum level (Bubblie, 2026-09-08) is decided before the
+    // item: a character under it is named with why, like a wrong class.
+    let (tall, short): (Vec<_>, Vec<_>) = chars
+        .iter()
+        .partition(|c| min_level == 0 || i64::from(c.level) >= min_level);
+    let (candidates, mut excluded) = fit.split(&tall);
+    excluded.extend(short.into_iter().map(|c| crate::loot_fit::Excluded {
+        name: c.name.clone(),
+        class: format!("{} {}, under {min_level}", c.class, c.level),
+        reason: "level",
+    }));
     Pick {
         enabled,
         item_name,

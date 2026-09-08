@@ -321,6 +321,26 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                         for_main: *for_main,
                     });
                 }
+                // Minimum level per side (0 = none): the roster's level, as
+                // the game or the member last set it.
+                let required = if *for_main {
+                    g.config.main_bid_min_level
+                } else {
+                    g.config.alt_bid_min_level
+                };
+                let level = g
+                    .roster
+                    .get(player)
+                    .and_then(|chars| chars.get(&key))
+                    .map_or(0, |c| i64::from(c.level));
+                if required > 0 && level < required {
+                    return Err(Rejection::CharacterBelowMinLevel {
+                        name: name.clone(),
+                        level,
+                        required,
+                        for_main: *for_main,
+                    });
+                }
             }
             Ok(vec![Event::BidPlaced {
                 auction_id: auction_id.clone(),
@@ -638,6 +658,14 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
     ] {
         if value.is_some_and(|v| !(0..=100).contains(&v)) {
             return Err(bad(setting, "is a percentage: 0 to 100"));
+        }
+    }
+    for (setting, value) in [
+        ("mainbidminlevel", p.main_bid_min_level),
+        ("altbidminlevel", p.alt_bid_min_level),
+    ] {
+        if value.is_some_and(|v| !(0..=65).contains(&v)) {
+            return Err(bad(setting, "is a level: 0 (none) to 65"));
         }
     }
     if p.raidhelper_api_key.as_ref().is_some_and(|k| {

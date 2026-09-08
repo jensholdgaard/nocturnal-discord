@@ -280,6 +280,78 @@ fn the_requirement_is_a_percentage() {
     }
 }
 
+/// Bubblie, 2026-09-08: a level-20 alt won a bid. A minimum level per side,
+/// 0 by default, gates only bids that name a character (the ledger knows no
+/// level for a bare bid) and reads the roster's level.
+#[test]
+fn a_minimum_level_refuses_the_side_it_names() {
+    let mut l = ledger();
+    // Thurgo the warrior is level 60 in the fixture; a low alt is added.
+    let system = Ctx {
+        guild: GUILD,
+        actor: Actor::System,
+        now_ms: NOW,
+    };
+    let envs = l
+        .propose(
+            &system,
+            &Command::SetRosterCharacter {
+                player: P,
+                character: toon("Mymm", "Rogue", None),
+                replace: false,
+            },
+        )
+        .unwrap();
+    l.commit(&envs);
+    let mut low = l.state().guild(GUILD).unwrap().roster[&P]["mymm"].clone();
+    low.level = 20;
+    let envs = l
+        .propose(
+            &system,
+            &Command::SetRosterCharacter {
+                player: P,
+                character: low,
+                replace: true,
+            },
+        )
+        .unwrap();
+    l.commit(&envs);
+    config(
+        &mut l,
+        ConfigPatch {
+            alt_bid_min_level: Some(55),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        exec(&mut l, NOW, bid(Some("Mymm"), false)),
+        Err(Rejection::CharacterBelowMinLevel {
+            name: "Mymm".into(),
+            level: 20,
+            required: 55,
+            for_main: false
+        })
+    );
+    exec(&mut l, NOW, bid(Some("Thurgo"), false)).expect("a 60 alt bids");
+    exec(&mut l, NOW, bid(None, false)).expect("a bare bid names no level to check");
+    assert!(
+        matches!(
+            exec(
+                &mut l,
+                NOW,
+                Command::UpdateConfig {
+                    patch: ConfigPatch {
+                        alt_bid_min_level: Some(70),
+                        ..Default::default()
+                    }
+                }
+            ),
+            Err(Rejection::InvalidConfig { .. })
+        ),
+        "65 is the cap"
+    );
+}
+
 #[test]
 fn the_toggle_is_config_like_any_other() {
     let mut l = ledger();

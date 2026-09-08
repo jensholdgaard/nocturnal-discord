@@ -58,6 +58,13 @@ pub enum Rejection {
         name: String,
         for_main: bool,
     },
+    /// The named character is under the side's minimum level (2026-09-08).
+    CharacterBelowMinLevel {
+        name: String,
+        level: i64,
+        required: i64,
+        for_main: bool,
+    },
     AlreadyProvisioned {
         username: String,
     },
@@ -116,6 +123,7 @@ impl Rejection {
             Rejection::BidBelowMinimum { .. } => "bid_below_minimum",
             Rejection::AttendanceBelowMinimum { .. } => "attendance_below_minimum",
             Rejection::CharacterNotEligible { .. } => "character_not_eligible",
+            Rejection::CharacterBelowMinLevel { .. } => "character_below_min_level",
             Rejection::AlreadyProvisioned { .. } => "already_provisioned",
             Rejection::NotProvisioned { .. } => "not_provisioned",
             Rejection::InvalidConfig { .. } => "invalid_config",

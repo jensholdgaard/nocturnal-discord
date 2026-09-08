@@ -78,6 +78,13 @@ picker cannot: a rank changed after the bid, an item row that arrived
 after the click, or a bid placed while the feature was off and turned on
 before close.
 
+## Level requirements
+
+`/configure altbidminlevel:55` (and `mainbidminlevel`) refuse a bid whose
+named character is under that level on the roster, and the picker shows
+such a character as not eligible with its level. Bubblie, 2026-09-08: a
+level-20 alt won a Dagger of Distraction. Zero, the default, is no rule.
+
 ## Attendance requirements
 
 Separately from the toggle, `/configure mainbidminra:50` (and

@@ -142,6 +142,24 @@ fn default_true() -> bool {
     true
 }
 
+/// A character name the way the game prints it: first letter up, the rest
+/// down (2026-09-08, members asked for a roster that reads like the game).
+/// Names are keys by lowercase already; this is the spelling on display.
+/// Applied in the projection, so rows written as "dogs" or "SHAKU" read as
+/// the game would show them without anyone re-adding anything.
+pub fn pretty_character_name(name: &str) -> String {
+    let name = name.trim();
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => {
+            let mut s: String = first.to_uppercase().collect();
+            s.extend(chars.flat_map(char::to_lowercase));
+            s
+        }
+        None => String::new(),
+    }
+}
+
 /// One character on the guild roster, as the member last described it. The
 /// event carries the whole record rather than a patch, so replay never has
 /// to merge and an `edit` that leaves a field out means "as before" only at
@@ -231,6 +249,14 @@ pub struct ConfigPatch {
     pub main_bid_min_attendance: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alt_bid_min_attendance: Option<i64>,
+    /// Level a named character needs to bid as MAIN / as ALT (2026-09-08,
+    /// Bubblie: a level-20 alt won a bid). Zero means no requirement; only
+    /// a bid that names a character is gated, since the ledger knows no
+    /// level otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_bid_min_level: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_bid_min_level: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
