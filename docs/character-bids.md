@@ -7,10 +7,12 @@ A bid names one of the member's roster characters. When the feature is on,
 the **Main bid** and **Alt bid** buttons do three things before the amount
 modal opens:
 
-1. **Filter by rank.** Main bid offers the member's Main-ranked character;
-   Alt bid offers every other character on their row (Second-ranked and
-   unranked). Officers set ranks with `/roster rank`; members can still
-   type one into `/roster add|edit` until the officers decide otherwise.
+1. **Filter by rank.** Main bid offers the member's ranked characters,
+   Main and Second; Alt bid offers the unranked rest of their row. (Until
+   2026-09-06 a Second was on the Alt side, and members with an M2 were
+   refused on the Main button; the sheet's M2 was always a second main.)
+   Officers set ranks with `/roster rank`; members can still type one into
+   `/roster add|edit` until the officers decide otherwise.
 2. **Filter by the item.** The mirrored item row (pqdi's EQEmu `items`
    row, cached on disk when the auction opened) carries the class, race and
    slot bitmasks. A character whose class the item excludes is not offered;

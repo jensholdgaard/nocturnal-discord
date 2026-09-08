@@ -382,7 +382,7 @@ pub enum Rank {
 
 /// Officers: rank a member's character as main, second or alt.
 //
-// The Main bid button offers a member's main; the rest bid as ALT. A ledger
+// The Main bid button offers a member's main and second; the rest bid as ALT. A ledger
 // event with the officer as actor, so the ranking has a history.
 #[tracing::instrument(name = "command.roster.rank", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral, check = "crate::discord::officer_check")]

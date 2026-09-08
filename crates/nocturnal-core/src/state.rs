@@ -4,8 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::event::{
-    ConfigPatch, Flavor, GuildId, Item, MainRank, PlayerId, RaidKill, RaidRef, RosterCharacter,
-    Secret,
+    ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidKill, RaidRef, RosterCharacter, Secret,
 };
 
 /// One line of a player's history (mirrors the legacy log shape).
@@ -352,9 +351,12 @@ impl GuildState {
         self.roster
             .get(&player)
             .map(|chars| {
+                // A ranked character - Main or Second - bids as a main; the
+                // sheet's M2 was a second main, never an alt (members hit
+                // the Main button with their M2 and were refused, 2026-09-06).
                 chars
                     .values()
-                    .filter(|c| (c.main == Some(MainRank::Main)) == for_main)
+                    .filter(|c| c.main.is_some() == for_main)
                     .collect()
             })
             .unwrap_or_default()

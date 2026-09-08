@@ -1,7 +1,8 @@
 //! Character bids and attendance requirements (2026-09-05).
 //!
 //! A bid may name one of the player's roster characters; the MAIN button
-//! allows the Main-ranked one, the ALT button every other. Officers can also
+//! allows the ranked ones (Main and Second), the ALT button the unranked.
+//! Officers can also
 //! require an attendance percentage per side. Both are ledger rules, so a
 //! forged pick and a stale client get the same answer as the buttons.
 
@@ -120,12 +121,8 @@ fn the_main_button_offers_the_main_and_the_alt_button_the_rest() {
             .map(|c| c.name.clone())
             .collect()
     };
-    assert_eq!(names(true), vec!["Vexira"]);
-    assert_eq!(
-        names(false),
-        vec!["Solenne", "Thurgo"],
-        "second and unranked"
-    );
+    assert_eq!(names(true), vec!["Solenne", "Vexira"], "main and second");
+    assert_eq!(names(false), vec!["Thurgo"], "unranked only");
 }
 
 #[test]
@@ -154,12 +151,12 @@ fn a_bid_without_a_character_is_still_a_bid() {
 fn the_side_decides_which_characters_a_bid_may_name() {
     let mut l = ledger();
     assert_eq!(
-        exec(&mut l, NOW, bid(Some("Solenne"), true)),
+        exec(&mut l, NOW, bid(Some("Thurgo"), true)),
         Err(Rejection::CharacterNotEligible {
-            name: "Solenne".into(),
+            name: "Thurgo".into(),
             for_main: true
         }),
-        "a second cannot bid as MAIN"
+        "an unranked character cannot bid as MAIN"
     );
     assert_eq!(
         exec(&mut l, NOW, bid(Some("Vexira"), false)),
@@ -169,6 +166,15 @@ fn the_side_decides_which_characters_a_bid_may_name() {
         }),
         "the main cannot bid as ALT"
     );
+    assert_eq!(
+        exec(&mut l, NOW, bid(Some("Solenne"), false)),
+        Err(Rejection::CharacterNotEligible {
+            name: "Solenne".into(),
+            for_main: false
+        }),
+        "a second main cannot bid as ALT either"
+    );
+    exec(&mut l, NOW, bid(Some("Solenne"), true)).expect("a second main bids as MAIN");
     assert_eq!(
         exec(&mut l, NOW, bid(Some("Nobody"), true)),
         Err(Rejection::RosterCharacterMissing {

@@ -196,7 +196,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | `/roster add name class level [aa] [quarmy_link] [access] [main]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot) |
 | `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
 | `/roster remove name` | all | Remove a character from your row |
-| `/roster rank member name main\|second\|alt` | officer | Rank a character on another member's row. Ranking a new main demotes the old one, so a member has one main. The Main bid button offers it (character bids) |
+| `/roster rank member name main\|second\|alt` | officer | Rank a character on another member's row. Ranking a new main demotes the old one, so a member has one main. The Main bid button offers the main and the second (character bids) |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |

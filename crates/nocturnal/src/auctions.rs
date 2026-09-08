@@ -1462,7 +1462,11 @@ async fn character_bid_click(
     if !p.enabled {
         return open_bid_modal(ctx, interaction, auction_id, for_main, None).await;
     }
-    let side = if for_main { "main" } else { "other characters" };
+    let side = if for_main {
+        "mains"
+    } else {
+        "other characters"
+    };
     match p.candidates.len() {
         0 => {
             let mut text = format!(
@@ -1489,7 +1493,7 @@ async fn character_bid_click(
                 );
             }
             text.push_str(if for_main {
-                "\nYour main is the character an officer ranked with `/roster rank`; other characters bid with **Alt bid**."
+                "\nYour mains are the characters an officer ranked main or second with `/roster rank`; other characters bid with **Alt bid**."
             } else {
                 "\nA character not on your row: `/roster add`."
             });
