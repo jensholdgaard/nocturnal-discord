@@ -39,6 +39,11 @@ Then:
 - **none** → an ephemeral refusal naming the item's class line and the
   characters that were excluded, and no modal.
 
+On the Alt side both the select and the refusal end with a line naming the
+member's ranked characters, "Your mains bid with **Main bid**: elena (main),
+dogs (second main)" (Elena, 2026-09-08, pressed Alt bid for her second main
+and was told nothing).
+
 Nothing about this waits on the network: the click has three seconds and a
 modal cannot follow a deferred acknowledgement, so the picker reads the
 ledger projection, the mirror's disk cache and the site's last snapshot.

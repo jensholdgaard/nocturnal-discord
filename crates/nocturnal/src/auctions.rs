@@ -1378,6 +1378,27 @@ pub struct Pick {
     pub race_line: Option<String>,
     pub candidates: Vec<crate::loot_fit::Candidate>,
     pub excluded: Vec<crate::loot_fit::Excluded>,
+    /// On the Alt side: the member's ranked characters, which bid with the
+    /// other button. Elena (2026-09-08) pressed Alt bid for her second
+    /// main and was told nothing; now the button says where it went.
+    pub mains_elsewhere: Vec<String>,
+}
+
+/// The Alt button's reminder that a ranked character lives on the other
+/// button: "" when the member has none.
+fn mains_hint(mains: &[String]) -> String {
+    if mains.is_empty() {
+        return String::new();
+    }
+    format!(
+        "\nYour {} with **Main bid**: {}.",
+        if mains.len() == 1 {
+            "main bids"
+        } else {
+            "mains bid"
+        },
+        mains.join(", ")
+    )
 }
 
 /// Resolve a member's eligible characters for one side of an auction. Reads
@@ -1393,11 +1414,12 @@ pub async fn pick(
     for_main: bool,
 ) -> Pick {
     let aid = auction_id.to_owned();
-    let (enabled, item_id, item_name, chars): (
+    let (enabled, item_id, item_name, chars, mains_elsewhere): (
         bool,
         String,
         String,
         Vec<nocturnal_core::RosterCharacter>,
+        Vec<String>,
     ) = data
         .driver
         .query(move |l| {
@@ -1415,6 +1437,26 @@ pub async fn pick(
                         .collect()
                 })
                 .unwrap_or_default(),
+                if for_main {
+                    Vec::new()
+                } else {
+                    g.map(|g| {
+                        g.bid_characters(player, true)
+                            .into_iter()
+                            .map(|c| {
+                                format!(
+                                    "{} ({})",
+                                    c.name,
+                                    match c.main {
+                                        Some(nocturnal_core::MainRank::Second) => "second main",
+                                        _ => "main",
+                                    }
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+                },
             )
         })
         .await;
@@ -1426,6 +1468,7 @@ pub async fn pick(
             race_line: None,
             candidates: Vec::new(),
             excluded: Vec::new(),
+            mains_elsewhere,
         };
     }
     let item = item_id
@@ -1457,6 +1500,7 @@ pub async fn pick(
             .filter(|r| r != "ALL"),
         candidates,
         excluded,
+        mains_elsewhere,
     }
 }
 
@@ -1511,11 +1555,12 @@ async fn character_bid_click(
                         .join(", "),
                 );
             }
-            text.push_str(if for_main {
-                "\nYour mains are the characters an officer ranked main or second with `/roster rank`; other characters bid with **Alt bid**."
+            if for_main {
+                text.push_str("\nYour mains are the characters an officer ranked main or second with `/roster rank`; other characters bid with **Alt bid**.");
             } else {
-                "\nA character not on your row: `/roster add`."
-            });
+                text.push_str(&mains_hint(&p.mains_elsewhere));
+                text.push_str("\nA character not on your row: `/roster add`.");
+            }
             ephemeral_response(ctx, interaction, text, Vec::new()).await
         }
         1 => open_bid_modal(ctx, interaction, auction_id, for_main, p.candidates.first()).await,
@@ -1542,11 +1587,14 @@ async fn character_bid_click(
                 serenity::CreateSelectMenuKind::String { options },
             )
             .placeholder("Which character is this bid for?");
-            let text = format!(
+            let mut text = format!(
                 "Which {} is **{}** for?",
                 if for_main { "main" } else { "character" },
                 p.item_name
             );
+            if !for_main {
+                text.push_str(&mains_hint(&p.mains_elsewhere));
+            }
             ephemeral_response(
                 ctx,
                 interaction,
