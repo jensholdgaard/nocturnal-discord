@@ -524,15 +524,18 @@ pub fn roster_update(
     }
 }
 
-/// Ask Ourios for recent profile events. Failure is an empty map and a
-/// debug line: the site keeps whatever it rendered last time.
-pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Profile> {
+/// Ask Ourios for recent profile events. `None` is a failure (logged):
+/// the render keeps the client profiles it showed last time, so a slow
+/// query never empties the site.
+pub async fn fetch_profiles(query_url: &str, tenant: &str) -> Option<HashMap<String, Profile>> {
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(45))
+        // 2026-09-08: the seven-day profile query takes ~40 s on the box; a
+        // timeout just above that turned every render into "unreachable".
+        .timeout(std::time::Duration::from_secs(150))
         .build()
     {
         Ok(c) => c,
-        Err(_) => return HashMap::new(),
+        Err(_) => return None,
     };
     // Seven days, not thirty: every extra day is more S3 row groups the
     // querier reads cold, and a profile older than a week is refreshed the
@@ -549,15 +552,15 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> HashMap<String, Pr
         Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
         Ok(r) => {
             tracing::warn!(status = %r.status(), "ourios refused the profile query; keeping the previous profiles");
-            return HashMap::new();
+            return None;
         }
         Err(e) => {
             tracing::warn!(error = %e, "ourios unreachable for profiles; keeping the previous ones");
-            return HashMap::new();
+            return None;
         }
     };
     let records = body["records"].as_array().cloned().unwrap_or_default();
-    latest_per_character(&records)
+    Some(latest_per_character(&records))
 }
 
 /// One member's telemetry footprint, for `/dpsstatus`.

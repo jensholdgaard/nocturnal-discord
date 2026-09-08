@@ -185,6 +185,85 @@ spec:
               spec:
                 query: avg(nocturnal_guild_attendance_average_percent)
                 seriesNameFormat: guild average
+    stat_profiles_current:
+      kind: Panel
+      spec:
+        display:
+          name: Profiles current
+          description: >-
+            Of the members who raided in the last 30 days, the share with a character profile
+            newer than 14 days (from the meter or an upload). Coverage, not an SLO: the guild's
+            behaviour, shown so officers can lean on it; /roster stale names who is missing.
+            Green from 80 %.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: percent-decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+                - value: 0
+                  color: '#e6a700'
+                - value: 0.8
+                  color: '#5cb85c'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(nocturnal_roster_profiles_current) / clamp_min(nocturnal_roster_raiders, 1)
+    stat_raiders:
+      kind: Panel
+      spec:
+        display:
+          name: Raiders (30d)
+          description: Members who attended a raid in the last 30 days - the people a profile is expected from.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: nocturnal_roster_raiders or vector(0)
+    ts_profiles_by_source:
+      kind: Panel
+      spec:
+        display:
+          name: Profiles current, by door
+          description: How many raiders are covered by a running meter and how many by an uploaded Zeal export, over time; the raider count as the ceiling.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+            thresholds:
+              mode: absolute
+              steps: []
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum by (nocturnal_profile_source) (nocturnal_roster_profiles_current)
+                seriesNameFormat: '{{nocturnal_profile_source}}'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: nocturnal_roster_raiders
+                seriesNameFormat: raiders
   layouts:
   - kind: Grid
     spec:
@@ -211,6 +290,18 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_active_work'
+      - x: 0
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_profiles_current'
+      - x: 6
+        y: 4
+        width: 6
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_raiders'
   - kind: Grid
     spec:
       display:
@@ -255,3 +346,9 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_attendance_average'
+      - x: 0
+        y: 8
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_profiles_by_source'

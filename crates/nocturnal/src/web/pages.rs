@@ -706,6 +706,29 @@ pub fn roster(data: &SiteData) -> String {
         div class="eyebrow" { "Who can we field" }
         h1 { "Roster" }
         p class="lede" { "The matrix the guild already uses, from the ledger." }
+        // Profile coverage (2026-09-08): who the bid buttons and the upgrade
+        // line can see, and who they cannot. A number to lean on, not an alarm.
+        @if let Some(c) = &data.coverage {
+            div class="card" {
+                @let pct = (c.ratio() * 100.0).round() as i64;
+                b { (c.current()) " of " (c.raiders) " raiders" } " have a character profile newer than " (c.fresh_days) " days ("
+                span class=(if c.ratio() >= 0.8 { "good" } else { "warn" }) { (pct) "%" }
+                ", target 80%): " (c.current_zeal) " from the meter, " (c.current_file) " from an upload."
+                @if !c.stale.is_empty() {
+                    details {
+                        summary { "Without one: " (c.stale.len()) }
+                        ul class="stale" { @for s in &c.stale {
+                            li { (name_link(&s.name))
+                                @if !s.characters.is_empty() { " " span class="mut" { "(" (s.characters.join(", ")) ")" } }
+                                @if let Some(ms) = s.last_profile_ms { " " span class="mut" { "last profile " (ago(data.generated_ms, ms)) } }
+                                @else { " " span class="mut" { "no profile yet" } }
+                            }
+                        } }
+                        p class="mut" style="font-size:13px" { "To be counted: " code { "/magelo" } " in game with the meter running, or " code { "/outputfile quarmy" } " and " code { "/roster upload" } " the file (or drop it on your Me page)." }
+                    }
+                }
+            }
+        }
         input type="search" id="rq" placeholder="Filter by member or character" aria-label="Filter roster";
         div class="tablewrap matrix" { table id="rt" {
             thead { tr { th { "Member" } @for c in classes { th class="cls" { (c) } } th { "Discord" } } }

@@ -82,6 +82,19 @@ groups:
         stability: development
         brief: Auction identifier (the correlation_id of its event stream).
         examples: ['ac_01J5XY3TQK']
+      - id: nocturnal.profile.source
+        type:
+          members:
+            - id: zeal
+              value: 'zeal'
+              stability: development
+              brief: A character profile the member's running client sent.
+            - id: file
+              value: 'file'
+              stability: development
+              brief: A character profile the member uploaded as a Zeal export (/roster upload or the site).
+        stability: development
+        brief: Which door a character profile came through, for coverage counts.
       - id: nocturnal.auction.flavor
         type:
           members:

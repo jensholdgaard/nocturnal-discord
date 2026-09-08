@@ -87,6 +87,24 @@ groups:
     unit: "{auction}"
     attributes:
       - ref: nocturnal.auction.flavor
+  - id: metric.nocturnal.roster.raiders
+    type: metric
+    metric_name: nocturnal.roster.raiders
+    stability: development
+    brief: Members who attended a raid in the last 30 days - the people a character profile is expected from.
+    instrument: gauge
+    unit: "{member}"
+  - id: metric.nocturnal.roster.profiles.current
+    type: metric
+    metric_name: nocturnal.roster.profiles.current
+    stability: development
+    brief: >
+      Of the raiders, those with a character profile newer than 14 days, by the door it came
+      through. Coverage, not an SLO: the guild's behaviour, shown so officers can lean on it.
+    instrument: gauge
+    unit: "{member}"
+    attributes:
+      - ref: nocturnal.profile.source
   - id: metric.nocturnal.raids.active
     type: metric
     metric_name: nocturnal.raids.active

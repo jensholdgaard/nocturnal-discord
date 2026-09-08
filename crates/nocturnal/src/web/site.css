@@ -88,3 +88,8 @@ input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid 
 .dropzone{display:block;border:2px dashed var(--line-strong);border-radius:8px;padding:22px 16px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2);transition:border-color .15s,background .15s}
 .dropzone:hover,.dropzone.over{border-color:var(--accent);color:var(--text);background:var(--surface)}
 .dropzone:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+
+/* Profile coverage (2026-09-08) */
+.good{color:var(--good);font-weight:700}.warn{color:var(--warn);font-weight:700}
+ul.stale{columns:2;column-gap:24px;margin:8px 0 0;padding-left:18px}ul.stale li{break-inside:avoid;margin:2px 0}
+@media (max-width:600px){ul.stale{columns:1}}

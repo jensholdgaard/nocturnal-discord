@@ -538,8 +538,25 @@ pub async fn rematerialize(
         })
         .await;
     if ourios.is_some() || !uploads.is_empty() {
+        // A failed fetch keeps last render's client profiles (uploads are
+        // merged fresh from the ledger either way): on 2026-09-08 three
+        // renders timed out and the site fell back to the three uploads.
         let mut profiles = match ourios {
-            Some((url, tenant)) => crate::profiles::fetch_profiles(url, tenant).await,
+            Some((url, tenant)) => match crate::profiles::fetch_profiles(url, tenant).await {
+                Some(p) => p,
+                None => site_handle
+                    .read()
+                    .ok()
+                    .and_then(|s| s.clone())
+                    .map(|prev| {
+                        prev.profiles
+                            .iter()
+                            .filter(|(_, p)| p.source.is_none())
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            },
             None => HashMap::new(),
         };
         crate::profiles::merge_uploads(&mut profiles, &uploads);
@@ -592,19 +609,43 @@ pub async fn rematerialize(
             signups: u["signups"].as_u64().unwrap_or(0) as usize,
         })
         .collect();
+    let profiles_for_coverage: HashMap<String, crate::profiles::Profile> = profile_payload
+        .as_ref()
+        .map(|(p, _)| p.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
     let both = driver
         .query(move |l| {
             l.state().guild(ledger_guild).map(|g| {
                 (
                     render(g, &members, now),
                     crate::site::SiteData::build(g, &members, now, upcoming_views),
+                    crate::site::coverage(g, &members, &profiles_for_coverage, now),
                 )
             })
         })
         .await;
-    let Some((json, mut data)) = both else {
+    let Some((json, mut data, coverage)) = both else {
         return;
     };
+    // Coverage on the dashboard: counts only, never a name (the names are
+    // on the roster page, behind the login).
+    {
+        let m = nocturnal_telemetry::metrics();
+        m.roster_raiders.record(coverage.raiders as u64, &[]);
+        for (source, n) in [
+            ("zeal", coverage.current_zeal),
+            ("file", coverage.current_file),
+        ] {
+            m.roster_profiles_current.record(
+                n as u64,
+                &[opentelemetry::KeyValue::new(
+                    attr::NOCTURNAL_PROFILE_SOURCE,
+                    source,
+                )],
+            );
+        }
+    }
+    data.coverage = Some(coverage);
     match profile_payload {
         Some((profiles, gear)) if !profiles.is_empty() => {
             data.profiles = profiles;

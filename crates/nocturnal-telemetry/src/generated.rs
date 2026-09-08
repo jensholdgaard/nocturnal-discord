@@ -15,6 +15,7 @@ pub mod attr {
     pub const NOCTURNAL_EVENT_VERSION: &str = "nocturnal.event.version";
     pub const NOCTURNAL_GUILD_ID: &str = "nocturnal.guild.id";
     pub const NOCTURNAL_INTERACTION_KIND: &str = "nocturnal.interaction.kind";
+    pub const NOCTURNAL_PROFILE_SOURCE: &str = "nocturnal.profile.source";
     pub const NOCTURNAL_PROVISION_OPERATION: &str = "nocturnal.provision.operation";
     pub const NOCTURNAL_RAID_ID: &str = "nocturnal.raid.id";
     pub const NOCTURNAL_RAID_TICK_NO: &str = "nocturnal.raid.tick_no";
@@ -101,6 +102,8 @@ pub mod metric {
     pub const NOCTURNAL_RAID_ACTIVE: &str = "nocturnal.raid.active";
     pub const NOCTURNAL_RAID_ATTENDANCE: &str = "nocturnal.raid.attendance";
     pub const NOCTURNAL_RAIDS_ACTIVE: &str = "nocturnal.raids.active";
+    pub const NOCTURNAL_ROSTER_PROFILES_CURRENT: &str = "nocturnal.roster.profiles.current";
+    pub const NOCTURNAL_ROSTER_RAIDERS: &str = "nocturnal.roster.raiders";
     pub const NOCTURNAL_SCHEDULER_DRIFT: &str = "nocturnal.scheduler.drift";
     pub const NOCTURNAL_SCHEDULER_HEARTBEAT: &str = "nocturnal.scheduler.heartbeat";
     pub const NOCTURNAL_WAL_FSYNC_DURATION: &str = "nocturnal.wal.fsync.duration";

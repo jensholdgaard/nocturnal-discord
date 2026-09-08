@@ -336,6 +336,10 @@ pub struct Metrics {
     pub provision_operations: Counter<u64>,
     pub auctions_active: Gauge<u64>,
     pub raids_active: Gauge<u64>,
+    /// Coverage (2026-09-08): raiders of the last 30 days, and how many of
+    /// them have a fresh character profile, by door.
+    pub roster_raiders: Gauge<u64>,
+    pub roster_profiles_current: Gauge<u64>,
     pub raid_attendance: Gauge<u64>,
     pub raid_active: Gauge<u64>,
     pub guild_attendance_average: Gauge<f64>,
@@ -433,6 +437,14 @@ impl Metrics {
             raids_active: meter
                 .u64_gauge(metric::NOCTURNAL_RAIDS_ACTIVE)
                 .with_unit("{raid}")
+                .build(),
+            roster_raiders: meter
+                .u64_gauge(metric::NOCTURNAL_ROSTER_RAIDERS)
+                .with_unit("{member}")
+                .build(),
+            roster_profiles_current: meter
+                .u64_gauge(metric::NOCTURNAL_ROSTER_PROFILES_CURRENT)
+                .with_unit("{member}")
                 .build(),
             raid_attendance: meter
                 .u64_gauge(metric::NOCTURNAL_RAID_ATTENDANCE)

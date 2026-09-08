@@ -4,7 +4,7 @@
 //! built from the ledger on each change. A page is a Maud template over
 //! these types, so a wrong field is a compile error rather than a blank tab.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nocturnal_core::state::GuildState;
 use nocturnal_core::{MainRank, PlayerId};
@@ -145,6 +145,10 @@ pub struct SiteData {
     /// door to name the member behind a login. Never written to site.json.
     #[serde(skip)]
     pub logins: BTreeMap<String, u64>,
+    /// Profile coverage of the last 30 days' raiders (2026-09-08): filled
+    /// in by the render once the profiles are known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<CoverageView>,
     /// Keyed by the site's name for a person.
     pub people: BTreeMap<String, PersonView>,
     /// Keyed by item name.
@@ -471,6 +475,7 @@ impl SiteData {
             upcoming,
             members: members_out,
             logins,
+            coverage: None,
             people,
             items,
             profiles: BTreeMap::new(),
@@ -478,6 +483,113 @@ impl SiteData {
             kill_board,
         }
     }
+}
+
+/// How many raiders have a fresh character profile, and who does not.
+/// Coverage, not an SLO: it measures the guild, so it is shown and nudged,
+/// never alerted on.
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Default, PartialEq)]
+pub struct CoverageView {
+    /// Members who attended a raid in the window.
+    pub raiders: usize,
+    /// Of those, with a profile newer than the freshness window from a
+    /// running client, or from an uploaded file.
+    pub current_zeal: usize,
+    pub current_file: usize,
+    pub window_days: i64,
+    pub fresh_days: i64,
+    /// Raiders without a fresh profile, by the site's name for them.
+    pub stale: Vec<StaleView>,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq)]
+pub struct StaleView {
+    pub name: String,
+    pub discord: String,
+    /// The roster characters a profile could come from.
+    pub characters: Vec<String>,
+    /// The newest profile any of them has, when there is one at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_profile_ms: Option<i64>,
+}
+
+impl CoverageView {
+    pub fn current(&self) -> usize {
+        self.current_zeal + self.current_file
+    }
+    /// 0..=1; 1 when there is nobody to cover.
+    pub fn ratio(&self) -> f64 {
+        if self.raiders == 0 {
+            1.0
+        } else {
+            self.current() as f64 / self.raiders as f64
+        }
+    }
+}
+
+/// Raiders of the last `window_days`, and whether each has a profile newer
+/// than `fresh_days` on any of their roster characters. A profile from a
+/// file counts as current the same as one from a client; the split is for
+/// the chart, so officers can see the upload door being used.
+pub fn coverage(
+    g: &GuildState,
+    members: &HashMap<u64, MemberInfo>,
+    profiles: &HashMap<String, Profile>,
+    now_ms: i64,
+) -> CoverageView {
+    const DAY_MS: i64 = 86_400_000;
+    const WINDOW_DAYS: i64 = 30;
+    const FRESH_DAYS: i64 = 14;
+    let since = now_ms - WINDOW_DAYS * DAY_MS;
+    let fresh_after = now_ms - FRESH_DAYS * DAY_MS;
+    let mut raiders: BTreeSet<PlayerId> = BTreeSet::new();
+    for r in g.raids.values() {
+        if r.date_ms < since {
+            continue;
+        }
+        for e in &r.entries {
+            if e.ts_ms >= since {
+                raiders.extend(e.players.iter().copied());
+            }
+        }
+    }
+    let mut out = CoverageView {
+        raiders: raiders.len(),
+        window_days: WINDOW_DAYS,
+        fresh_days: FRESH_DAYS,
+        ..CoverageView::default()
+    };
+    for id in raiders {
+        let characters: Vec<String> = g
+            .roster
+            .get(&id)
+            .map(|cs| cs.values().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let newest = characters
+            .iter()
+            .filter_map(|c| profiles.get(&c.to_lowercase()))
+            .max_by_key(|p| p.reported_ms);
+        match newest {
+            Some(p) if p.reported_ms >= fresh_after => {
+                if p.source.is_some() {
+                    out.current_file += 1;
+                } else {
+                    out.current_zeal += 1;
+                }
+            }
+            newest => out.stale.push(StaleView {
+                name: SiteData::name_for(g, members, id),
+                discord: members
+                    .get(&id)
+                    .map(|m| m.username.clone())
+                    .unwrap_or_default(),
+                characters,
+                last_profile_ms: newest.map(|p| p.reported_ms),
+            }),
+        }
+    }
+    out.stale.sort_by_key(|s| s.name.to_lowercase());
+    out
 }
 
 /// Two log lines belong to the same raid night: the same ledger raid, or the

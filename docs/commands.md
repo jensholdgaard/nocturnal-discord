@@ -198,6 +198,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | `/roster remove name` | all | Remove a character from your row |
 | `/roster rank member name main\|second\|alt` | officer | Rank a character on a member's row - its own ledger command, the one way a rank changes. Ranking a new main demotes the old one in the same decision, so a member has one main. The Main bid button offers the main and the second (character bids) |
 | `/roster upload file` | all | Upload a character from a Zeal export: `/outputfile quarmy` in game, then attach `<Name>Quarmy.txt` (or `<Name>-Inventory.txt`, gear only). Works on any Zeal build. A Quarmy file adds a missing character to your row; level and AA update the row; the site's character page and the bid buttons' upgrade line use it. Bags, bank and coin are dropped before anything is stored (2026-09-08). The same file can be dropped on your own member page on the site, which asks Perses who you are before it writes |
+| `/roster stale` | officer | Raiders of the last 30 days without a character profile newer than 14 days, with their characters and what to tell them; the coverage number behind it is on the Business dashboard and the site's roster page (2026-09-08) |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
@@ -312,6 +313,12 @@ doesn't care where it runs). Paths and the dashboard URL are config
     The site's member page has a drop zone for the same file (`POST /upload`,
     behind Caddy's forward-auth; the bot asks Perses whoami with the
     browser's cookies and maps the login to the ledger player).
+24. Profile coverage (2026-09-08): `nocturnal.roster.raiders` and
+    `nocturnal.roster.profiles.current{nocturnal.profile.source=zeal|file}`
+    are set on every site render (counts only, never a name); the Business
+    dashboard shows the share with an 80 % line, the roster page and
+    `/roster stale` name who is missing. Deliberately not an SLO: it
+    measures the guild, not the bot, so nothing alerts on it.
 22. Ranks are the officers' (2026-09-08). `/roster edit` is gone and
     `/roster add` has no rank option; `/roster rank` is its own ledger
     command (`rank_roster_character`), and a member's own

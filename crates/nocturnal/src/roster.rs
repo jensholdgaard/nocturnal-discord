@@ -242,7 +242,7 @@ async fn upsert(
 #[poise::command(
     slash_command,
     rename = "roster",
-    subcommands("add", "list", "remove", "rank", "export", "upload")
+    subcommands("add", "list", "remove", "rank", "export", "upload", "stale")
 )]
 pub async fn roster(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -435,6 +435,66 @@ pub async fn upload(
         }
         Err(e) => ctx.say(format!(":no_entry: {e}")).await?,
     };
+    Ok(())
+}
+
+/// Officers: raiders of the last 30 days without a fresh character profile, and what to tell them.
+//
+// The nudge behind the coverage number on the Business dashboard. Reads the
+// site's last snapshot, which is where the number is computed.
+#[tracing::instrument(name = "command.roster.stale", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, check = "crate::discord::officer_check")]
+pub async fn stale(ctx: Context<'_>) -> Result<(), Error> {
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let snapshot = ctx.data().site.read().ok().and_then(|s| s.clone());
+    let Some(c) = snapshot.as_ref().and_then(|s| s.coverage.clone()) else {
+        ctx.say("The site has not rendered yet; try again in a minute.")
+            .await?;
+        return Ok(());
+    };
+    let pct = (c.ratio() * 100.0).round() as i64;
+    let mut lines = vec![format!(
+        "**{} of {} raiders** (last {} days) have a character profile newer than {} days: {pct}% (target 80%). {} from the meter, {} from an upload.",
+        c.current(),
+        c.raiders,
+        c.window_days,
+        c.fresh_days,
+        c.current_zeal,
+        c.current_file
+    )];
+    if c.stale.is_empty() {
+        lines.push("Nobody is missing one.".to_owned());
+    } else {
+        lines.push(format!("**Without one ({}):**", c.stale.len()));
+        for s in c.stale.iter().take(60) {
+            let mut l = format!("- **{}**", s.name);
+            if !s.discord.is_empty() && !s.discord.eq_ignore_ascii_case(&s.name) {
+                l.push_str(&format!(" ({})", s.discord));
+            }
+            if !s.characters.is_empty() {
+                l.push_str(&format!(" - {}", s.characters.join(", ")));
+            }
+            lines.push(l);
+        }
+        if c.stale.len() > 60 {
+            lines.push(format!(
+                "… and {} more on the site's roster page.",
+                c.stale.len() - 60
+            ));
+        }
+        lines.push("What to tell them: `/magelo` in game with the meter running, or `/outputfile quarmy` and `/roster upload` the file (or drop it on the Me page of the site).".to_owned());
+    }
+    // Discord caps a message at 2000 characters; the site has the full list.
+    let mut text = String::new();
+    for l in lines {
+        if text.len() + l.len() + 1 > 1900 {
+            text.push_str("\n… the rest is on the site's roster page.");
+            break;
+        }
+        text.push_str(&l);
+        text.push('\n');
+    }
+    ctx.say(text).await?;
     Ok(())
 }
 
