@@ -430,6 +430,55 @@ pub async fn upload_export(
     })
 }
 
+/// Uploaded profiles applied to their rows, as the client sync does for
+/// live ones: the upload flow already did this once, and doing it on every
+/// render means a change in how AA is priced reaches the row without a
+/// re-upload. `None` from `roster_update` keeps the ledger quiet.
+pub async fn sync_uploads(
+    driver: &crate::driver::DriverHandle,
+    ledger_guild: u64,
+    uploads: &[nocturnal_core::UploadedProfile],
+) -> usize {
+    use nocturnal_core::{Actor, Command};
+    let mut written = 0;
+    for u in uploads {
+        let Some(p) = from_body_text(&u.body, u.uploaded_ms, None) else {
+            continue;
+        };
+        let player = u.player;
+        let key = u.name.to_lowercase();
+        let existing = driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .and_then(|g| g.roster.get(&player))
+                    .and_then(|chars| chars.get(&key))
+                    .cloned()
+            })
+            .await;
+        let Some(existing) = existing else { continue };
+        let Some((character, replace)) = roster_update(&p, Some(&existing)) else {
+            continue;
+        };
+        if driver
+            .execute(
+                ledger_guild,
+                Actor::System,
+                Command::SetRosterCharacter {
+                    player,
+                    character,
+                    replace,
+                },
+            )
+            .await
+            .is_ok()
+        {
+            written += 1;
+        }
+    }
+    written
+}
+
 /// The client's class id for a roster class name: the reverse of
 /// [`class_name`], for a profile built from a file that has no class line.
 pub fn class_id(name: &str) -> Option<i64> {
@@ -448,12 +497,17 @@ pub fn roster_update(
     let level = u8::try_from(profile.level)
         .ok()
         .filter(|l| (1..=65).contains(l))?;
-    let aa = profile
-        .aa
-        .get("spent")
-        .copied()
-        .and_then(|a| u16::try_from(a).ok())
-        .filter(|a| *a >= 1);
+    // AA on the roster means points spent, as members type it. A profile
+    // that lists its abilities is priced with the table; one that only says
+    // "spent" (a client from before abilities were sent) gives a rank sum,
+    // which is all it has. Ajja, 2026-09-08: 18 ranks, 37 points.
+    let aa = if profile.aa_abilities.is_empty() {
+        profile.aa.get("spent").copied()
+    } else {
+        Some(crate::web::pages::aa_points_total(&profile.aa_abilities))
+    }
+    .and_then(|a| u16::try_from(a).ok())
+    .filter(|a| *a >= 1);
     let next = nocturnal_core::RosterCharacter {
         name: profile.name.clone(),
         class,
@@ -744,6 +798,31 @@ mod tests {
         ]);
         let m = latest_per_character(&[r]);
         assert_eq!(m["shaku"].reporter.as_deref(), Some("bisben_"));
+    }
+
+    /// Ajja, 2026-09-08: the roster's AA is points spent, so a profile that
+    /// lists its abilities is priced with the table (index 211 is granted on
+    /// Quarm and costs nothing), and only a profile without the list falls
+    /// back to the rank sum the client called "spent".
+    #[test]
+    fn roster_aa_is_points_spent_not_ranks() {
+        let mut p = from_body_text(
+            &serde_json::json!({
+                "name": "Ajja", "level": 60, "class": 14, "race": 12,
+                "aa": {"spent": 18},
+                "aa_abilities": [[13,3],[20,1],[24,3],[25,1],[34,3],[55,1],[211,3],[225,3]],
+                "equipment": [],
+            })
+            .to_string(),
+            1,
+            None,
+        )
+        .unwrap();
+        let (c, _) = roster_update(&p, None).unwrap();
+        assert_eq!(c.aa, Some(37), "priced: 3+2+12+2+12+3+0+3");
+        p.aa_abilities.clear();
+        let (c, _) = roster_update(&p, None).unwrap();
+        assert_eq!(c.aa, Some(18), "no list: the rank sum is all there is");
     }
 
     #[test]

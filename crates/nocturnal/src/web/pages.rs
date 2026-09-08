@@ -476,6 +476,8 @@ fn aa_table() -> &'static std::collections::HashMap<u16, AaRow> {
 }
 
 /// Points a trained ability has cost: rank r costs `cost + (r-1) * cost_inc`.
+/// An index the table marks free (211: every Quarm character has it at rank
+/// 3 without paying) costs nothing whatever the rank.
 fn aa_points_spent(index: u16, rank: u8) -> i64 {
     let Some(row) = aa_table().get(&index) else {
         return 0;
@@ -483,6 +485,12 @@ fn aa_points_spent(index: u16, rank: u8) -> i64 {
     (1..=i64::from(rank))
         .map(|r| row.cost + (r - 1) * row.cost_inc)
         .sum()
+}
+
+/// Points spent across a profile's trained abilities: what the roster's AA
+/// column means, and what a member types into `/roster add`.
+pub(crate) fn aa_points_total(abilities: &[(u16, u8)]) -> i64 {
+    abilities.iter().map(|(i, r)| aa_points_spent(*i, *r)).sum()
 }
 
 const SLOT_ORDER: [&str; 22] = [

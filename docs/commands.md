@@ -317,6 +317,13 @@ doesn't care where it runs). Paths and the dashboard URL are config
     command (`rank_roster_character`), and a member's own
     `roster.character.set` that would change main/second is refused
     (`rank_is_officers`). Profile sync and uploads carry the rank unchanged.
+23. Roster AA is points spent (2026-09-08). A profile that lists its
+    trained abilities (a client since the abilities were sent, or an
+    upload) is priced with the site's AA table, so the roster says what a
+    member would type; a profile that only says "spent" gives the client's
+    rank sum. AA index 211 is granted to every Quarm character at rank 3 and
+    costs nothing (Ajja: 8 abilities, 18 ranks, 37 points). Uploaded
+    profiles are re-applied to their rows on every render, like live ones.
 
 ## Resolved decisions (2026-08-21: keep current behaviour throughout)
 

@@ -204,7 +204,7 @@
 {"eqmacid":208,"name":"Call of Xuzl","cost":3,"cost_inc":-1,"max_level":3,"prereq_skill":0,"prereq_minpoints":0},
 {"eqmacid":209,"name":"Hastened Stealth","cost":3,"cost_inc":0,"max_level":3,"prereq_skill":0,"prereq_minpoints":0},
 {"eqmacid":210,"name":"Ingenuity","cost":1,"cost_inc":1,"max_level":3,"prereq_skill":0,"prereq_minpoints":0},
-{"eqmacid":211,"name":"Fleet of Foot","cost":2,"cost_inc":2,"max_level":2,"prereq_skill":0,"prereq_minpoints":0},
+{"eqmacid":211,"name":"Fleet of Foot","cost":0,"cost_inc":0,"max_level":3,"note":"Granted on Quarm: every character carries rank 3 without spending (Ajja, 2026-09-08: 37 points spent only add up with this at 0). The client name for this index is unproven; a bought Fleet of Foot has two ranks.","prereq_skill":0,"prereq_minpoints":0},
 {"eqmacid":212,"name":"Fading Memories","cost":6,"cost_inc":0,"max_level":1,"prereq_skill":0,"prereq_minpoints":0},
 {"eqmacid":213,"name":"Tactical Mastery","cost":2,"cost_inc":1,"max_level":3,"prereq_skill":0,"prereq_minpoints":0},
 {"eqmacid":214,"name":"Theft of Life","cost":1,"cost_inc":1,"max_level":3,"prereq_skill":0,"prereq_minpoints":0},

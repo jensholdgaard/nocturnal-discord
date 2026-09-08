@@ -543,6 +543,13 @@ pub async fn rematerialize(
             None => HashMap::new(),
         };
         crate::profiles::merge_uploads(&mut profiles, &uploads);
+        let from_files = crate::profiles::sync_uploads(driver, ledger_guild, &uploads).await;
+        if from_files > 0 {
+            tracing::info!(
+                { attr::NOCTURNAL_ROSTER_ROWS } = from_files,
+                "roster updated from uploaded profiles"
+            );
+        }
         if !profiles.is_empty() {
             // Reporter username -> player id: from the members we know, and
             // Discord's member search for a reporter we have never rendered.
