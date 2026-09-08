@@ -197,7 +197,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | `/roster edit …` | all | Edit one; fields left out stay as they were, exactly as the roster bot preserved link and access |
 | `/roster remove name` | all | Remove a character from your row |
 | `/roster rank member name main\|second\|alt` | officer | Rank a character on another member's row. Ranking a new main demotes the old one, so a member has one main. The Main bid button offers the main and the second (character bids) |
-| `/roster upload file` | all | Upload a character from a Zeal export: `/outputfile quarmy` in game, then attach `<Name>Quarmy.txt` (or `<Name>-Inventory.txt`, gear only). Works on any Zeal build. A Quarmy file adds a missing character to your row; level and AA update the row; the site's character page and the bid buttons' upgrade line use it. Bags, bank and coin are dropped before anything is stored (2026-09-08) |
+| `/roster upload file` | all | Upload a character from a Zeal export: `/outputfile quarmy` in game, then attach `<Name>Quarmy.txt` (or `<Name>-Inventory.txt`, gear only). Works on any Zeal build. A Quarmy file adds a missing character to your row; level and AA update the row; the site's character page and the bid buttons' upgrade line use it. Bags, bank and coin are dropped before anything is stored (2026-09-08). The same file can be dropped on your own member page on the site, which asks Perses who you are before it writes |
 | `/roster export` | officer | Every guild member as CSV — ID, username, display name, roles, bot/human, joined. Needs the Server Members intent on the application |
 | `/dpstoken` (gate → button → ephemeral line) | member with a mapped guild rank | Issue (or refresh) the caller's personal OTLP ingest token + Perses dashboard access |
 | `/dpsrevoke member` | Administrator or Manage Guild | Revoke a member's token and dashboard access |
@@ -306,6 +306,9 @@ doesn't care where it runs). Paths and the dashboard URL are config
     site a character profile by attaching a `/outputfile quarmy` export.
     Stored as the same JSON body our client's profile event carries, so
     one parser serves both; a file never overrides a fresher client report.
+    The site's member page has a drop zone for the same file (`POST /upload`,
+    behind Caddy's forward-auth; the bot asks Perses whoami with the
+    browser's cookies and maps the login to the ledger player).
 
 ## Resolved decisions (2026-08-21: keep current behaviour throughout)
 

@@ -227,6 +227,209 @@ pub fn class_name(id: i64) -> Option<&'static str> {
     })
 }
 
+/// What an upload did, for the reply - Discord's or the site's.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct UploadOutcome {
+    pub name: String,
+    pub level: i64,
+    pub class: String,
+    pub source: nocturnal_core::ProfileSource,
+    /// Slots with an item in them, of 21.
+    pub filled: usize,
+    pub aa_ranks: usize,
+    /// The character was not on the row and the file put it there.
+    pub added: bool,
+}
+
+impl UploadOutcome {
+    /// One line for the member, the same from either door.
+    pub fn line(&self) -> String {
+        let what = match self.source {
+            nocturnal_core::ProfileSource::QuarmyFile => "a Quarmy export",
+            nocturnal_core::ProfileSource::InventoryFile => "an inventory export",
+        };
+        let mut s = format!(
+            "{} - {} {}, {} of 21 slots worn, from {what}.",
+            self.name, self.level, self.class, self.filled
+        );
+        if self.aa_ranks > 0 {
+            s.push_str(&format!(" {} AA ranks.", self.aa_ranks));
+        }
+        if self.added {
+            s.push_str(" Added to your roster row.");
+        }
+        s.push_str(" The site's character page updates within a few minutes; the bid buttons use it right away.");
+        s
+    }
+}
+
+/// A member's `/outputfile` export becomes a profile: parsed, checked against
+/// their roster row (a Quarmy file may add the character), stored in the
+/// ledger as the JSON a client's profile event carries, applied to the row's
+/// level and AA, and re-emitted into the telemetry store. One flow behind
+/// both doors, Discord's `/roster upload` and the site's drop zone
+/// (2026-09-08). `Err` is a sentence for the member.
+pub async fn upload_export(
+    driver: &crate::driver::DriverHandle,
+    ledger_guild: u64,
+    player: u64,
+    filename: &str,
+    bytes: &[u8],
+    now_ms: i64,
+) -> Result<UploadOutcome, String> {
+    use nocturnal_core::{Actor, Command, RosterCharacter};
+    const MAX_BYTES: usize = 512 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!(
+            "{filename} is {} KB; an export is a few KB. Is it the right file?",
+            bytes.len() / 1024
+        ));
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let parsed = crate::outputfile::parse(&text).map_err(|e| {
+        format!("{filename} is not a Zeal export: {e}. In game: /outputfile quarmy, then attach <Name>Quarmy.txt.")
+    })?;
+    let name = crate::outputfile::character_name(&parsed, filename).ok_or_else(|| {
+        "the file names no character - a Quarmy export does, and an inventory export's file name does (Ziglax-Inventory.txt).".to_owned()
+    })?;
+    let key = name.to_lowercase();
+    let existing = driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.roster.get(&player))
+                .and_then(|chars| chars.get(&key))
+                .cloned()
+        })
+        .await;
+    let rejection = |e: &crate::driver::ExecError| {
+        crate::discord::rejection_text(e)
+            .trim_start_matches(":no_entry: ")
+            .to_owned()
+    };
+    let mut added = false;
+    let existing = match existing {
+        Some(c) => c,
+        None => {
+            let (Some(class_id), Some(level)) = (parsed.class, parsed.level) else {
+                return Err(format!(
+                    "{name} is not on your row, and an inventory export cannot add it - /roster add first, or upload a Quarmy export."
+                ));
+            };
+            let Some(class) = class_name(class_id) else {
+                return Err(format!(
+                    "the file says class {class_id}, which is not an EverQuest class"
+                ));
+            };
+            let character = RosterCharacter {
+                name: name.clone(),
+                class: class.to_owned(),
+                level: level.clamp(1, 65) as u8,
+                aa: None,
+                profile_url: None,
+                access: Vec::new(),
+                main: None,
+            };
+            driver
+                .execute(
+                    ledger_guild,
+                    Actor::User(player),
+                    Command::SetRosterCharacter {
+                        player,
+                        character: character.clone(),
+                        replace: false,
+                    },
+                )
+                .await
+                .map_err(|e| rejection(&e))?;
+            added = true;
+            character
+        }
+    };
+
+    let fallback = crate::outputfile::Fallback {
+        level: i64::from(existing.level),
+        class: class_id(&existing.class).unwrap_or(0),
+        race: None,
+        guild: "",
+    };
+    let body = crate::outputfile::body(&parsed, &name, fallback);
+    let body_text = body.to_string();
+    let source = parsed.source;
+    driver
+        .execute(
+            ledger_guild,
+            Actor::User(player),
+            Command::UploadRosterProfile {
+                player,
+                name: name.clone(),
+                source,
+                body: body_text.clone(),
+            },
+        )
+        .await
+        .map_err(|e| rejection(&e))?;
+
+    // What the file says about level and AA goes on the roster row, exactly
+    // as a client's profile would put it there; ranks, access and link stay.
+    if let Some(profile) = from_body_text(&body_text, now_ms, None) {
+        if let Some((character, replace)) = roster_update(&profile, Some(&existing)) {
+            if let Err(e) = driver
+                .execute(
+                    ledger_guild,
+                    Actor::User(player),
+                    Command::SetRosterCharacter {
+                        player,
+                        character,
+                        replace,
+                    },
+                )
+                .await
+            {
+                tracing::debug!(error = %e, "upload not applied to the roster row");
+            }
+        }
+    }
+
+    // The same event a client would have sent, into the telemetry store, so
+    // every reader of profiles sees one stream. The reporter the gateway
+    // stamps is the bot's; `everquest.profile.source` says it was a file.
+    let level = body["level"].as_i64().unwrap_or(0);
+    let class_id_out = body["class"].as_i64().unwrap_or(0);
+    tracing::event!(
+        name: "everquest.character.profile",
+        target: "nocturnal::profiles",
+        tracing::Level::INFO,
+        "everquest.character.name" = %name,
+        "everquest.character.level" = level,
+        "everquest.character.class" = %class_id_out,
+        "everquest.profile.source" = source.as_str(),
+        "everquest.profile.reason" = "upload",
+        "{}",
+        body_text
+    );
+    tracing::info!(
+        { nocturnal_telemetry::attr::NOCTURNAL_PLAYER_ID } = player,
+        "everquest.profile.source" = source.as_str(),
+        "roster profile uploaded"
+    );
+    Ok(UploadOutcome {
+        name,
+        level,
+        class: class_name(class_id_out)
+            .map(str::to_owned)
+            .unwrap_or_else(|| existing.class.clone()),
+        source,
+        filled: parsed.equipment.iter().filter(|s| s.id.is_some()).count(),
+        aa_ranks: parsed
+            .aa_abilities
+            .iter()
+            .map(|(_, r)| usize::from(*r))
+            .sum(),
+        added,
+    })
+}
+
 /// The client's class id for a roster class name: the reverse of
 /// [`class_name`], for a profile built from a file that has no class line.
 pub fn class_id(name: &str) -> Option<i64> {

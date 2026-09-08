@@ -238,6 +238,11 @@ pub fn not_ready() -> String {
     )
 }
 
+/// The drop zone's script: reveal it to the member the page is about, post
+/// the dropped file as the request body, show the server's sentence.
+const DROP_JS: &str = r#"(function(){var box=document.getElementById('drop');if(!box)return;var login=decodeURIComponent(location.pathname.split('/')[2]||'');fetch('/perses/api/v1/user/whoami').then(function(r){return r.ok?r.json():null}).then(function(u){var n=u&&u.metadata&&u.metadata.name;if(n&&n.toLowerCase()===login.toLowerCase()){box.hidden=false;}}).catch(function(){});var zone=document.getElementById('dropzone'),input=document.getElementById('dropfile'),note=document.getElementById('dropnote');function send(f){if(!f)return;if(f.size>524288){note.textContent=f.name+' is '+Math.round(f.size/1024)+' KB; an export is a few KB.';return;}note.textContent='Reading '+f.name+'…';fetch('/upload',{method:'POST',headers:{'x-filename':f.name,'content-type':'text/plain'},body:f}).then(function(r){return r.json()}).then(function(j){note.textContent=(j.ok?'✓ ':'✗ ')+j.message;if(j.ok){setTimeout(function(){location.reload();},4000);}}).catch(function(){note.textContent='The upload did not go through; try again, or /roster upload in Discord.';});}
+['dragenter','dragover'].forEach(function(e){zone.addEventListener(e,function(ev){ev.preventDefault();zone.classList.add('over');});});['dragleave','drop'].forEach(function(e){zone.addEventListener(e,function(ev){ev.preventDefault();zone.classList.remove('over');});});zone.addEventListener('drop',function(ev){send(ev.dataTransfer.files[0]);});input.addEventListener('change',function(){send(input.files[0]);});})();"#;
+
 pub fn me_redirect() -> String {
     layout(
         "Me",
@@ -376,6 +381,16 @@ pub fn member(data: &SiteData, login: &str, island: bool) -> String {
                 @else { (characters_chips(data, &m.characters)) }
                 @if m.characters.iter().any(|c| data.profiles.contains_key(&c.name.to_lowercase())) { p class="mut" style="font-size:13px" { "Underlined characters have a gear profile from the meter — click one." } }
                 @else { p class="mut" style="font-size:13px" { "No gear profile yet: with the meter running, " code { "/magelo" } " in game sends one, and every zone-in after that keeps it current." } }
+                // The drop zone (2026-09-08): a member on any Zeal build hands
+                // the site a /outputfile export. Shown only to the member the
+                // page is about; the server checks the login again on POST.
+                div id="drop" class="drop" hidden {
+                    h2 { "Or upload a Zeal export" }
+                    p class="mut" style="font-size:13px" { "On any Zeal build: " code { "/outputfile quarmy" } " in game, then drop " code { "<Name>Quarmy.txt" } " here (it is in your EverQuest folder). Gear, level and AA are read; bags, bank and coin are dropped before anything is stored." }
+                    label class="dropzone" id="dropzone" for="dropfile" { "Drop the file here, or click to choose" input type="file" id="dropfile" accept=".txt,text/plain" hidden; }
+                    p id="dropnote" class="mut" style="font-size:13px" {}
+                }
+                script { (PreEscaped(DROP_JS)) }
             }
             div class="col" {
             div class="panels" {

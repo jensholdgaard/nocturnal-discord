@@ -138,6 +138,10 @@ pub struct SiteData {
     pub upcoming: Vec<UpcomingView>,
     /// Keyed by Discord username — what the login reports.
     pub members: BTreeMap<String, MemberView>,
+    /// Lowercased Discord username -> ledger player, for the site's upload
+    /// door to name the member behind a login. Never written to site.json.
+    #[serde(skip)]
+    pub logins: BTreeMap<String, u64>,
     /// Keyed by the site's name for a person.
     pub people: BTreeMap<String, PersonView>,
     /// Keyed by item name.
@@ -452,12 +456,17 @@ impl SiteData {
             );
         }
 
+        let logins = members
+            .iter()
+            .map(|(id, m)| (m.username.to_lowercase(), *id))
+            .collect();
         SiteData {
             generated_ms: now_ms,
             avg_attendance: g.average_attendance(now_ms),
             raids,
             upcoming,
             members: members_out,
+            logins,
             people,
             items,
             profiles: BTreeMap::new(),

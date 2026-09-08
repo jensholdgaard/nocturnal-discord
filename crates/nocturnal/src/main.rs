@@ -215,11 +215,25 @@ fn main() -> anyhow::Result<()> {
     let readiness = health::Readiness::default().with_writer_beat(driver.writer_beat());
     let site_handle: site::SiteHandle = Default::default();
     if let Some(bind) = &cfg.health.bind {
+        // The site's drop zone writes to the ledger for the guild the bot
+        // serves; without a guild (a bare replay box) there is no upload.
+        let upload = cfg
+            .discord
+            .data_guild_id
+            .or(cfg.discord.guild_id)
+            .filter(|_| !offline)
+            .map(|ledger_guild| web::upload::UploadCtx {
+                driver: driver.clone(),
+                ledger_guild,
+                site: site_handle.clone(),
+                rt: rt.handle().clone(),
+            });
         health::serve(
             bind,
             readiness.clone(),
             site_handle.clone(),
             cfg.roster.assets_dir.clone(),
+            upload,
         )?;
     }
 

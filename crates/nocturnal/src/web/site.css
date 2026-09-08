@@ -82,3 +82,9 @@ input[type=search]{width:100%;max-width:360px;padding:9px 12px;border:1px solid 
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:8px 0 16px}
 .stats div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
 .stats b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stats span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+/* The member page's drop zone (2026-09-08) */
+.drop{margin-top:18px}.drop h2{margin-bottom:6px}
+.dropzone{display:block;border:2px dashed var(--line-strong);border-radius:8px;padding:22px 16px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2);transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone.over{border-color:var(--accent);color:var(--text);background:var(--surface)}
+.dropzone:focus-within{outline:2px solid var(--focus);outline-offset:2px}

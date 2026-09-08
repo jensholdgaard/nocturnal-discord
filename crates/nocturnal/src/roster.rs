@@ -382,10 +382,8 @@ pub enum Rank {
 
 /// Upload your character from a Zeal export: /outputfile quarmy, then attach the file.
 //
-// What a member on any Zeal build can give the site instead of our client's
-// `/magelo`. Bags, bank and coin are dropped at parse time. The character has
-// to be on the member's own row; a Quarmy file names its class and level, so
-// a missing character is added first.
+// The Discord door to `profiles::upload_export`; the site's drop zone is the
+// other. Bags, bank and coin are dropped at parse time.
 #[tracing::instrument(name = "command.roster.upload", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(slash_command, ephemeral)]
 pub async fn upload(
@@ -393,11 +391,10 @@ pub async fn upload(
     #[description = "Your <Name>Quarmy.txt (/outputfile quarmy) or <Name>-Inventory.txt"]
     file: serenity::Attachment,
 ) -> Result<(), Error> {
-    const MAX_BYTES: u32 = 512 * 1024;
     let ledger_guild = require_guild(&ctx)?;
     crate::discord::ack_ephemeral(&ctx).await?;
     let player = ctx.author().id.get();
-    if file.size > MAX_BYTES {
+    if file.size > 512 * 1024 {
         ctx.say(format!(
             ":no_entry: **{}** is {} KB; an export is a few KB. Is it the right file?",
             file.filename,
@@ -414,174 +411,26 @@ pub async fn upload(
             return Ok(());
         }
     };
-    let text = String::from_utf8_lossy(&bytes);
-    let parsed = match crate::outputfile::parse(&text) {
-        Ok(p) => p,
-        Err(e) => {
-            ctx.say(format!(
-                ":no_entry: **{}** is not a Zeal export: {e}. In game: `/outputfile quarmy`, then attach `<Name>Quarmy.txt`.",
-                file.filename
-            ))
-            .await?;
-            return Ok(());
-        }
-    };
-    let Some(name) = crate::outputfile::character_name(&parsed, &file.filename) else {
-        ctx.say(":no_entry: the file names no character - a Quarmy export does, and an inventory export's file name does (`Ziglax-Inventory.txt`).")
-            .await?;
-        return Ok(());
-    };
-
-    // The character on the member's own row, added first when the file can
-    // say what it is (a Quarmy line has the class and level).
-    let key = name.to_lowercase();
-    let existing = ctx
-        .data()
-        .driver
-        .query(move |l| {
-            l.state()
-                .guild(ledger_guild)
-                .and_then(|g| g.roster.get(&player))
-                .and_then(|chars| chars.get(&key))
-                .cloned()
-        })
-        .await;
-    let existing = match existing {
-        Some(c) => c,
-        None => {
-            let (Some(class_id), Some(level)) = (parsed.class, parsed.level) else {
-                ctx.say(format!(
-                    ":no_entry: **{name}** is not on your row, and an inventory export cannot add it - `/roster add` first, or upload a Quarmy export."
-                ))
-                .await?;
-                return Ok(());
-            };
-            let Some(class) = crate::profiles::class_name(class_id) else {
-                ctx.say(format!(
-                    ":no_entry: the file says class {class_id}, which is not an EverQuest class"
-                ))
-                .await?;
-                return Ok(());
-            };
-            let character = RosterCharacter {
-                name: name.clone(),
-                class: class.to_owned(),
-                level: level.clamp(1, 65) as u8,
-                aa: None,
-                profile_url: None,
-                access: Vec::new(),
-                main: None,
-            };
-            match execute(
-                &ctx,
-                Command::SetRosterCharacter {
-                    player,
-                    character: character.clone(),
-                    replace: false,
-                },
-            )
-            .await?
-            {
-                Ok(_) => character,
-                Err(e) => {
-                    ctx.say(rejection_text(&e)).await?;
-                    return Ok(());
-                }
-            }
-        }
-    };
-
-    let fallback = crate::outputfile::Fallback {
-        level: i64::from(existing.level),
-        class: crate::profiles::class_id(&existing.class).unwrap_or(0),
-        race: None,
-        guild: "",
-    };
-    let body = crate::outputfile::body(&parsed, &name, fallback);
-    let body_text = body.to_string();
-    let source = parsed.source;
-    match execute(
-        &ctx,
-        Command::UploadRosterProfile {
-            player,
-            name: name.clone(),
-            source,
-            body: body_text.clone(),
-        },
+    let outcome = crate::profiles::upload_export(
+        &ctx.data().driver,
+        ledger_guild,
+        player,
+        &file.filename,
+        &bytes,
+        crate::discord::chrono_now_ms(),
     )
-    .await?
-    {
-        Ok(_) => {}
-        Err(e) => {
-            ctx.say(rejection_text(&e)).await?;
-            return Ok(());
-        }
-    }
-
-    // What the file says about level and AA goes on the roster row, exactly
-    // as a client's profile would put it there; ranks, access and link stay.
-    let now_ms = crate::discord::chrono_now_ms();
-    if let Some(profile) = crate::profiles::from_body_text(&body_text, now_ms, None) {
-        if let Some((character, replace)) =
-            crate::profiles::roster_update(&profile, Some(&existing))
-        {
-            if let Err(e) = execute(
-                &ctx,
-                Command::SetRosterCharacter {
-                    player,
-                    character,
-                    replace,
-                },
-            )
+    .await;
+    match outcome {
+        Ok(o) => {
+            ctx.say(format!(
+                ":white_check_mark: **{}**{}",
+                o.name,
+                &o.line()[o.name.len()..]
+            ))
             .await?
-            {
-                tracing::debug!(error = %e, "upload not applied to the roster row");
-            }
         }
-    }
-
-    // The same event a client would have sent, into the telemetry store,
-    // so every reader of profiles sees one stream. The reporter the gateway
-    // stamps is the bot's; `everquest.profile.source` says it was a file.
-    let filled = parsed.equipment.iter().filter(|s| s.id.is_some()).count();
-    tracing::event!(
-        name: "everquest.character.profile",
-        target: "nocturnal::profiles",
-        tracing::Level::INFO,
-        "everquest.character.name" = %name,
-        "everquest.character.level" = body["level"].as_i64().unwrap_or(0),
-        "everquest.character.class" = %body["class"].as_i64().unwrap_or(0),
-        "everquest.profile.source" = source.as_str(),
-        "everquest.profile.reason" = "upload",
-        "{}",
-        body_text
-    );
-    tracing::info!(
-        { attr::NOCTURNAL_PLAYER_ID } = player,
-        "everquest.profile.source" = source.as_str(),
-        "roster profile uploaded"
-    );
-
-    let what = match source {
-        nocturnal_core::ProfileSource::QuarmyFile => "a Quarmy export",
-        nocturnal_core::ProfileSource::InventoryFile => "an inventory export",
+        Err(e) => ctx.say(format!(":no_entry: {e}")).await?,
     };
-    let class =
-        crate::profiles::class_name(body["class"].as_i64().unwrap_or(0)).unwrap_or(&existing.class);
-    let aa = parsed
-        .aa_abilities
-        .iter()
-        .map(|(_, r)| usize::from(*r))
-        .sum::<usize>();
-    let mut line = format!(
-        ":white_check_mark: **{name}** - {} {class}, {filled} of 21 slots worn, from {what}.",
-        body["level"].as_i64().unwrap_or(0)
-    );
-    if aa > 0 {
-        line.push_str(&format!(" {aa} AA ranks."));
-    }
-    line.push_str(" The site's character page updates within a few minutes; the Main and Alt bid buttons use it right away.");
-    ctx.say(line).await?;
     Ok(())
 }
 

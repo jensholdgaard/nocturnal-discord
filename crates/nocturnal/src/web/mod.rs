@@ -11,6 +11,7 @@
 //! nothing about the viewer except what the page asks Perses for itself.
 
 pub mod pages;
+pub mod upload;
 
 use std::path::{Path, PathBuf};
 
@@ -39,7 +40,7 @@ impl Response {
             headers: vec!["cache-control: no-cache, must-revalidate".into()],
         }
     }
-    fn not_found() -> Self {
+    pub(crate) fn not_found() -> Self {
         Response {
             status: "404 Not Found",
             content_type: "text/plain; charset=utf-8",

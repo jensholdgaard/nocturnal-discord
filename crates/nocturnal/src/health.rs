@@ -55,6 +55,7 @@ pub fn serve(
     readiness: Readiness,
     site: crate::site::SiteHandle,
     assets_dir: Option<std::path::PathBuf>,
+    upload: Option<crate::web::upload::UploadCtx>,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind)?;
     tracing::info!(
@@ -67,10 +68,64 @@ pub fn serve(
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { continue };
                 let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
-                let mut buf = [0u8; 4096];
-                let n = stream.read(&mut buf).unwrap_or(0);
-                let req = String::from_utf8_lossy(&buf[..n]);
-                let path = req.split_whitespace().nth(1).unwrap_or("/").to_owned();
+                // The head, however many reads it takes (a browser's POST
+                // arrives in pieces); then the path decides what to do.
+                let mut buf = Vec::with_capacity(4096);
+                let head = loop {
+                    let mut chunk = [0u8; 4096];
+                    let n = stream.read(&mut chunk).unwrap_or(0);
+                    if n == 0 {
+                        break None;
+                    }
+                    buf.extend_from_slice(&chunk[..n]);
+                    if let Some(h) = crate::web::upload::parse_head(&buf) {
+                        break Some(h);
+                    }
+                    if buf.len() > 64 * 1024 {
+                        break None;
+                    }
+                };
+                let Some((head, body_at)) = head else { continue };
+                let path = head.path.clone();
+                let write_response = |stream: &mut std::net::TcpStream, r: crate::web::Response| {
+                    let mut out = format!(
+                        "HTTP/1.1 {}\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n",
+                        r.status,
+                        r.content_type,
+                        r.body.len()
+                    );
+                    for h in &r.headers {
+                        out.push_str(h);
+                        out.push_str("\r\n");
+                    }
+                    out.push_str("\r\n");
+                    let _ = stream.write_all(out.as_bytes());
+                    let _ = stream.write_all(&r.body);
+                };
+                // The one POST: a member's Zeal export for the site's drop zone.
+                if head.method == "POST" {
+                    let r = match (&upload, path.split('?').next()) {
+                        (Some(ctx), Some("/upload")) => {
+                            if head.content_length > crate::web::upload::MAX_BODY {
+                                crate::web::upload::reply(
+                                    "413 Content Too Large",
+                                    false,
+                                    "That file is too large to be an export.",
+                                )
+                            } else {
+                                let body = crate::web::upload::read_body(
+                                    &mut stream,
+                                    &buf[body_at.min(buf.len())..],
+                                    head.content_length,
+                                );
+                                crate::web::upload::handle(ctx, &head, &body)
+                            }
+                        }
+                        _ => crate::web::Response::not_found(),
+                    };
+                    write_response(&mut stream, r);
+                    continue;
+                }
                 let (status, body): (&str, &[u8]) = match path.as_str() {
                     "/healthz" => ("200 OK", b"ok\n"),
                     "/readyz" if readiness.is_ready() => ("200 OK", b"ready\n"),
@@ -79,19 +134,7 @@ pub fn serve(
                     // live snapshot. Caddy has already put it behind the login.
                     _ => {
                         let r = crate::web::respond(&path, &site, assets_dir.as_deref());
-                        let mut head = format!(
-                            "HTTP/1.1 {}\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n",
-                            r.status,
-                            r.content_type,
-                            r.body.len()
-                        );
-                        for h in &r.headers {
-                            head.push_str(h);
-                            head.push_str("\r\n");
-                        }
-                        head.push_str("\r\n");
-                        let _ = stream.write_all(head.as_bytes());
-                        let _ = stream.write_all(&r.body);
+                        write_response(&mut stream, r);
                         continue;
                     }
                 };
