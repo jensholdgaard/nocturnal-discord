@@ -214,7 +214,7 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: sum(nocturnal_roster_profiles_current) / clamp_min(nocturnal_roster_raiders, 1)
+                query: sum(nocturnal_roster_profiles_current) / clamp_min(sum(nocturnal_roster_raiders), 1)
     stat_raiders:
       kind: Panel
       spec:
