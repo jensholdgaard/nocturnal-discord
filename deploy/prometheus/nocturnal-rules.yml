@@ -67,19 +67,36 @@ groups:
           summary: "{{ $value | printf \"%.0f\" }} interactions took over 2 s to acknowledge in the last hour"
           description: Discord fails an interaction at 3 s; these were close. Ack p95 by kind on the Platform dashboard says which command.
 
+      # The budget alerts carry hysteresis: they fire once the window is a fifth over
+      # target for two hours, not the moment it brushes the line. On 2026-09-07 the ack
+      # budget sat at 16 slow of 1597 - exactly 1.0 % - and every handful of new
+      # interactions flipped it, so a redeploy looked like it "fired an alert" (it was
+      # the resolved notice).
       - alert: NocturnalAckSLOBudgetSpent
-        expr: nocturnal:ack_slow:increase30d > 0.01 * nocturnal:ack:increase30d and nocturnal:ack:increase30d > 100
+        expr: nocturnal:ack_slow:increase30d > 0.012 * nocturnal:ack:increase30d and nocturnal:ack:increase30d > 100
+        for: 2h
         labels: { team: bot, severity: warning }
         annotations:
           summary: Ack SLO missed over the last 30 days
           description: More than 1 % of interactions in the last 30 days took over 2 s to acknowledge.
 
       - alert: NocturnalCommandSLOBudgetSpent
-        expr: nocturnal:command_failed:increase30d > 0.005 * nocturnal:command:increase30d and nocturnal:command:increase30d > 100
+        expr: nocturnal:command_failed:increase30d > 0.006 * nocturnal:command:increase30d and nocturnal:command:increase30d > 100
+        for: 2h
         labels: { team: bot, severity: warning }
         annotations:
           summary: Command SLO missed over the last 30 days
           description: More than 0.5 % of commands in the last 30 days failed for infrastructure reasons.
+
+      # ---- quiet after a restart ---------------------------------------------------------
+      # Not a notification (Alertmanager routes severity=info to nowhere): an inhibitor. For
+      # ten minutes after the bot starts - a deploy, a watchdog restart - its warnings are
+      # held back, so cold caches and a replay do not page anyone. Criticals still do.
+      - alert: NocturnalJustRestarted
+        expr: max(process_uptime_seconds{service_name="nocturnal"}) < 600
+        labels: { team: bot, severity: info }
+        annotations:
+          summary: The bot restarted less than ten minutes ago
 
       # ---- capacity ----------------------------------------------------------------------
       - alert: NocturnalDiskLow
