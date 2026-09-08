@@ -585,7 +585,13 @@ pub fn character(data: &SiteData, name: &str) -> String {
     let class = CLASSES.get(p.class as usize).copied().unwrap_or("");
     let body = html! {
         div class="read" {
-            div class="eyebrow" { "Character · reported " (ago(data.generated_ms, p.reported_ms)) }
+            div class="eyebrow" {
+                @match p.source.as_deref() {
+                    Some("quarmy_file") => { "Character · from a Quarmy export uploaded " (ago(data.generated_ms, p.reported_ms)) }
+                    Some("inventory_file") => { "Character · from an inventory export uploaded " (ago(data.generated_ms, p.reported_ms)) }
+                    _ => { "Character · reported " (ago(data.generated_ms, p.reported_ms)) }
+                }
+            }
             h1 { (p.name) " " span class="mut" style="font:400 16px/1 'Atkinson Hyperlegible',system-ui,sans-serif" { "· " (p.level) " " (class) @if !p.guild.is_empty() { " · " (p.guild) } } }
             // With a sheet (newer Zeal): the numbers the member sees in the
             // inventory window, item sums as detail. Without: item sums,

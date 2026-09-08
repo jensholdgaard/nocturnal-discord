@@ -451,6 +451,7 @@ mod tests {
             aa_abilities: vec![],
             reported_ms: 1,
             reporter: None,
+            source: None,
         }
     }
 

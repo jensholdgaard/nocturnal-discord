@@ -1,0 +1,31 @@
+Location	Name	ID	Count	Slots
+Ear	Earring of Living Slime	27939	1	0
+Head	Circlet of the Falinkan	1867	1	0
+Face	Dragon Scaled Mask	1157	1	0
+Ear	Yunnb's Earring	10912	1	0
+Neck	Choker of the Wretched	1742	1	0
+Shoulders	Runed Coldain Prayer Shawl	1199	1	0
+Arms	Insidious Sleeves	1248	1	0
+Back	Hierophant's Cloak	1622	1	0
+Wrist	Bracelet of Quiescence	12806	1	0
+Wrist	Spirit Wracked Cord	5723	1	0
+Range	Eye of Narandi	1745	1	0
+Hands	Ancient Shissar Gauntlet	4582	1	0
+Primary	Staff of the Serpent	10650	1	0
+Secondary	Barrier of Sound	31214	1	0
+Fingers	Djarns Amethyst Ring	10366	1	0
+Fingers	Ring of Lightning	25198	1	0
+Chest	Robe of the Azure Sky	10845	1	0
+Legs	Tanned Iksar Hide Leggings	5819	1	0
+Feet	Boots of the Dead Dream	31327	1	0
+Waist	Girdle of Rapidity	5765	1	0
+Ammo	Empty	0	0	0
+General1	Hand Made Backpack	17969	1	10
+General1-Slot1	Empty	0	0	0
+General1-Slot2	10 Dose Ant's Potion	14536	10	0
+General2	Empty	0	0	0
+General-Coin	Currency	0	1234	0
+Held	Empty	0	0	0
+Bank1	Hand Made Backpack	17969	1	10
+Bank1-Slot1	Empty	0	0	0
+Bank-Coin	Currency	0	5678	0

@@ -155,6 +155,13 @@ fn samples() -> Vec<Event> {
                 main: Some(nocturnal_core::MainRank::Main),
             },
         },
+        Event::RosterProfileUploaded {
+            player: 1,
+            name: "Ziglax".into(),
+            source: nocturnal_core::ProfileSource::QuarmyFile,
+            body: r#"{"name":"Ziglax","level":60,"class":14,"race":12,"equipment":[{"slot":"Head","id":1867,"name":"Circlet of the Falinkan"}]}"#.into(),
+            uploaded_ms: 1_700_000_000_000,
+        },
         Event::RosterCharacterRemoved {
             player: 1,
             name: "Shaku".into(),
@@ -200,6 +207,7 @@ const PINNED_KINDS: &[&str] = &[
     "auction.finalized",
     "auction.cancelled",
     "roster.character.set",
+    "roster.profile.uploaded",
     "roster.character.removed",
     "config.updated",
     "telemetry.token.issued",

@@ -18,11 +18,12 @@ pub use apply::apply;
 pub use command::{Command, Ctx};
 pub use decide::{compute_winners, decide, CLASSES};
 pub use event::{
-    Actor, Envelope, Event, Flavor, GuildId, Item, KillEvidence, MainRank, PlayerId, RaidKill,
-    RosterCharacter, Secret,
+    Actor, Envelope, Event, Flavor, GuildId, Item, KillEvidence, MainRank, PlayerId, ProfileSource,
+    RaidKill, RosterCharacter, Secret,
 };
 pub use reject::Rejection;
 pub use state::State;
+pub use state::UploadedProfile;
 
 /// The single-writer ledger: state plus the next sequence number.
 ///

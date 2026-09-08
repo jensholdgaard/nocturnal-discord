@@ -127,6 +127,15 @@ pub enum Command {
         player: PlayerId,
         name: String,
     },
+    /// `/roster upload`: a profile parsed from a Zeal output file, as the
+    /// JSON body a client's profile event would carry. The character must
+    /// already be on the player's row.
+    UploadRosterProfile {
+        player: PlayerId,
+        name: String,
+        source: crate::event::ProfileSource,
+        body: String,
+    },
     // -- telemetry provisioning (M8) --
     IssueToken {
         username: String,
@@ -183,6 +192,7 @@ impl Command {
             Command::CancelAuction { .. } => "cancel_auction",
             Command::UpdateConfig { .. } => "update_config",
             Command::SetRosterCharacter { .. } => "set_roster_character",
+            Command::UploadRosterProfile { .. } => "upload_roster_profile",
             Command::RemoveRosterCharacter { .. } => "remove_roster_character",
             Command::IssueToken { .. } => "issue_token",
             Command::RefreshAccess { .. } => "refresh_access",

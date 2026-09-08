@@ -117,6 +117,27 @@ pub enum MainRank {
     Second,
 }
 
+/// Where an uploaded character profile came from (2026-09-08): the file a
+/// member dropped into Discord, so the site can say "from a Quarmy export"
+/// and freshness rules can tell a file from a live client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileSource {
+    /// `/outputfile quarmy`: character line, inventory, AA, skills.
+    QuarmyFile,
+    /// `/outputfile inventory`: gear only, no character line.
+    InventoryFile,
+}
+
+impl ProfileSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ProfileSource::QuarmyFile => "quarmy_file",
+            ProfileSource::InventoryFile => "inventory_file",
+        }
+    }
+}
+
 /// One character on the guild roster, as the member last described it. The
 /// event carries the whole record rather than a patch, so replay never has
 /// to merge and an `edit` that leaves a field out means "as before" only at
@@ -363,6 +384,18 @@ pub enum Event {
     },
     #[serde(rename = "roster.character.removed")]
     RosterCharacterRemoved { player: PlayerId, name: String },
+    /// A character profile a member uploaded as a Zeal output file
+    /// (2026-09-08). `body` is the same JSON a client's
+    /// `everquest.character.profile` event carries, so the site reads both
+    /// with one parser; bags, bank and coin never reach it.
+    #[serde(rename = "roster.profile.uploaded")]
+    RosterProfileUploaded {
+        player: PlayerId,
+        name: String,
+        source: ProfileSource,
+        body: String,
+        uploaded_ms: i64,
+    },
 
     // -- config & telemetry provisioning -------------------------------------
     #[serde(rename = "config.updated")]
@@ -438,6 +471,7 @@ impl Event {
             Event::AuctionCancelled { .. } => "auction.cancelled",
             Event::RosterCharacterSet { .. } => "roster.character.set",
             Event::RosterCharacterRemoved { .. } => "roster.character.removed",
+            Event::RosterProfileUploaded { .. } => "roster.profile.uploaded",
             Event::ConfigUpdated { .. } => "config.updated",
             Event::TelemetryTokenIssued { .. } => "telemetry.token.issued",
             Event::TelemetryAccessUpdated { .. } => "telemetry.access.updated",

@@ -54,6 +54,11 @@ pub struct Profile {
     /// behind the bearer token, a fact rather than a claim.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reporter: Option<String>,
+    /// Where it came from when not a live client: `quarmy_file` or
+    /// `inventory_file` for a `/roster upload` (2026-09-08). `None` is a
+    /// client's own event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// The body of a profile event, as Zeal builds it. Everything but the
@@ -78,6 +83,52 @@ struct Body {
     equipment: Vec<Slot>,
     #[serde(default)]
     aa_abilities: Vec<(u16, u8)>,
+    #[serde(default)]
+    source: Option<String>,
+}
+
+/// A profile from one event body: the client's, or the same JSON a
+/// `/roster upload` stored in the ledger. `None` when the text is not a
+/// profile body.
+pub fn from_body_text(text: &str, reported_ms: i64, reporter: Option<String>) -> Option<Profile> {
+    let b = serde_json::from_str::<Body>(text).ok()?;
+    Some(Profile {
+        name: b.name,
+        level: b.level,
+        class: b.class,
+        race: b.race,
+        deity: b.deity,
+        guild: b.guild,
+        base_stats: b.base_stats,
+        sheet: b.sheet,
+        aa: b.aa,
+        equipment: b.equipment,
+        aa_abilities: b.aa_abilities,
+        reported_ms,
+        reporter,
+        source: b.source,
+    })
+}
+
+/// Fold the ledger's uploaded profiles into what the clients reported: an
+/// upload counts when it is newer than the client's last word on that
+/// character, and a file never overrides a fresher client.
+pub fn merge_uploads(
+    profiles: &mut HashMap<String, Profile>,
+    uploads: &[nocturnal_core::UploadedProfile],
+) {
+    for u in uploads {
+        let Some(p) = from_body_text(&u.body, u.uploaded_ms, None) else {
+            continue;
+        };
+        let key = u.name.to_lowercase();
+        let newer = profiles
+            .get(&key)
+            .map_or(true, |have| u.uploaded_ms > have.reported_ms);
+        if newer {
+            profiles.insert(key, p);
+        }
+    }
 }
 
 /// An Ourios record, only the parts we read. The body arrives either as the
@@ -135,31 +186,20 @@ pub fn latest_per_character(records: &[serde_json::Value]) -> HashMap<String, Pr
         let Some(text) = body_text(&rec.body) else {
             continue;
         };
-        let Ok(b) = serde_json::from_str::<Body>(&text) else {
+        let reported_ms = nanos(&rec.time_unix_nano) / 1_000_000;
+        let Some(p) = from_body_text(
+            &text,
+            reported_ms,
+            string_attr(&rec.attributes, "everquest.reporter"),
+        ) else {
             continue;
         };
-        let reported_ms = nanos(&rec.time_unix_nano) / 1_000_000;
-        let key = b.name.to_lowercase();
-        let newer = out.get(&key).map_or(true, |p| reported_ms > p.reported_ms);
+        let key = p.name.to_lowercase();
+        let newer = out
+            .get(&key)
+            .map_or(true, |have| reported_ms > have.reported_ms);
         if newer {
-            out.insert(
-                key,
-                Profile {
-                    name: b.name,
-                    level: b.level,
-                    class: b.class,
-                    race: b.race,
-                    deity: b.deity,
-                    guild: b.guild,
-                    base_stats: b.base_stats,
-                    sheet: b.sheet,
-                    aa: b.aa,
-                    equipment: b.equipment,
-                    aa_abilities: b.aa_abilities,
-                    reported_ms,
-                    reporter: string_attr(&rec.attributes, "everquest.reporter"),
-                },
-            );
+            out.insert(key, p);
         }
     }
     out
@@ -185,6 +225,12 @@ pub fn class_name(id: i64) -> Option<&'static str> {
         15 => "Beastlord",
         _ => return None,
     })
+}
+
+/// The client's class id for a roster class name: the reverse of
+/// [`class_name`], for a profile built from a file that has no class line.
+pub fn class_id(name: &str) -> Option<i64> {
+    (1..=15).find(|id| class_name(*id).is_some_and(|n| n.eq_ignore_ascii_case(name)))
 }
 
 /// What the roster should record for a profile, given what it holds now.
@@ -332,6 +378,11 @@ pub fn aggregate_reporters(records: &[serde_json::Value]) -> Vec<ReporterStatus>
     let mut by: std::collections::BTreeMap<String, ReporterStatus> =
         std::collections::BTreeMap::new();
     for r in records {
+        // An uploaded file re-emitted by the bot is a profile, not a client
+        // checking in: it says nothing about who runs which build.
+        if attr(r, "everquest.profile.source").is_some() {
+            continue;
+        }
         let reporter = attr(r, "everquest.reporter")
             .or_else(|| attr(r, "everquest.character.name"))
             .unwrap_or_else(|| "unknown".to_owned());

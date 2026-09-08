@@ -14,6 +14,7 @@ mod health;
 mod items;
 mod lock;
 mod loot_fit;
+mod outputfile;
 mod profiles;
 mod provision;
 mod raid_names;

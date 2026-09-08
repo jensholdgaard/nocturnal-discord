@@ -347,6 +347,32 @@ pub fn apply(state: &mut State, env: &Envelope) {
                 .insert(character.name.to_lowercase(), character.clone());
         }
 
+        Event::RosterProfileUploaded {
+            player,
+            name,
+            source,
+            body,
+            uploaded_ms,
+        } => {
+            let key = name.to_lowercase();
+            let newer = g
+                .profiles
+                .get(&key)
+                .map_or(true, |p| *uploaded_ms >= p.uploaded_ms);
+            if newer {
+                g.profiles.insert(
+                    key,
+                    crate::state::UploadedProfile {
+                        player: *player,
+                        name: name.clone(),
+                        source: *source,
+                        body: body.clone(),
+                        uploaded_ms: *uploaded_ms,
+                    },
+                );
+            }
+        }
+
         Event::RosterCharacterRemoved { player, name } => {
             if let Some(chars) = g.roster.get_mut(player) {
                 chars.remove(&name.to_lowercase());

@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::event::{
-    ConfigPatch, Flavor, GuildId, Item, PlayerId, RaidKill, RaidRef, RosterCharacter, Secret,
+    ConfigPatch, Flavor, GuildId, Item, PlayerId, ProfileSource, RaidKill, RaidRef,
+    RosterCharacter, Secret,
 };
 
 /// One line of a player's history (mirrors the legacy log shape).
@@ -197,6 +198,16 @@ pub struct TokenGrant {
     pub role: String,
 }
 
+/// The newest uploaded profile per character (2026-09-08).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UploadedProfile {
+    pub player: PlayerId,
+    pub name: String,
+    pub source: ProfileSource,
+    pub body: String,
+    pub uploaded_ms: i64,
+}
+
 /// All projections for one Discord guild.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct GuildState {
@@ -220,6 +231,9 @@ pub struct GuildState {
     /// so `Shaku` and `shaku` are one character. Absorbed from the roster
     /// bot, whose store was a Google Sheet.
     pub roster: BTreeMap<PlayerId, BTreeMap<String, RosterCharacter>>,
+    /// Uploaded character profiles, keyed by lowercase character name; the
+    /// newest upload wins. Live client profiles live in Ourios, not here.
+    pub profiles: BTreeMap<String, UploadedProfile>,
 }
 
 /// The whole projected world.

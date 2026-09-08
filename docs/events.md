@@ -111,6 +111,7 @@ did not store is a secret that cannot leak from a backup.
 |---|---|---|
 | `roster.character.set` | player, character{name, class, level, aa?, profile_url?, access[], main?} | The whole record, not a patch: replay never merges. Absorbed from nocturnal-roster-bot 2026-08-31 |
 | `roster.character.removed` | player, name | |
+| `roster.profile.uploaded` | player, name, source (quarmy_file \| inventory_file), body, uploaded_ms | A member's `/outputfile` export (2026-09-08). `body` is the JSON a client's `everquest.character.profile` event carries, minus bags, bank and coin, which never reach the ledger. Newest per character wins |
 | `config.updated` | key, value | Admin roles, defaults, tick settings — replaces the 1 h Mongo polling loop |
 | `ops.note` | text | Officer-visible annotation ("corrected per dispute…"), keeps the log the single narrative |
 

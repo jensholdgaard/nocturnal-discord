@@ -25,7 +25,10 @@ modal opens:
    would go in, what is worn there now (from the character's last Zeal
    profile, via the site snapshot) and the stat delta. Paired slots (ears,
    wrists, rings) compare against the weaker of the two. A character with
-   no profile is offered with "no gear on record".
+   no profile is offered with "no gear on record". A member on another
+   Zeal build gets a profile by attaching a `/outputfile quarmy` export to
+   `/roster upload` (2026-09-08); the file's gear is what the upgrade line
+   then compares against.
 
 Then:
 

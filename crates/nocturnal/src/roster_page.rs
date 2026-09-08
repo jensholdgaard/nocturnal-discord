@@ -527,8 +527,22 @@ pub async fn rematerialize(
         std::collections::BTreeMap<String, crate::profiles::Profile>,
         std::collections::BTreeMap<String, crate::items::ItemSummary>,
     )> = None;
-    if let Some((url, tenant)) = ourios {
-        let profiles = crate::profiles::fetch_profiles(url, tenant).await;
+    // Uploaded files (2026-09-08) come from the ledger and count whether or
+    // not Ourios answers; a client's fresher report still wins.
+    let uploads: Vec<nocturnal_core::UploadedProfile> = driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .map(|g| g.profiles.values().cloned().collect())
+                .unwrap_or_default()
+        })
+        .await;
+    if ourios.is_some() || !uploads.is_empty() {
+        let mut profiles = match ourios {
+            Some((url, tenant)) => crate::profiles::fetch_profiles(url, tenant).await,
+            None => HashMap::new(),
+        };
+        crate::profiles::merge_uploads(&mut profiles, &uploads);
         if !profiles.is_empty() {
             // Reporter username -> player id: from the members we know, and
             // Discord's member search for a reporter we have never rendered.

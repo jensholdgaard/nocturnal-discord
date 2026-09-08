@@ -431,6 +431,30 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
+        Command::UploadRosterProfile {
+            player,
+            name,
+            source,
+            body,
+        } => {
+            let key = name.to_lowercase();
+            let on_row = g
+                .roster
+                .get(player)
+                .is_some_and(|chars| chars.contains_key(&key));
+            if !on_row {
+                return Err(Rejection::RosterCharacterMissing { name: name.clone() });
+            }
+            validate_profile_body(name, body)?;
+            Ok(vec![Event::RosterProfileUploaded {
+                player: *player,
+                name: name.clone(),
+                source: *source,
+                body: body.clone(),
+                uploaded_ms: ctx.now_ms,
+            }])
+        }
+
         Command::RemoveRosterCharacter { player, name } => {
             let key = name.to_lowercase();
             let exists = g
@@ -625,6 +649,36 @@ pub const CLASSES: [&str; 15] = [
 /// Guard the values `/roster` writes, the way `validate_config` guards
 /// `/configure`: here, not at the slash-command options, so the sheet import
 /// is held to the same rules as a member typing.
+/// An uploaded profile body is JSON, names the character it is for, and is
+/// not absurdly large: a Quarmy export's equipment, AA and stats are a few
+/// KB; 64 KB is a file that still has its bank in it, or is not a profile.
+const PROFILE_BODY_MAX: usize = 64 * 1024;
+
+fn validate_profile_body(name: &str, body: &str) -> Result<(), Rejection> {
+    let bad = |reason: String| Rejection::InvalidRosterEntry {
+        field: "profile",
+        reason,
+    };
+    if body.len() > PROFILE_BODY_MAX {
+        return Err(bad(format!(
+            "is {} bytes; a profile is under {} KB",
+            body.len(),
+            PROFILE_BODY_MAX / 1024
+        )));
+    }
+    let v: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| bad(format!("is not JSON: {e}")))?;
+    match v.get("name").and_then(|n| n.as_str()) {
+        Some(n) if n.eq_ignore_ascii_case(name) => {}
+        Some(n) => return Err(bad(format!("is for {n}, not {name}"))),
+        None => return Err(bad("names no character".into())),
+    }
+    if !v.get("equipment").is_some_and(|e| e.is_array()) {
+        return Err(bad("has no equipment list".into()));
+    }
+    Ok(())
+}
+
 fn validate_roster_character(c: &crate::event::RosterCharacter) -> Result<(), Rejection> {
     let bad = |field, reason: String| Rejection::InvalidRosterEntry { field, reason };
     let name = c.name.trim();
