@@ -242,7 +242,7 @@ async fn upsert(
 #[poise::command(
     slash_command,
     rename = "roster",
-    subcommands("add", "remove", "rank", "export", "upload")
+    subcommands("add", "list", "remove", "rank", "export", "upload")
 )]
 pub async fn roster(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -268,6 +268,65 @@ pub async fn add(
     #[description = "Raid access, comma-separated: VP, ST, Emp, VT"] access: Option<String>,
 ) -> Result<(), Error> {
     upsert(ctx, false, name, class, level, aa, quarmy_link, access).await
+}
+
+/// Your roster row as the ledger has it; officers may look at any member's.
+//
+// Ziglax, feedback channel, 2026-09-08. Ephemeral, one line per character in
+// the same shape /roster add answers with, ranks first.
+#[tracing::instrument(name = "command.roster.list", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral)]
+pub async fn list(
+    ctx: Context<'_>,
+    #[description = "Another member's row (officers)"] member: Option<serenity::User>,
+) -> Result<(), Error> {
+    let ledger_guild = require_guild(&ctx)?;
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let (player, whose) = match member {
+        Some(m) if m.id != ctx.author().id => {
+            if !crate::discord::officer_check(ctx).await? {
+                ctx.say(":no_entry: another member's row is an officer's to look at; `/roster list` alone shows yours")
+                    .await?;
+                return Ok(());
+            }
+            (m.id.get(), format!("<@{}>'s row", m.id.get()))
+        }
+        _ => (ctx.author().id.get(), "Your row".to_owned()),
+    };
+    let mut chars: Vec<RosterCharacter> = ctx
+        .data()
+        .driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .and_then(|g| g.roster.get(&player))
+                .map(|cs| cs.values().cloned().collect())
+                .unwrap_or_default()
+        })
+        .await;
+    if chars.is_empty() {
+        ctx.say(format!(
+            "{whose} is empty — `/roster add`, `/roster upload`, or run the meter and zone."
+        ))
+        .await?;
+        return Ok(());
+    }
+    // Main, then second, then the rest by name: the order the bid buttons think in.
+    chars.sort_by_key(|c| {
+        (
+            match c.main {
+                Some(MainRank::Main) => 0,
+                Some(MainRank::Second) => 1,
+                None => 2,
+            },
+            c.name.to_lowercase(),
+        )
+    });
+    let mut lines = vec![format!("**{whose}** — {} character(s)", chars.len())];
+    lines.extend(chars.iter().map(|c| format!("- {}", describe(c))));
+    lines.push("Ranks (M-, M2-) are set by officers with `/roster rank`.".to_owned());
+    ctx.say(lines.join("\n")).await?;
+    Ok(())
 }
 
 /// Remove a character from your roster row.

@@ -77,6 +77,9 @@ pub struct CharacterView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aa: Option<u16>,
     pub main: Option<MainRank>,
+    /// The quarmy.com page the member put on the roster, when they did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -216,6 +219,7 @@ fn characters_of(g: &GuildState, id: PlayerId) -> Vec<CharacterView> {
                     level: c.level,
                     aa: c.aa,
                     main: c.main,
+                    profile_url: c.profile_url.clone(),
                 })
                 .collect()
         })

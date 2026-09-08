@@ -194,6 +194,7 @@ cutover) so one bot serves the guild. Same UX, ledger-backed internals.
 | Command | Access | Behaviour |
 |---|---|---|
 | `/roster add name class level [aa] [quarmy_link] [access]` | all | Add a character to your roster row (absorbed from nocturnal-roster-bot). No rank option: main and second are the officers' (`/roster rank`) |
+| `/roster list [member]` | all (member: officer) | Your roster row as the ledger has it, ranks first; officers may look at any member's (feedback, 2026-09-08) |
 | `/roster remove name` | all | Remove a character from your row |
 | `/roster rank member name main\|second\|alt` | officer | Rank a character on a member's row - its own ledger command, the one way a rank changes. Ranking a new main demotes the old one in the same decision, so a member has one main. The Main bid button offers the main and the second (character bids) |
 | `/roster upload file` | all | Upload a character from a Zeal export: `/outputfile quarmy` in game, then attach `<Name>Quarmy.txt` (or `<Name>-Inventory.txt`, gear only). Works on any Zeal build. A Quarmy file adds a missing character to your row; level and AA update the row; the site's character page and the bid buttons' upgrade line use it. Bags, bank and coin are dropped before anything is stored (2026-09-08). The same file can be dropped on your own member page on the site, which asks Perses who you are before it writes |

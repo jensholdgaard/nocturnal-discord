@@ -191,6 +191,7 @@ mod tests {
                     level: 60,
                     aa: None,
                     main: Some(nocturnal_core::MainRank::Main),
+                    profile_url: None,
                 }],
             },
         );

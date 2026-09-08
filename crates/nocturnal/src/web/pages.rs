@@ -46,6 +46,9 @@ fn layout_full(title: &str, current: &str, body: Markup, island: bool, wide: boo
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Nocturnal" }
+                // A tab icon (kilowattfpv, feedback channel, 2026-09-02): a
+                // crescent, inline so it needs no extra request or route.
+                link rel="icon" href=(FAVICON);
                 link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap";
                 style { (PreEscaped(CSS)) }
                 @if island { link rel="stylesheet" href={ "/assets/island.css?v=" (v) }; }
@@ -238,6 +241,9 @@ pub fn not_ready() -> String {
     )
 }
 
+/// The tab icon: a moon on the site's night ground, as a data URI.
+const FAVICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F1420'/%3E%3Cpath d='M20.5 5.5a10.5 10.5 0 1 0 6 18.3A9 9 0 0 1 20.5 5.5z' fill='%23D2A94B'/%3E%3C/svg%3E";
+
 /// The drop zone's script: reveal it to the member the page is about, post
 /// the dropped file as the request body, show the server's sentence.
 const DROP_JS: &str = r#"(function(){var box=document.getElementById('drop');if(!box)return;var login=decodeURIComponent(location.pathname.split('/')[2]||'');fetch('/perses/api/v1/user/whoami').then(function(r){return r.ok?r.json():null}).then(function(u){var n=u&&u.metadata&&u.metadata.name;if(n&&n.toLowerCase()===login.toLowerCase()){box.hidden=false;}}).catch(function(){});var zone=document.getElementById('dropzone'),input=document.getElementById('dropfile'),note=document.getElementById('dropnote');function send(f){if(!f)return;if(f.size>524288){note.textContent=f.name+' is '+Math.round(f.size/1024)+' KB; an export is a few KB.';return;}note.textContent='Reading '+f.name+'…';fetch('/upload',{method:'POST',headers:{'x-filename':f.name,'content-type':'text/plain'},body:f}).then(function(r){return r.json()}).then(function(j){note.textContent=(j.ok?'✓ ':'✗ ')+j.message;if(j.ok){setTimeout(function(){location.reload();},4000);}}).catch(function(){note.textContent='The upload did not go through; try again, or /roster upload in Discord.';});}
@@ -347,6 +353,10 @@ fn characters_chips(data: &SiteData, chars: &[crate::site::CharacterView]) -> Ma
                 @if data.profiles.contains_key(&key) { a class="namelink" href={ "/char/" (enc(&c.name)) } { (c.name) " (" (rank) (c.level) ")" } }
                 @else { (c.name) " (" (rank) (c.level) ")" }
                 " " span class="mut" { (c.class) @if let Some(aa) = c.aa { " · " (aa) " AA" } }
+                // The Quarmy page, when the roster has one (kilowattfpv, 2026-09-02).
+                @if let Some(url) = c.profile_url.as_deref().filter(|u| u.starts_with("https://quarmy.com/")) {
+                    " " a class="mut" href=(url) target="_blank" rel="noopener" title="Quarmy character page" { "↗ quarmy" }
+                }
             }
         } }
     }
