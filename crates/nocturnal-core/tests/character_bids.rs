@@ -1,8 +1,8 @@
 //! Character bids and attendance requirements (2026-09-05).
 //!
 //! A bid may name one of the player's roster characters; the MAIN button
-//! allows the ranked ones (Main and Second), the ALT button the unranked.
-//! Officers can also
+//! allows the ranked ones (Main and Second), the ALT button every character
+//! (a main may always bid at alt priority, 2026-09-09). Officers can also
 //! require an attendance percentage per side. Both are ledger rules, so a
 //! forged pick and a stale client get the same answer as the buttons.
 
@@ -132,7 +132,11 @@ fn the_main_button_offers_the_main_and_the_alt_button_the_rest() {
             .collect()
     };
     assert_eq!(names(true), vec!["Solenne", "Vexira"], "main and second");
-    assert_eq!(names(false), vec!["Thurgo"], "unranked only");
+    assert_eq!(
+        names(false),
+        vec!["Solenne", "Thurgo", "Vexira"],
+        "every character may bid as an alt"
+    );
 }
 
 #[test]
@@ -168,22 +172,8 @@ fn the_side_decides_which_characters_a_bid_may_name() {
         }),
         "an unranked character cannot bid as MAIN"
     );
-    assert_eq!(
-        exec(&mut l, NOW, bid(Some("Vexira"), false)),
-        Err(Rejection::CharacterNotEligible {
-            name: "Vexira".into(),
-            for_main: false
-        }),
-        "the main cannot bid as ALT"
-    );
-    assert_eq!(
-        exec(&mut l, NOW, bid(Some("Solenne"), false)),
-        Err(Rejection::CharacterNotEligible {
-            name: "Solenne".into(),
-            for_main: false
-        }),
-        "a second main cannot bid as ALT either"
-    );
+    exec(&mut l, NOW, bid(Some("Vexira"), false)).expect("a main may bid as ALT (2026-09-09)");
+    let mut l = ledger();
     exec(&mut l, NOW, bid(Some("Solenne"), true)).expect("a second main bids as MAIN");
     assert_eq!(
         exec(&mut l, NOW, bid(Some("Nobody"), true)),
@@ -228,14 +218,14 @@ fn an_attendance_requirement_refuses_the_side_it_names() {
         },
     )
     .unwrap();
-    assert_eq!(
-        exec(&mut l, NOW + 2, bid(None, true)),
-        Err(Rejection::AttendanceBelowMinimum {
-            required: 50,
-            actual: 0,
-            for_main: true
-        })
-    );
+    // A main bid under the main line is taken as an alt bid (2026-09-09),
+    // not refused: the member can still bid, at alt priority.
+    exec(&mut l, NOW + 2, bid(Some("Vexira"), true)).unwrap();
+    let g = l.state().guild(GUILD).unwrap();
+    let landed = g.auctions["au-1"].bids.last().unwrap();
+    assert!(!landed.for_main, "landed on the ALT side");
+    assert_eq!(landed.character.as_deref(), Some("Vexira"));
+    assert_eq!(landed.attendance as i64, 0);
     // The ALT side has its own threshold, unset here.
     exec(&mut l, NOW + 2, bid(None, false)).unwrap();
     config(

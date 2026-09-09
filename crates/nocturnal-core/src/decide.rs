@@ -287,16 +287,21 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             // the one the bid records anyway, so what refuses a bid is what
             // the roster page shows.
             let attendance = g.attendance_pct(*player, ctx.now_ms);
-            let required = if *for_main {
-                g.config.main_bid_min_attendance
-            } else {
-                g.config.alt_bid_min_attendance
-            };
-            if required > 0 && (attendance as i64) < required {
+            // A main bid under the main line is not refused: it is taken as
+            // an alt bid (2026-09-09, the raid: "they should be able to bid,
+            // but considered an alt"). The reply says so; the ALT line still
+            // applies to it. `for_main` below is the side the bid *lands* on.
+            let mut for_main = *for_main;
+            let main_line = g.config.main_bid_min_attendance;
+            if for_main && main_line > 0 && (attendance as i64) < main_line {
+                for_main = false;
+            }
+            let alt_line = g.config.alt_bid_min_attendance;
+            if !for_main && alt_line > 0 && (attendance as i64) < alt_line {
                 return Err(Rejection::AttendanceBelowMinimum {
-                    required,
+                    required: alt_line,
                     actual: attendance as i64,
-                    for_main: *for_main,
+                    for_main: false,
                 });
             }
             // A named character must be on the player's own row and on the
@@ -312,18 +317,18 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                     return Err(Rejection::RosterCharacterMissing { name: name.clone() });
                 }
                 let allowed = g
-                    .bid_characters(*player, *for_main)
+                    .bid_characters(*player, for_main)
                     .iter()
                     .any(|c| c.name.eq_ignore_ascii_case(name));
                 if !allowed {
                     return Err(Rejection::CharacterNotEligible {
                         name: name.clone(),
-                        for_main: *for_main,
+                        for_main,
                     });
                 }
                 // Minimum level per side (0 = none): the roster's level, as
                 // the game or the member last set it.
-                let required = if *for_main {
+                let required = if for_main {
                     g.config.main_bid_min_level
                 } else {
                     g.config.alt_bid_min_level
@@ -338,7 +343,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                         name: name.clone(),
                         level,
                         required,
-                        for_main: *for_main,
+                        for_main,
                     });
                 }
             }
@@ -346,7 +351,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 auction_id: auction_id.clone(),
                 player: *player,
                 amount: *amount,
-                for_main: *for_main,
+                for_main,
                 attendance,
                 character: character.clone(),
             }])

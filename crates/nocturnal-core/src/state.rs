@@ -377,9 +377,12 @@ impl GuildState {
                 // A ranked character - Main or Second - bids as a main; the
                 // sheet's M2 was a second main, never an alt (members hit
                 // the Main button with their M2 and were refused, 2026-09-06).
+                // The Alt side is every character on the row (2026-09-09): a
+                // main may always bid at alt priority - a returning member on
+                // trial, a main without the attendance for a main bid.
                 chars
                     .values()
-                    .filter(|c| c.main.is_some() == for_main)
+                    .filter(|c| !for_main || c.main.is_some())
                     .collect()
             })
             .unwrap_or_default()

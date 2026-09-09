@@ -1223,8 +1223,13 @@ pub fn rejection_text(e: &ExecError) -> String {
             actual,
             for_main,
         } => format!(
-            ":no_entry: {} bids need **{required}%** raid attendance — yours is **{actual}%**.",
-            if *for_main { "MAIN" } else { "ALT" }
+            ":no_entry: {} bids need **{required}%** raid attendance — yours is **{actual}%**.{}",
+            if *for_main { "MAIN" } else { "ALT" },
+            if *for_main {
+                ""
+            } else {
+                " A main bid under its line would have landed here too."
+            }
         ),
         R::CharacterBelowMinLevel {
             name,
@@ -1239,9 +1244,9 @@ pub fn rejection_text(e: &ExecError) -> String {
             ":no_entry: **{name}** cannot bid as {}: {}",
             if *for_main { "MAIN" } else { "ALT" },
             if *for_main {
-                "only your main-ranked character can. An officer sets the rank with `/roster rank`."
+                "only a character an officer ranked main or second can (`/roster rank`); every character can bid with **Alt bid**."
             } else {
-                "that is your main — use **Main bid**."
+                "it is not on your roster row."
             }
         ),
         R::InvalidAmount => {

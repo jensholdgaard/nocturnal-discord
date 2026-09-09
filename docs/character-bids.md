@@ -8,9 +8,12 @@ the **Main bid** and **Alt bid** buttons do three things before the amount
 modal opens:
 
 1. **Filter by rank.** Main bid offers the member's ranked characters,
-   Main and Second; Alt bid offers the unranked rest of their row. (Until
-   2026-09-06 a Second was on the Alt side, and members with an M2 were
-   refused on the Main button; the sheet's M2 was always a second main.)
+   Main and Second; Alt bid offers every character on their row, ranked
+   ones included, at alt priority (since 2026-09-09: a main on a
+   "back to the game" trial, or under the attendance line, bids as an alt
+   by pressing Alt bid). (Until 2026-09-06 a Second was on the Alt side,
+   and members with an M2 were refused on the Main button; the sheet's M2
+   was always a second main.)
    Officers set ranks with `/roster rank`, and only officers: since
    2026-09-08 the ledger refuses a member's own write that changes a rank.
 2. **Filter by the item.** The mirrored item row (pqdi's EQEmu `items`
@@ -86,6 +89,12 @@ such a character as not eligible with its level. Bubblie, 2026-09-08: a
 level-20 alt won a Dagger of Distraction. Zero, the default, is no rule.
 
 ## Attendance requirements
+
+A main bid under `mainbidminra` is not refused (2026-09-09): the ledger
+takes it as an **alt** bid, the reply says so with both percentages, and
+`altbidminra` still applies to it. A member too low for a main bid can
+therefore always bid, at alt priority, from either button.
+
 
 Separately from the toggle, `/configure mainbidminra:50` (and
 `altbidminra`) refuses a bid on that side when the member's attendance —

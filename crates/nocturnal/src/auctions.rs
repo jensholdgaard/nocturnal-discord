@@ -1390,12 +1390,19 @@ fn mains_hint(mains: &[String]) -> String {
     if mains.is_empty() {
         return String::new();
     }
+    // Since 2026-09-09 the ranked characters are on this list too, at alt
+    // priority; the hint says where they win first.
     format!(
-        "\nYour {} with **Main bid**: {}.",
+        "\nHere {} at alt priority; **Main bid** is where {} first: {}.",
         if mains.len() == 1 {
-            "main bids"
+            "your main bids"
         } else {
-            "mains bid"
+            "your mains bid"
+        },
+        if mains.len() == 1 {
+            "it wins"
+        } else {
+            "they win"
         },
         mains.join(", ")
     )
@@ -1764,13 +1771,45 @@ pub async fn resolve_modal_bid(
         .unwrap_or_else(|| "the item".to_owned());
     // Name the item and the side: a bidder with two auctions open needs to
     // see which one this answered.
+    // The side the bid landed on is the ledger's to say: a main bid under the
+    // attendance line is taken as an alt bid (2026-09-09), and the member
+    // must hear that from the reply, not discover it at the close.
+    let landed = match &outcome {
+        Ok(envs) => envs.iter().find_map(|e| match &e.event {
+            nocturnal_core::Event::BidPlaced {
+                for_main,
+                attendance,
+                ..
+            } => Some((*for_main, *attendance)),
+            _ => None,
+        }),
+        Err(_) => None,
+    };
     let text = match &outcome {
         Ok(_) if amount == 0 => format!("Bid withdrawn from **{item}**"),
-        Ok(_) => format!(
-            "Bid **{amount}** as {}{} on **{item}**",
-            if for_main { "MAIN" } else { "ALT" },
-            character.map(|c| format!(" ({c})")).unwrap_or_default()
-        ),
+        Ok(_) => {
+            let (side, attendance) = landed.unwrap_or((for_main, 0.0));
+            let mut t = format!(
+                "Bid **{amount}** as {}{} on **{item}**",
+                if side { "MAIN" } else { "ALT" },
+                character.map(|c| format!(" ({c})")).unwrap_or_default()
+            );
+            if for_main && !side {
+                let line = data
+                    .driver
+                    .query(move |l| {
+                        l.state()
+                            .guild(ledger_guild)
+                            .map_or(0, |g| g.config.main_bid_min_attendance)
+                    })
+                    .await;
+                t.push_str(&format!(
+                    " — counted as an **ALT** bid: main bids need **{line}%** raid attendance, yours is **{}%**.",
+                    attendance as i64
+                ));
+            }
+            t
+        }
         Err(e) => rejection_text(e),
     };
     tracing::info!(

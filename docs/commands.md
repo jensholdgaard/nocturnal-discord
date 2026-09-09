@@ -331,6 +331,11 @@ doesn't care where it runs). Paths and the dashboard URL are config
     on the roster (`character_below_min_level`), and the picker lists such a
     character among the not-eligible with its level. A bare bid (feature
     off) names no character and is not gated.
+27. Alt bids for everyone, mains demoted not refused (2026-09-09, the
+    Vex Thal raid): the Alt button offers every character on the row, so a
+    main on trial bids as an alt by choice; a main bid under `mainbidminra`
+    lands as an alt bid with the reply saying why, instead of a refusal
+    that left the member unable to bid at all.
 22. Ranks are the officers' (2026-09-08). `/roster edit` is gone and
     `/roster add` has no rank option; `/roster rank` is its own ledger
     command (`rank_roster_character`), and a member's own
