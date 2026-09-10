@@ -17,7 +17,12 @@ site without anyone scrolling Discord history or a second bot in the guild.
    ```yaml
    discord:
      feedback_channel_id: 1544068940349579404
+     feedback_channel_names: ["bot-discussions"]   # more, by name (2026-09-10)
    ```
+   The id is the first channel and what turns the intent on; the names are
+   resolved against the guild at boot, each with its own cursor file
+   (`feedback-<channel id>.cursor`). Records carry the channel id, so a
+   reader tells the channels apart by it.
    Deploy the binary that knows the key **before** the config carrying it
    (`deny_unknown_fields`: a rollback binary would otherwise crash-loop).
 3. The bot needs *View Channel* and *Read Message History* on that channel.

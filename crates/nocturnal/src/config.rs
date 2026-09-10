@@ -199,6 +199,11 @@ pub struct DiscordConfig {
     /// the connection and the bot is down. Unset = no intent, no mirror.
     #[serde(default)]
     pub feedback_channel_id: Option<u64>,
+    /// More channels to mirror, by name (2026-09-10: `bot-discussions`),
+    /// resolved against the guild at boot. Needs `feedback_channel_id` set:
+    /// that is what turns the intent on.
+    #[serde(default)]
+    pub feedback_channel_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

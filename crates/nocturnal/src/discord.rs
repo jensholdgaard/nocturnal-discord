@@ -564,9 +564,9 @@ async fn on_event(
                 event: upd,
                 new: None,
                 ..
-            } if upd.channel_id == f.channel && upd.content.is_some() => {
+            } if f.mirrors(upd.channel_id) && upd.content.is_some() => {
                 // No cache: fetch the edited message once.
-                if let Ok(m) = f.channel.message(&ctx.http, upd.id).await {
+                if let Ok(m) = upd.channel_id.message(&ctx.http, upd.id).await {
                     if f.wants(&m) {
                         f.record(&m, "edited");
                     }
@@ -777,10 +777,14 @@ pub async fn run(
     let provision_driver = driver.clone();
     let roster_labels = cfg.roster.access_labels.clone();
     let roster_output = cfg.roster.output_path.clone();
-    let feedback = cfg
-        .discord
-        .feedback_channel_id
-        .map(|c| std::sync::Arc::new(crate::feedback::Feedback::new(c, &cfg.data.dir)));
+    let feedback_names = cfg.discord.feedback_channel_names.clone();
+    let feedback = cfg.discord.feedback_channel_id.map(|c| {
+        std::sync::Arc::new(crate::feedback::Feedback::new(
+            c,
+            feedback_names.clone(),
+            &cfg.data.dir,
+        ))
+    });
     let feedback_enabled = feedback.is_some();
     let prometheus_query_url = cfg.roster.prometheus_query_url.clone();
     let raid_bosses_path = cfg.roster.raid_bosses_path.clone();
@@ -896,7 +900,11 @@ pub async fn run(
                 // the bot was away, then follows the channel live.
                 if let Some(f) = feedback.clone() {
                     let http = ctx.http.clone();
-                    tokio::spawn(async move { f.backfill(http.as_ref()).await });
+                    let guild = serenity::GuildId::new(guild_id);
+                    tokio::spawn(async move {
+                        f.resolve_names(http.as_ref(), guild).await;
+                        f.backfill(http.as_ref()).await
+                    });
                 }
                 // Boot recovery: auctions still open in the ledger get fresh
                 // embeds so their buttons work again (hazard B11).
