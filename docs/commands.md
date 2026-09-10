@@ -336,6 +336,9 @@ doesn't care where it runs). Paths and the dashboard URL are config
     main on trial bids as an alt by choice; a main bid under `mainbidminra`
     lands as an alt bid with the reply saying why, instead of a refusal
     that left the member unable to bid at all.
+28. A raid's loot list is debits that name an item (2026-09-10). A debit
+    with only a comment ("afk", "Gloves") is an adjustment: it stays in the
+    member's history and off the raid page, since there is no item to link.
 22. Ranks are the officers' (2026-09-08). `/roster edit` is gone and
     `/roster add` has no rank option; `/roster rank` is its own ledger
     command (`rank_roster_character`), and a member's own

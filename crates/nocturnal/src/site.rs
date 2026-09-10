@@ -273,9 +273,14 @@ impl SiteData {
                     .copied()
                     .expect("groups are never empty");
                 let ids: Vec<&String> = group.iter().map(|(id, _)| *id).collect();
+                // Loot is a debit that names an item (2026-09-10). A debit with
+                // only a comment - "afk", "Gloves", a manual correction - is an
+                // adjustment: it stays in the member's history, not on the
+                // raid's loot list, since there is no item to link to.
                 let mut loot: Vec<LootView> = Vec::new();
                 for (pid, p) in &g.players {
                     for e in &p.log {
+                        let Some(item) = &e.item else { continue };
                         if e.dkp < 0
                             && e.raid
                                 .as_ref()
@@ -283,11 +288,7 @@ impl SiteData {
                         {
                             loot.push(LootView {
                                 ts_ms: e.ts_ms,
-                                item: e
-                                    .item
-                                    .as_ref()
-                                    .map(|i| i.name.clone())
-                                    .unwrap_or_else(|| e.comment.clone()),
+                                item: item.name.clone(),
                                 winner: name(pid),
                                 cost: -e.dkp,
                             });
@@ -680,6 +681,25 @@ mod tests {
                 player: 1,
                 delta: -42,
                 comment: "Sigil Earring".into(),
+                // Loot names an item (2026-09-10); a bare comment is an adjustment.
+                item: Some(nocturnal_core::Item {
+                    id: "1".into(),
+                    name: "Sigil Earring".into(),
+                    url: None,
+                    data: None,
+                    image: None,
+                }),
+            },
+        );
+        // And an adjustment with only a comment on the same raid, which the
+        // loot list must leave alone.
+        run(
+            &mut l,
+            1_600,
+            Command::AdjustDkp {
+                player: 1,
+                delta: -5,
+                comment: "afk".into(),
                 item: None,
             },
         );
