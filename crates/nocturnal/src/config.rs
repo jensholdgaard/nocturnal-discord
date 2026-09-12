@@ -153,7 +153,7 @@ pub struct ProvisionConfig {
     /// reason a second Python process was still running.
     pub guild_id: Option<u64>,
     /// Override for the commit `/dpstoken` asks members to be on (what
-    /// `/zeal version` prints after `1.4.5+`). Normally unset: the bot reads
+    /// `/zeal version` prints after the `+`). Normally unset: the bot reads
     /// `build.txt` from the nocturnal-zeal release, which the NewZeal
     /// workflow publishes with every build.
     #[serde(default)]

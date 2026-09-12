@@ -219,9 +219,13 @@ pub async fn expected_zeal_build(p: &Provisioning) -> Option<String> {
 /// tell is whether `/otlp setup` exists.
 pub fn zeal_gate_text(zeal_build: Option<&str>) -> String {
     let check = match zeal_build {
+        // The version number is deliberately not spelled out: it moves whenever we
+        // merge upstream (1.4.5 -> 1.4.7 on 2026-09-12), and a stale literal here
+        // tells every member to look for a string their client will never print.
+        // The commit after the `+` is what identifies the build anyway.
         Some(b) => format!(
-            "In game, `/zeal version` must say `1.4.5+{b}`. Anything else — `1.4.5+UNOFFICIAL` \
-             included — is an older file: swap it first."
+            "In game, `/zeal version` must end with `+{b}`. Anything else — a `+UNOFFICIAL` \
+             build included — is an older file: swap it first."
         ),
         None => {
             "In game, `/otlp setup` must be a known command. If it prints a usage line instead, \
@@ -779,7 +783,11 @@ mod tests {
     #[test]
     fn the_gate_names_the_build_when_known_and_the_usage_tell_otherwise() {
         let exact = zeal_gate_text(Some("2b3cf2b"));
-        assert!(exact.contains("`1.4.5+2b3cf2b`"), "{exact}");
+        assert!(exact.contains("`+2b3cf2b`"), "{exact}");
+        assert!(
+            !exact.contains("1.4."),
+            "the gate must not name a version: it moves on every upstream merge\n{exact}"
+        );
         assert!(exact.contains(ZEAL_RELEASE_URL));
         let generic = zeal_gate_text(None);
         assert!(
