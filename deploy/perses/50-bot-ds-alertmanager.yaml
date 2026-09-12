@@ -1,0 +1,35 @@
+# Alertmanager as a Perses datasource (2026-09-12): the alerts and silences the
+# box is holding, read through Perses rather than Prometheus' own UI, which is
+# not reachable from a browser without going through the login wall.
+#
+# Read endpoints plus the two that let an officer silence an alert from the
+# dashboard - creating a silence is a POST to /api/v2/silences and expiring one
+# a DELETE on /api/v2/silence/<id>. Perses proxies these server-side, so the
+# browser never talks to 127.0.0.1:9093 and the login wall still applies.
+apiVersion: perses.dev/v1alpha1
+kind: Datasource
+metadata:
+  name: alertmanager
+  project: nocturnal
+spec:
+  display:
+    name: Alertmanager
+  default: false
+  plugin:
+    kind: AlertManagerDatasource
+    spec:
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://127.0.0.1:9093
+          allowedEndpoints:
+            - endpointPattern: /api/v2/alerts
+              method: GET
+            - endpointPattern: /api/v2/silences
+              method: GET
+            - endpointPattern: /api/v2/silences
+              method: POST
+            - endpointPattern: /api/v2/silence/([a-zA-Z0-9-]+)
+              method: DELETE
+            - endpointPattern: /api/v2/status
+              method: GET

@@ -1,0 +1,240 @@
+# Alerts, in Perses (2026-09-12). Prometheus and Alertmanager both ship a web UI,
+# and neither is reachable from a browser without the login wall in front of it -
+# which is why every Discord alert used to link to http://eq-perses:9090. This
+# dashboard makes Perses the one place a member looks: what is firing now and
+# what is silenced come from Alertmanager, the history comes from Prometheus'
+# own ALERTS series, so Prometheus stays a backend and nobody needs its UI.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: alerts
+  project: nocturnal
+spec:
+  display:
+    name: Alerts
+  duration: 24h
+  refreshInterval: 1m
+  panels:
+    firing_now:
+      kind: Panel
+      spec:
+        display:
+          name: Firing now
+          description: >-
+            Live from Alertmanager, grouped by the team the rule names: bot for the
+            DKP bot, vm for the box. An officer can silence one from here.
+        plugin:
+          kind: AlertTable
+          spec:
+            defaultGroupBy:
+              - team
+            allowedActions:
+              - silence
+            deduplication:
+              mode: fingerprint
+            labelColorMappings:
+              - labelKey: severity
+                mode: severity
+        queries:
+        - kind: AlertsQuery
+          spec:
+            plugin:
+              kind: AlertManagerAlertsQuery
+              spec:
+                datasource:
+                  kind: AlertManagerDatasource
+                  name: alertmanager
+                active: true
+                silenced: true
+                inhibited: true
+    silences:
+      kind: Panel
+      spec:
+        display:
+          name: Silences
+          description: >-
+            Alerts an officer has muted, and until when. Silencing acknowledges a
+            known problem without hiding the next one; an expired silence lets the
+            alert speak again on its own.
+        plugin:
+          kind: SilenceTable
+          spec:
+            allowedActions:
+              - expire
+        queries:
+        - kind: SilencesQuery
+          spec:
+            plugin:
+              kind: AlertManagerSilencesQuery
+              spec:
+                datasource:
+                  kind: AlertManagerDatasource
+                  name: alertmanager
+    stat_firing:
+      kind: Panel
+      spec:
+        display:
+          name: Firing
+          description: Alerts in a firing state right now, from Prometheus' own ALERTS series.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+                - value: 0
+                  color: '#5cb85c'
+                - value: 1
+                  color: '#e6a700'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: count(ALERTS{alertstate="firing"}) or vector(0)
+    stat_critical:
+      kind: Panel
+      spec:
+        display:
+          name: Critical
+          description: Of those, the ones that page rather than inform.
+        plugin:
+          kind: StatChart
+          spec:
+            calculation: last-number
+            format:
+              unit: decimal
+              decimalPlaces: 0
+            thresholds:
+              steps:
+                - value: 0
+                  color: '#5cb85c'
+                - value: 1
+                  color: '#d9534f'
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: count(ALERTS{alertstate="firing", severity="critical"}) or vector(0)
+    ts_history:
+      kind: Panel
+      spec:
+        display:
+          name: What has been firing
+          description: >-
+            One line per alert while it was firing, over the dashboard window. A rule
+            that flaps shows as a dashed line; one that is simply true shows as a
+            band. Pending states are excluded - they are the rule waiting out its
+            `for` clause, not a problem yet.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+            yAxis:
+              min: 0
+              max: 1.2
+              format:
+                unit: decimal
+                decimalPlaces: 0
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: max by (alertname, severity) (ALERTS{alertstate="firing"})
+                seriesNameFormat: '{{alertname}} ({{severity}})'
+    ts_notifications:
+      kind: Panel
+      spec:
+        display:
+          name: Notifications sent to Discord
+          description: >-
+            What actually reached a channel, per hour, and anything that failed on the
+            way. A warning repeats every 6 hours while it stays true, so a flat line
+            here is one standing alert, not six new ones.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(alertmanager_notifications_total{integration="discord"}[1h]))
+                seriesNameFormat: sent
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: sum(increase(alertmanager_notifications_failed_total{integration="discord"}[1h]))
+                seriesNameFormat: failed
+  layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: Right now
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_firing'
+      - x: 4
+        y: 0
+        width: 4
+        height: 4
+        content:
+          $ref: '#/spec/panels/stat_critical'
+      - x: 8
+        y: 0
+        width: 16
+        height: 10
+        content:
+          $ref: '#/spec/panels/firing_now'
+  - kind: Grid
+    spec:
+      display:
+        title: Silences
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/silences'
+  - kind: Grid
+    spec:
+      display:
+        title: History
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_history'
+      - x: 12
+        y: 0
+        width: 12
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_notifications'
