@@ -72,7 +72,12 @@ groups:
         labels: { team: bot, severity: critical }
         annotations:
           summary: "{{ $value | printf \"%.0f\" }} interactions took over 2 s to acknowledge in the last hour"
-          description: Discord fails an interaction at 3 s; these were close. Ack p95 by kind on the Platform dashboard says which command.
+          description: >-
+            Discord fails an interaction at 3 s; these were close. Read "Acknowledgment,
+            delivery against response" on the Platform dashboard first - it says which half
+            is slow, and they have different causes. High delivery is the gateway hop or a
+            blocked runtime worker and there is nothing to do during a raid. High response
+            is our own work or the REST round trip, and that is the one worth chasing.
 
       # The budget alerts carry hysteresis: they fire once the window is a fifth over
       # target for two hours, not the moment it brushes the line. On 2026-09-07 the ack

@@ -333,6 +333,56 @@ spec:
               spec:
                 query: histogram_quantile(0.99, sum by (le, nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_bucket[5m]))) and on(nocturnal_interaction_kind) (sum by (nocturnal_interaction_kind) (rate(nocturnal_interaction_ack_duration_seconds_count[5m])) > 0)
                 seriesNameFormat: 'p99 {{nocturnal_interaction_kind}}'
+    ts_ack_split:
+      kind: Panel
+      spec:
+        display:
+          name: Acknowledgment, delivery against response
+          description: >-
+            The same 3-second budget as the panel beside it, split at the
+            moment the interaction reaches this process. Delivery is Discord's
+            gateway hop plus any wait for a free runtime worker; response is
+            our own work plus the REST round trip back. They sum to the
+            acknowledgment, and which one carries a slow raid night is a
+            different bug with a different fix: delivery says the hop or the
+            runtime, response says us.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_delivery_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_delivery_duration_seconds_count[5m])) > 0)
+                seriesNameFormat: 'p95 delivery'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_response_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_response_duration_seconds_count[5m])) > 0)
+                seriesNameFormat: 'p95 response'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.99, sum by (le) (rate(nocturnal_interaction_delivery_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_delivery_duration_seconds_count[5m])) > 0)
+                seriesNameFormat: 'p99 delivery'
+        - kind: TimeSeriesQuery
+          spec:
+            plugin:
+              kind: PrometheusTimeSeriesQuery
+              spec:
+                query: histogram_quantile(0.99, sum by (le) (rate(nocturnal_interaction_response_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_interaction_response_duration_seconds_count[5m])) > 0)
+                seriesNameFormat: 'p99 response'
     ts_failures:
       kind: Panel
       spec:
@@ -667,6 +717,12 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/ts_ack'
+      - x: 0
+        y: 8
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_ack_split'
   - kind: Grid
     spec:
       display:
