@@ -1271,6 +1271,7 @@ async fn ack(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
 ) -> anyhow::Result<()> {
+    let entered = crate::discord::chrono_now_ms();
     let result = interaction
         .create_response(
             ctx,
@@ -1283,7 +1284,7 @@ async fn ack(
         .context("deferring component interaction");
     // The bid-storm hot path: every click on a live auction embed lands here,
     // and it shares the slash commands' 3-second deadline.
-    crate::discord::record_component_ack(interaction.id.get());
+    crate::discord::record_component_ack(interaction.id.get(), entered);
     result
 }
 
@@ -1342,6 +1343,7 @@ async fn open_bid_modal(
         .placeholder(placeholder)
         .required(true)
         .max_length(12);
+    let entered = crate::discord::chrono_now_ms();
     interaction
         .create_response(
             ctx,
@@ -1355,7 +1357,7 @@ async fn open_bid_modal(
         )
         .await
         .context("opening the bid modal")?;
-    crate::discord::record_component_ack(interaction.id.get());
+    crate::discord::record_component_ack(interaction.id.get(), entered);
     Ok(())
 }
 
@@ -1690,6 +1692,7 @@ async fn ephemeral_response(
     text: impl Into<String>,
     components: Vec<serenity::CreateActionRow>,
 ) -> anyhow::Result<()> {
+    let entered = crate::discord::chrono_now_ms();
     interaction
         .create_response(
             ctx,
@@ -1702,7 +1705,7 @@ async fn ephemeral_response(
         )
         .await
         .context("character pick reply")?;
-    crate::discord::record_component_ack(interaction.id.get());
+    crate::discord::record_component_ack(interaction.id.get(), entered);
     Ok(())
 }
 
@@ -1839,6 +1842,7 @@ pub async fn handle_modal(
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
     // Defer first, exactly as for a click: everything below borrows time we
     // no longer owe Discord.
+    let entered = crate::discord::chrono_now_ms();
     modal
         .create_response(
             ctx,
@@ -1848,7 +1852,7 @@ pub async fn handle_modal(
         )
         .await
         .context("deferring bid modal")?;
-    crate::discord::record_component_ack(modal.id.get());
+    crate::discord::record_component_ack(modal.id.get(), entered);
 
     let Some(discord_guild) = modal.guild_id.map(|g| g.get()) else {
         return Ok(());

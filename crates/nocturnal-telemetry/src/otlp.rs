@@ -323,6 +323,13 @@ pub struct Metrics {
     pub commands: Counter<u64>,
     /// Interaction creation to `defer` — the clock Discord actually enforces.
     pub ack_duration: Histogram<f64>,
+    /// The two halves of `ack_duration`, so a slow acknowledgment says
+    /// whose fault it is: the gateway hop and the wait for a free runtime
+    /// worker, then our work plus the REST round trip. Without the split,
+    /// one number covers three legs and every raid-night investigation ends
+    /// in a guess (2026-09-13).
+    pub delivery_duration: Histogram<f64>,
+    pub response_duration: Histogram<f64>,
     pub commit_duration: Histogram<f64>,
     pub ledger_events: Counter<u64>,
     pub ledger_seq: Gauge<u64>,
@@ -393,6 +400,16 @@ impl Metrics {
                 .build(),
             ack_duration: meter
                 .f64_histogram(metric::NOCTURNAL_INTERACTION_ACK_DURATION)
+                .with_unit("s")
+                .with_boundaries(INTERACTION_SECONDS.to_vec())
+                .build(),
+            delivery_duration: meter
+                .f64_histogram(metric::NOCTURNAL_INTERACTION_DELIVERY_DURATION)
+                .with_unit("s")
+                .with_boundaries(INTERACTION_SECONDS.to_vec())
+                .build(),
+            response_duration: meter
+                .f64_histogram(metric::NOCTURNAL_INTERACTION_RESPONSE_DURATION)
                 .with_unit("s")
                 .with_boundaries(INTERACTION_SECONDS.to_vec())
                 .build(),

@@ -26,6 +26,30 @@ groups:
     unit: s
     attributes:
       - ref: nocturnal.interaction.kind
+  - id: metric.nocturnal.interaction.delivery.duration
+    type: metric
+    metric_name: nocturnal.interaction.delivery.duration
+    stability: development
+    brief: >
+      Discord's interaction timestamp to the moment this process begins
+      handling it: the gateway hop and any wait for a runtime worker. The
+      half of `nocturnal.interaction.ack.duration` we do not control, split
+      out so a slow acknowledgment can be blamed on the wire or on us.
+    instrument: histogram
+    unit: s
+    attributes:
+      - ref: nocturnal.interaction.kind
+  - id: metric.nocturnal.interaction.response.duration
+    type: metric
+    metric_name: nocturnal.interaction.response.duration
+    stability: development
+    brief: >
+      Handler entry to Discord accepting the acknowledgment: our own work
+      plus the REST round trip. The half we do control.
+    instrument: histogram
+    unit: s
+    attributes:
+      - ref: nocturnal.interaction.kind
   - id: metric.nocturnal.interaction.commit.duration
     type: metric
     metric_name: nocturnal.interaction.commit.duration

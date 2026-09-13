@@ -29,6 +29,22 @@ use anyhow::Context as _;
 use config::Config;
 use nocturnal_telemetry::attr;
 
+/// The runtime every entry point builds.
+///
+/// Tokio's default is one worker per core, and the box has two. That is not
+/// a throughput problem — the bot is idle between clicks — but a latency
+/// one: any section that blocks a worker (a synchronous file read, a
+/// serialization of the 1.6 MB site snapshot) takes half the runtime's
+/// capacity with it, and an interaction that lands in that window waits.
+/// Workers here exist to absorb those sections, not to add CPU, so the count
+/// is set above the core count deliberately.
+fn runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+}
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let mut config_path: Option<&str> = None;
@@ -69,7 +85,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // The OTLP exporters spawn background tasks: give them a reactor first.
-    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    let rt = runtime().context("tokio runtime")?;
     let _rt_guard = rt.enter();
     let _telemetry = nocturnal_telemetry::init(&nocturnal_telemetry::TelemetryConfig {
         default_service_name: "nocturnal".to_owned(),
@@ -270,7 +286,7 @@ fn bell_test(target: &str) -> anyhow::Result<()> {
         .init();
 
     let token = Config::discord_token()?;
-    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    let rt = runtime().context("tokio runtime")?;
     rt.block_on(async move {
         let voice = songbird::Songbird::serenity();
         let mut client = serenity::ClientBuilder::new(

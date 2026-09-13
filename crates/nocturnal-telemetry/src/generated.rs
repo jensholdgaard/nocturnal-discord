@@ -95,6 +95,10 @@ pub mod metric {
     pub const NOCTURNAL_GUILD_ATTENDANCE_AVERAGE: &str = "nocturnal.guild.attendance.average";
     pub const NOCTURNAL_INTERACTION_ACK_DURATION: &str = "nocturnal.interaction.ack.duration";
     pub const NOCTURNAL_INTERACTION_COMMIT_DURATION: &str = "nocturnal.interaction.commit.duration";
+    pub const NOCTURNAL_INTERACTION_DELIVERY_DURATION: &str =
+        "nocturnal.interaction.delivery.duration";
+    pub const NOCTURNAL_INTERACTION_RESPONSE_DURATION: &str =
+        "nocturnal.interaction.response.duration";
     pub const NOCTURNAL_LEDGER_EVENTS: &str = "nocturnal.ledger.events";
     pub const NOCTURNAL_LEDGER_SEQ: &str = "nocturnal.ledger.seq";
     pub const NOCTURNAL_LEDGER_WRITER_HEARTBEAT: &str = "nocturnal.ledger.writer.heartbeat";

@@ -489,20 +489,50 @@ fn snowflake_ms(id: u64) -> i64 {
     (id >> 22) as i64 + DISCORD_EPOCH_MS
 }
 
-fn record_ack(created_ms: i64, kind: &'static str) {
-    let elapsed = (chrono_now_ms() - created_ms) as f64 / 1000.0;
-    // A clock that stepped backwards would otherwise post a negative sample
-    // and poison the histogram's sum for the whole collection interval.
-    if elapsed < 0.0 {
-        return;
+/// Record an acknowledgment and the two halves it is made of.
+///
+/// `created_ms` is Discord's snowflake; `entered_ms` is the wall clock read
+/// immediately before the response call, which is as close to "this process
+/// began handling the interaction" as the call site can get.
+///
+/// The split is the point. One number from snowflake to done covers three
+/// legs — the gateway hop, our own work, and the REST round trip — and on
+/// 2026-09-13 that ambiguity cost a full investigation: the ledger, the
+/// compactor, load, the gateway and the network to Discord were each ruled
+/// out, and the remaining ~300ms had nowhere to be attributed. Delivery is
+/// the part we do not control (the hop, plus any wait for a free runtime
+/// worker); response is the part we do.
+fn record_ack_legs(created_ms: i64, entered_ms: i64, kind: &'static str) {
+    let done = chrono_now_ms();
+    let metrics = nocturnal_telemetry::metrics();
+    let attrs = [opentelemetry::KeyValue::new(
+        nocturnal_telemetry::attr::NOCTURNAL_INTERACTION_KIND,
+        kind,
+    )];
+    for (instrument, leg) in [
+        (&metrics.ack_duration, leg_seconds(created_ms, done)),
+        (
+            &metrics.delivery_duration,
+            leg_seconds(created_ms, entered_ms),
+        ),
+        (&metrics.response_duration, leg_seconds(entered_ms, done)),
+    ] {
+        if let Some(seconds) = leg {
+            instrument.record(seconds, &attrs);
+        }
     }
-    nocturnal_telemetry::metrics().ack_duration.record(
-        elapsed,
-        &[opentelemetry::KeyValue::new(
-            nocturnal_telemetry::attr::NOCTURNAL_INTERACTION_KIND,
-            kind,
-        )],
-    );
+}
+
+/// One leg of an acknowledgment, in seconds, or `None` when it ran backwards.
+///
+/// A clock that stepped between the two reads would otherwise post a negative
+/// sample and poison the histogram's sum for the whole collection interval.
+/// Each leg is judged on its own: a step can invert one of the three while
+/// leaving the others honest, so a single check on the total would either
+/// discard good samples or keep a bad one.
+fn leg_seconds(from_ms: i64, to_ms: i64) -> Option<f64> {
+    let ms = to_ms.checked_sub(from_ms)?;
+    (ms >= 0).then(|| ms as f64 / 1000.0)
 }
 
 /// Acknowledge a slash command, timed against Discord's own clock.
@@ -511,18 +541,20 @@ fn record_ack(created_ms: i64, kind: &'static str) {
 /// answering inline is what made the 3-second window a recurring outage — so
 /// this is the one place the acknowledgment latency can be measured.
 pub async fn ack(ctx: &Context<'_>) -> Result<(), Box<serenity::Error>> {
+    let entered = chrono_now_ms();
     let result = ctx.defer().await.map_err(Box::new);
     if let poise::Context::Application(app) = ctx {
-        record_ack(snowflake_ms(app.interaction.id.get()), "command");
+        record_ack_legs(snowflake_ms(app.interaction.id.get()), entered, "command");
     }
     result
 }
 
 /// As [`ack`], for the ephemeral replies most commands use.
 pub async fn ack_ephemeral(ctx: &Context<'_>) -> Result<(), Box<serenity::Error>> {
+    let entered = chrono_now_ms();
     let result = ctx.defer_ephemeral().await.map_err(Box::new);
     if let poise::Context::Application(app) = ctx {
-        record_ack(snowflake_ms(app.interaction.id.get()), "command");
+        record_ack_legs(snowflake_ms(app.interaction.id.get()), entered, "command");
     }
     result
 }
@@ -533,15 +565,16 @@ pub async fn ack_component(
     ctx: &serenity::Context,
     press: &serenity::ComponentInteraction,
 ) -> Result<(), Box<serenity::Error>> {
+    let entered = chrono_now_ms();
     let result = press.defer(ctx).await.map_err(Box::new);
-    record_component_ack(press.id.get());
+    record_component_ack(press.id.get(), entered);
     result
 }
 
 /// Time a button acknowledgment that was sent some other way (the auction
 /// embeds answer with `Acknowledge` rather than `defer`).
-pub fn record_component_ack(interaction_id: u64) {
-    record_ack(snowflake_ms(interaction_id), "button");
+pub fn record_component_ack(interaction_id: u64, entered_ms: i64) {
+    record_ack_legs(snowflake_ms(interaction_id), entered_ms, "button");
 }
 
 /// Gateway events we handle outside the command framework: auction buttons.
@@ -3103,8 +3136,9 @@ pub async fn belltest(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod ack_tests {
-    use super::{snowflake_ms, DISCORD_EPOCH_MS};
+    use super::{leg_seconds, snowflake_ms, DISCORD_EPOCH_MS};
 
     /// The acknowledgment histogram is only as good as this arithmetic, and a
     /// wrong shift or epoch fails silently — it still yields a plausible-looking
@@ -3124,5 +3158,29 @@ mod ack_tests {
     fn the_low_bits_do_not_reach_the_timestamp() {
         let base = 1_540_111_927_995_539_506u64 & !((1 << 22) - 1);
         assert_eq!(snowflake_ms(base), snowflake_ms(base | 0x3F_FFFF));
+    }
+
+    #[test]
+    fn a_leg_is_seconds_from_milliseconds() {
+        assert_eq!(leg_seconds(1_000, 3_500), Some(2.5));
+        assert_eq!(leg_seconds(1_000, 1_000), Some(0.0));
+    }
+
+    #[test]
+    fn a_backwards_leg_is_dropped_rather_than_recorded_negative() {
+        assert_eq!(leg_seconds(3_500, 1_000), None);
+        assert_eq!(leg_seconds(i64::MIN, i64::MAX), None);
+    }
+
+    #[test]
+    fn the_two_halves_add_up_to_the_whole_acknowledgment() {
+        // Delivery is the gateway hop, response is our work plus the REST
+        // round trip; the ack is what Discord's 3-second deadline measures.
+        let (created, entered, done) = (1_000, 1_400, 1_950);
+        let delivery = leg_seconds(created, entered).unwrap();
+        let response = leg_seconds(entered, done).unwrap();
+        let ack = leg_seconds(created, done).unwrap();
+        assert!((delivery + response - ack).abs() < f64::EPSILON);
+        assert_eq!(delivery, 0.4);
     }
 }
