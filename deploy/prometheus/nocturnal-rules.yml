@@ -6,6 +6,13 @@
 # The two SLOs (docs/runbook.md, "Alerting and SLOs"):
 #   ack     99 % of interactions acknowledged within 2 s over 30 days (Discord gives up at 3 s)
 #   command 99.5 % of commands not failed by infrastructure over 30 days (rejections are not failures)
+#
+# The recording rules below stay - the Platform dashboard's SLO row is built on them -
+# but the budget *alerts* are gone (2026-09-13). A 30-day window cannot be acted on in
+# the moment: the 33 slow acks that tripped it were all on raid nights a week ago, and
+# it would have repeated four times a day until October while nobody could do a thing.
+# Every alert in this file is now critical; anything that is a number to look at rather
+# than a thing to do belongs on the dashboard.
 groups:
   - name: nocturnal
     rules:
@@ -54,7 +61,7 @@ groups:
 
       - alert: NocturnalCompactionErrors
         expr: sum(increase(nocturnal_compaction_runs_total{nocturnal_decision_outcome="error"}[1h])) > 0
-        labels: { team: bot, severity: warning }
+        labels: { team: bot, severity: critical }
         annotations:
           summary: Compaction failed
           description: The WAL keeps growing until compaction succeeds (WAL awaiting compaction on the Platform dashboard). S3 upload is the usual suspect.
@@ -62,7 +69,7 @@ groups:
       # ---- the SLOs, as budget burn ------------------------------------------------------
       - alert: NocturnalAckSlow
         expr: (sum(increase(nocturnal_interaction_ack_duration_seconds_count[1h])) - sum(increase(nocturnal_interaction_ack_duration_seconds_bucket{le="2"}[1h]))) >= 3
-        labels: { team: bot, severity: warning }
+        labels: { team: bot, severity: critical }
         annotations:
           summary: "{{ $value | printf \"%.0f\" }} interactions took over 2 s to acknowledge in the last hour"
           description: Discord fails an interaction at 3 s; these were close. Ack p95 by kind on the Platform dashboard says which command.
@@ -72,26 +79,12 @@ groups:
       # budget sat at 16 slow of 1597 - exactly 1.0 % - and every handful of new
       # interactions flipped it, so a redeploy looked like it "fired an alert" (it was
       # the resolved notice).
-      - alert: NocturnalAckSLOBudgetSpent
-        expr: nocturnal:ack_slow:increase30d > 0.012 * nocturnal:ack:increase30d and nocturnal:ack:increase30d > 100
-        for: 2h
-        labels: { team: bot, severity: warning }
-        annotations:
-          summary: Ack SLO missed over the last 30 days
-          description: More than 1 % of interactions in the last 30 days took over 2 s to acknowledge.
-
-      - alert: NocturnalCommandSLOBudgetSpent
-        expr: nocturnal:command_failed:increase30d > 0.006 * nocturnal:command:increase30d and nocturnal:command:increase30d > 100
-        for: 2h
-        labels: { team: bot, severity: warning }
-        annotations:
-          summary: Command SLO missed over the last 30 days
-          description: More than 0.5 % of commands in the last 30 days failed for infrastructure reasons.
 
       # ---- quiet after a restart ---------------------------------------------------------
       # Not a notification (Alertmanager routes severity=info to nowhere): an inhibitor. For
       # ten minutes after the bot starts - a deploy, a watchdog restart - its warnings are
       # held back, so cold caches and a replay do not page anyone. Criticals still do.
+
       - alert: NocturnalJustRestarted
         expr: max(process_uptime_seconds{service_name="nocturnal"}) < 600
         labels: { team: bot, severity: info }
@@ -102,7 +95,7 @@ groups:
       - alert: NocturnalDiskLow
         expr: max(system_filesystem_usage_bytes{system_filesystem_state="free"}) < 3e9
         for: 10m
-        labels: { team: bot, severity: warning }
+        labels: { team: bot, severity: critical }
         annotations:
           summary: "Under {{ $value | humanize1024 }}B free on the event store"
           description: /var/lib/nocturnal shares the root filesystem; see the Infrastructure dashboard for who is growing.
@@ -110,7 +103,7 @@ groups:
       - alert: NocturnalCommitSlow
         expr: histogram_quantile(0.95, sum by (le) (rate(nocturnal_interaction_commit_duration_seconds_bucket[10m]))) > 1 and on() sum(rate(nocturnal_interaction_commit_duration_seconds_count[10m])) > 0
         for: 10m
-        labels: { team: bot, severity: warning }
+        labels: { team: bot, severity: critical }
         annotations:
           summary: "Commit p95 at {{ $value | printf \"%.2f\" }} s"
           description: fsync or the WAL is slow; the disk is the usual reason.
