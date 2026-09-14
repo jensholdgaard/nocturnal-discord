@@ -1270,8 +1270,8 @@ async fn component_is_officer(
 async fn ack(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
+    entered: i64,
 ) -> anyhow::Result<()> {
-    let entered = crate::discord::chrono_now_ms();
     let result = interaction
         .create_response(
             ctx,
@@ -1324,6 +1324,7 @@ async fn open_bid_modal(
     auction_id: &str,
     for_main: bool,
     character: Option<&crate::loot_fit::Candidate>,
+    entered: i64,
 ) -> anyhow::Result<()> {
     let side = if for_main { "Main bid" } else { "Alt bid" };
     // With a character: the title names it (45 chars max) and the field's
@@ -1343,7 +1344,6 @@ async fn open_bid_modal(
         .placeholder(placeholder)
         .required(true)
         .max_length(12);
-    let entered = crate::discord::chrono_now_ms();
     interaction
         .create_response(
             ctx,
@@ -1539,6 +1539,7 @@ async fn character_bid_click(
     ledger_guild: GuildId,
     auction_id: &str,
     for_main: bool,
+    entered: i64,
 ) -> anyhow::Result<()> {
     let p = pick(
         data,
@@ -1549,7 +1550,7 @@ async fn character_bid_click(
     )
     .await;
     if !p.enabled {
-        return open_bid_modal(ctx, interaction, auction_id, for_main, None).await;
+        return open_bid_modal(ctx, interaction, auction_id, for_main, None, entered).await;
     }
     let side = if for_main {
         "mains"
@@ -1587,9 +1588,19 @@ async fn character_bid_click(
                 text.push_str(&mains_hint(&p.mains_elsewhere));
                 text.push_str("\nA character not on your row: `/roster add`.");
             }
-            ephemeral_response(ctx, interaction, text, Vec::new()).await
+            ephemeral_response(ctx, interaction, text, Vec::new(), entered).await
         }
-        1 => open_bid_modal(ctx, interaction, auction_id, for_main, p.candidates.first()).await,
+        1 => {
+            open_bid_modal(
+                ctx,
+                interaction,
+                auction_id,
+                for_main,
+                p.candidates.first(),
+                entered,
+            )
+            .await
+        }
         _ => {
             let action = if for_main {
                 Action::PickMain
@@ -1626,6 +1637,7 @@ async fn character_bid_click(
                 interaction,
                 text,
                 vec![serenity::CreateActionRow::SelectMenu(menu)],
+                entered,
             )
             .await
         }
@@ -1641,6 +1653,7 @@ async fn character_pick_selected(
     ledger_guild: GuildId,
     auction_id: &str,
     for_main: bool,
+    entered: i64,
 ) -> anyhow::Result<()> {
     let chosen = match &interaction.data.kind {
         serenity::ComponentInteractionDataKind::StringSelect { values } => values.first().cloned(),
@@ -1652,6 +1665,7 @@ async fn character_pick_selected(
             interaction,
             ":no_entry: No character chosen.",
             Vec::new(),
+            entered,
         )
         .await;
     };
@@ -1669,7 +1683,7 @@ async fn character_pick_selected(
         .iter()
         .find(|c| c.name.eq_ignore_ascii_case(&chosen))
     {
-        Some(c) => open_bid_modal(ctx, interaction, auction_id, for_main, Some(c)).await,
+        Some(c) => open_bid_modal(ctx, interaction, auction_id, for_main, Some(c), entered).await,
         None => {
             ephemeral_response(
                 ctx,
@@ -1678,6 +1692,7 @@ async fn character_pick_selected(
                     ":no_entry: **{chosen}** is not one of your eligible characters for this bid."
                 ),
                 Vec::new(),
+                entered,
             )
             .await
         }
@@ -1691,8 +1706,8 @@ async fn ephemeral_response(
     interaction: &serenity::ComponentInteraction,
     text: impl Into<String>,
     components: Vec<serenity::CreateActionRow>,
+    entered: i64,
 ) -> anyhow::Result<()> {
-    let entered = crate::discord::chrono_now_ms();
     interaction
         .create_response(
             ctx,
@@ -1836,13 +1851,14 @@ pub async fn handle_modal(
     modal: &serenity::ModalInteraction,
     data: &Data,
 ) -> anyhow::Result<()> {
+    // Read before anything else, for the same reason as in `handle_component`.
+    let entered = crate::discord::chrono_now_ms();
     let Some((action, auction_id, character)) = parse_custom_id(&modal.data.custom_id) else {
         return Ok(()); // not ours
     };
     tracing::Span::current().record("nocturnal.auction.id", auction_id);
     // Defer first, exactly as for a click: everything below borrows time we
     // no longer owe Discord.
-    let entered = crate::discord::chrono_now_ms();
     modal
         .create_response(
             ctx,
@@ -1917,6 +1933,12 @@ pub async fn handle_component(
     interaction: &serenity::ComponentInteraction,
     data: &Data,
 ) -> anyhow::Result<()> {
+    // The moment this process took the click, read before anything below it
+    // runs. Everything downstream is handed this instant rather than reading
+    // its own clock: the split is only honest if "delivery" ends where our
+    // work begins, and on the bid path our work (`pick`) happens before the
+    // response call, not after it.
+    let entered = crate::discord::chrono_now_ms();
     let Some((action, auction_id, _)) = parse_custom_id(&interaction.data.custom_id) else {
         return Ok(()); // not ours (item pickers, pagination, …)
     };
@@ -1941,6 +1963,7 @@ pub async fn handle_component(
             ledger_guild,
             auction_id,
             action.for_main(),
+            entered,
         )
         .await;
     }
@@ -1952,11 +1975,12 @@ pub async fn handle_component(
             ledger_guild,
             auction_id,
             action.for_main(),
+            entered,
         )
         .await;
     }
     // Defer-first: nothing below this line races the 3-second window.
-    ack(ctx, interaction).await?;
+    ack(ctx, interaction, entered).await?;
 
     let aid = auction_id.to_owned();
     let status = data
