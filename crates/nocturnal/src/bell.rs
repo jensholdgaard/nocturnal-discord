@@ -27,6 +27,22 @@ pub fn embedded() -> &'static [u8] {
 /// A bell must never outlive the auction it announces.
 const PLAY_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How long to let Discord finish a disconnect before joining the next
+/// channel.
+///
+/// A guild has one voice connection. Leaving returns from `remove` as soon as
+/// the intent is sent, not when Discord has acted on it, so joining the second
+/// raid channel immediately raced the first channel's teardown and Discord
+/// dropped one of the two requests. It failed the same way every time: the
+/// first channel rang, the second reported "request was cancelled/dropped".
+/// 182 of 185 attempts on the second channel over two days (2026-09-16).
+const SETTLE: Duration = Duration::from_millis(500);
+
+/// One retry for a join that lost that race anyway - two bells for two
+/// auctions opened seconds apart collide the same way, and that ordering is
+/// not ours to control. Both attempts still sit inside `PLAY_TIMEOUT`.
+const JOIN_RETRY_WAIT: Duration = Duration::from_millis(400);
+
 fn sound(path: Option<&std::path::Path>) -> Input {
     match path {
         Some(p) => match std::fs::read(p) {
@@ -72,6 +88,9 @@ pub fn ring(
             if let Some(manager) = songbird::get(&ctx).await {
                 let _ = manager.remove(serenity::GuildId::new(guild_id)).await;
             }
+            // Let that disconnect land before the next join asks for the same
+            // single voice connection.
+            tokio::time::sleep(SETTLE).await;
         }
     });
 }
@@ -96,12 +115,25 @@ async fn play_in(
         .await
         .map_err(|e| anyhow::anyhow!("bell audio could not be decoded: {e}"))?;
 
-    let call = manager
+    let call = match manager
         .join(
             serenity::GuildId::new(guild_id),
             serenity::ChannelId::new(channel),
         )
-        .await?;
+        .await
+    {
+        Ok(call) => call,
+        Err(first) => {
+            tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %first, "voice join lost a race; retrying once");
+            tokio::time::sleep(JOIN_RETRY_WAIT).await;
+            manager
+                .join(
+                    serenity::GuildId::new(guild_id),
+                    serenity::ChannelId::new(channel),
+                )
+                .await?
+        }
+    };
     let mut locked = call.lock().await;
     let track = locked.play_input(input);
     drop(locked);
