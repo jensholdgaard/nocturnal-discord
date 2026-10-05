@@ -225,6 +225,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             over_bid_to_win_main,
             deadline_ts_ms,
             debit_dkp,
+            live,
         } => {
             g.auctions.insert(
                 auction_id.clone(),
@@ -237,6 +238,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     over_bid_to_win_main: *over_bid_to_win_main,
                     deadline_ts_ms: *deadline_ts_ms,
                     debit_dkp: *debit_dkp,
+                    live: *flavor == Flavor::Short || *live,
                     status: AuctionStatus::Open,
                     bids: Vec::new(),
                     winners: Vec::new(),

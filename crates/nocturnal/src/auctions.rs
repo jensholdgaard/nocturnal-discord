@@ -773,6 +773,18 @@ pub async fn post(
     Ok(())
 }
 
+/// Where an auction's embed goes: a live one (short, or a roll on the bid
+/// time) to the auction channel, the rest to the long auction channel, or
+/// the auction channel when no long one is configured. The opener and boot
+/// recovery share it so a restart re-posts where the auction began.
+fn auction_channel_for(live: bool, short: Option<u64>, long: Option<u64>) -> Option<u64> {
+    if live {
+        short
+    } else {
+        long.or(short)
+    }
+}
+
 /// Boot recovery (hazard B11): every auction still open in the ledger gets a
 /// fresh embed, so its buttons work again after a restart.
 pub async fn repost_open_auctions(
@@ -787,15 +799,12 @@ pub async fn repost_open_auctions(
                 return Vec::new();
             };
             let short = g.config.auction_channel;
-            let long = g.config.long_auction_channel.or(short);
+            let long = g.config.long_auction_channel;
             g.auctions
                 .iter()
                 .filter(|(_, a)| a.status == AuctionStatus::Open)
                 .filter_map(|(id, a)| {
-                    let channel = match a.flavor {
-                        Flavor::Short => short,
-                        Flavor::Long | Flavor::Roll => long,
-                    }?;
+                    let channel = auction_channel_for(a.live, short, long)?;
                     Some((id.clone(), a.clone(), channel))
                 })
                 .collect::<Vec<_>>()
@@ -975,6 +984,7 @@ async fn open_auction(
     num_items: Option<u32>,
     duration_ms: i64,
     debit_dkp: bool,
+    live: bool,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(ctx)?;
     let (cfg_min_bid, lock, over, short_channel, long_channel) = ctx
@@ -991,11 +1001,7 @@ async fn open_auction(
             )
         })
         .await;
-    let channel = match flavor {
-        Flavor::Short => short_channel,
-        Flavor::Long | Flavor::Roll => long_channel.or(short_channel),
-    };
-    let Some(channel) = channel else {
+    let Some(channel) = auction_channel_for(live, short_channel, long_channel) else {
         ctx.say(":no_entry: Auction channel not set, use /configure to set it")
             .await?;
         return Ok(());
@@ -1013,6 +1019,7 @@ async fn open_auction(
         over_bid_to_win_main: over,
         duration_ms,
         debit_dkp,
+        live,
     };
     // The item row for the character picker, fetched now so a click later
     // reads it from disk. Fire and forget: a miss only costs the picker its
@@ -1040,13 +1047,13 @@ async fn open_auction(
                         .and_then(|g| g.auctions.get(&aid).cloned())
                 })
                 .await;
-            if let Some(auction) = auction {
+            if let Some(auction) = &auction {
                 post(
                     ctx.serenity_context().http.as_ref(),
                     &ctx.data().auctions,
                     channel,
                     &auction_id,
-                    &auction,
+                    auction,
                 )
                 .await?;
             }
@@ -1055,8 +1062,10 @@ async fn open_auction(
                 "auction opened"
             );
             // The bell, as officers know it: both raid channels, right after
-            // the auction embed goes up. Decorative and never fatal.
-            if flavor == Flavor::Short && ctx.data().bell.enabled {
+            // the auction embed goes up. Decorative and never fatal. Rung for
+            // what the ledger calls live: a short auction, and since
+            // 2026-10-05 a roll auction opened without hours.
+            if auction.as_ref().is_some_and(|a| a.live) && ctx.data().bell.enabled {
                 let (raid_channel, second) = ctx
                     .data()
                     .driver
@@ -1123,6 +1132,7 @@ pub async fn startbid(
         numitems,
         bid_time_s * 1000,
         true,
+        true,
     )
     .await
 }
@@ -1170,6 +1180,7 @@ pub async fn startlongbid(
         numitems,
         hours * 3_600_000,
         debit.unwrap_or(true),
+        false,
     )
     .await
 }
@@ -1220,6 +1231,8 @@ pub async fn rollauction(
     };
     // Ziglax, 2026-09-30: a long auction won by a /random 100 instead of a
     // bid. The ledger records no minimum and no debit whatever is passed.
+    // Ziglax, 2026-10-05: without hours it runs like a /startbid auction
+    // too: the auction channel and the bell, not the long auction channel.
     open_auction(
         &ctx,
         item,
@@ -1228,6 +1241,7 @@ pub async fn rollauction(
         numitems,
         duration_ms,
         false,
+        duration.is_none(),
     )
     .await
 }
@@ -2601,8 +2615,8 @@ pub async fn handle_component(
 #[cfg(test)]
 mod tests {
     use super::{
-        closed_message, custom_id, details_readable, item_history_lines, live_message,
-        parse_custom_id, settled_message, Action, Auction, AuctionStatus, Flavor,
+        auction_channel_for, closed_message, custom_id, details_readable, item_history_lines,
+        live_message, parse_custom_id, settled_message, Action, Auction, AuctionStatus, Flavor,
     };
 
     /// The one status that must stay sealed, and the three that must not.
@@ -2659,6 +2673,7 @@ mod tests {
             rolls: Vec::new(),
             roll_offs: Vec::new(),
             debit_dkp: true,
+            live: flavor == Flavor::Short,
         }
     }
 
@@ -3018,6 +3033,7 @@ mod tests {
                     over_bid_to_win_main: 0,
                     duration_ms: 600_000,
                     debit_dkp: true,
+                    live: false,
                 },
             )
             .await
@@ -3094,5 +3110,17 @@ mod tests {
         ] {
             assert_eq!(parse_custom_id(id), None, "{id}");
         }
+    }
+
+    /// Ziglax, 2026-10-05: a live auction (short, or a roll on the bid time)
+    /// goes to the auction channel even when a long auction channel is set;
+    /// the rest go to the long one, or the auction channel without it.
+    #[test]
+    fn a_live_auction_goes_to_the_auction_channel() {
+        assert_eq!(auction_channel_for(true, Some(1), Some(2)), Some(1));
+        assert_eq!(auction_channel_for(true, None, Some(2)), None);
+        assert_eq!(auction_channel_for(false, Some(1), Some(2)), Some(2));
+        assert_eq!(auction_channel_for(false, Some(1), None), Some(1));
+        assert_eq!(auction_channel_for(false, None, None), None);
     }
 }

@@ -86,6 +86,10 @@ pub struct Auction {
     pub deadline_ts_ms: i64,
     /// `false`: a free auction, the winners keep their DKP (2026-09-08).
     pub debit_dkp: bool,
+    /// Posted to the auction channel with the bell: every short auction, and
+    /// a roll auction opened without hours (2026-10-05). The rest go to the
+    /// long auction channel.
+    pub live: bool,
     pub status: AuctionStatus,
     pub bids: Vec<Bid>,
     pub winners: Vec<crate::event::Winner>,
@@ -518,6 +522,7 @@ mod tests {
             cancelled_by: None,
             cancelled_ts_ms: None,
             debit_dkp: true,
+            live: false,
             rolls: Vec::new(),
             roll_offs: Vec::new(),
         }

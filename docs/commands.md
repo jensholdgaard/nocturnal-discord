@@ -81,7 +81,7 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/dpsstatus` | officer | — | Who is sending telemetry, on what Zeal build, last seen (from Ourios, 14 days) |
 | `/startbid` | officer | search, minbid?, numitems?, database? | Short auction flow (below) |
 | `/startlongbid` | officer | search, minbid?, numitems?, duration? (h, default 48), database?, debit? | Long auction; bids via `/bid`. `debit:false` is a free auction (feedback, 2026-09-08): bids and winners as usual, the loot recorded at 0 DKP, nobody charged; the post says so |
-| `/rollauction` | officer | search, numitems?, duration? (h, default: the `bidtime` of a `/startbid` auction), database? | Roll auction (2026-09-30): laid out like a long auction, but members press **I want to roll** for a public 1–100 roll instead of bidding. No minimum bid and no debit; the highest roll wins at the deadline and a tie at the cut is rolled off automatically |
+| `/rollauction` | officer | search, numitems?, duration? (h, default: the `bidtime` of a `/startbid` auction), database? | Roll auction (2026-09-30): laid out like a long auction (without `duration`, posted to auctionchannel with the bell like `/startbid`, 2026-10-05), but members press **I want to roll** for a public 1–100 roll instead of bidding. No minimum bid and no debit; the highest roll wins at the deadline and a tie at the cut is rolled off automatically |
 | `/auctiondetails` | officer | auctionid | Dump bids/winners of a **settled** auction; refused while it is still running; publicly announces the peek in the auction channel (only when it actually showed something) |
 | `/cancelauction` | officer role | auctionid | Void a running auction: no winner, no DKP. Bids stay readable, not republished |
 | `/endauction` | officer role | auctionid | Close and settle now, skipping the wait; the deadline becomes that moment |
@@ -144,7 +144,9 @@ green with winners + anonymized bids. **Legacy never debits these winners** —
 the rewrite does (deliberate change).
 
 **Roll auction** (`/rollauction`, 2026-09-30, no legacy counterpart): posted
-to longauctionchannel like a long auction, with one button, **I want to
+to longauctionchannel like a long auction (without `duration`, since
+2026-10-05: to auctionchannel with the bell, like a `/startbid` auction),
+with one button, **I want to
 roll**. It lasts `duration` hours, or without one the `bidtime` a `/startbid`
 auction lasts (`/configure`, 60 s by default). A click is a `/random 100`
 (`roll_for_auction`, one per registered member, drawn from the click's
@@ -388,7 +390,8 @@ doesn't care where it runs). Paths and the dashboard URL are config
 Per the maintainer: current UX stays exactly as officers know it; changes can
 be requested later. Concretely:
 
-- **Bell sound**: kept — played at short-auction start in the raid channel(s),
+- **Bell sound**: kept — played at short-auction start in the raid channel(s)
+  (and since 2026-10-05 at the start of a `/rollauction` without `duration`),
   strictly fire-and-forget (a voice failure can never touch an auction).
 - **Bid entry**: the DM-typed-amount flow stays, hardened — the collector is
   bound to its specific auction, closed DMs get the ephemeral fallback, and

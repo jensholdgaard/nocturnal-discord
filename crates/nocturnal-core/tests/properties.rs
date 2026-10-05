@@ -61,6 +61,7 @@ fn arb_command() -> impl Strategy<Value = Command> {
             over_bid_to_win_main: 0,
             duration_ms: 1_000,
             debit_dkp: true,
+            live: false,
         }),
         (auction_id.clone(), player.clone(), amount, any::<bool>()).prop_map(
             |(id, player, amount, for_main)| Command::PlaceBid {

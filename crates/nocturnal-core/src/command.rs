@@ -86,6 +86,9 @@ pub enum Command {
         duration_ms: i64,
         /// `false` opens a free auction: nobody is debited at the close.
         debit_dkp: bool,
+        /// `true` runs a roll auction like a short one: auction channel and
+        /// bell. Ignored for the other flavors, whose flavor already says.
+        live: bool,
     },
     PlaceBid {
         auction_id: String,

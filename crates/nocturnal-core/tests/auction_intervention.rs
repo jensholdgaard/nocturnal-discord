@@ -71,6 +71,7 @@ fn running_auction_with(debit_dkp: bool) -> Ledger {
             over_bid_to_win_main: 0,
             duration_ms: DEADLINE - 1_000_000,
             debit_dkp,
+            live: false,
         },
     )
     .unwrap();

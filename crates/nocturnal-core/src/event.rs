@@ -382,6 +382,12 @@ pub enum Event {
         /// absent means the winners paid.
         #[serde(default = "default_true")]
         debit_dkp: bool,
+        /// A roll auction run like a short one (2026-10-05): opened without
+        /// hours, on the bid time, posted to the auction channel with the
+        /// bell. Only a roll records it; absent means false, so every earlier
+        /// roll keeps the long auction channel.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        live: bool,
     },
     #[serde(rename = "auction.bid_placed")]
     BidPlaced {

@@ -230,6 +230,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             over_bid_to_win_main,
             duration_ms,
             debit_dkp,
+            live,
         } => {
             if g.auctions.contains_key(auction_id) {
                 return Err(Rejection::AuctionIdTaken);
@@ -251,6 +252,9 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 over_bid_to_win_main: knob(*over_bid_to_win_main),
                 deadline_ts_ms: ctx.now_ms + *duration_ms,
                 debit_dkp: *debit_dkp && !roll,
+                // A short auction is live by flavor and a long one never is:
+                // only a roll carries the choice in the fact.
+                live: *live && roll,
             }])
         }
 

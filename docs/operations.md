@@ -343,7 +343,8 @@ archive is simply off.
 
 ### The auction bell
 
-The legacy bell rings in the raid voice channels when a short auction opens.
+The legacy bell rings in the raid voice channels when a short auction opens,
+and (2026-10-05) when a `/rollauction` opens without a `duration`.
 The sound is **compiled into the binary** (34 KB), so there is no asset to
 deploy and nothing to fetch on the hot path; `bell.path` overrides it with a
 file, and `bell.enabled: false` turns it off.

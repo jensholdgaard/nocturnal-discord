@@ -84,6 +84,7 @@ fn roll_auction(num_items: u32) -> Ledger {
             over_bid_to_win_main: 100,
             duration_ms: DEADLINE - OPENED,
             debit_dkp: true,
+            live: false,
         },
     )
     .unwrap();
@@ -227,6 +228,7 @@ fn a_roll_on_a_bidding_auction_is_refused() {
             over_bid_to_win_main: 0,
             duration_ms: DEADLINE - OPENED,
             debit_dkp: true,
+            live: false,
         },
     )
     .unwrap();
@@ -472,4 +474,66 @@ fn the_same_seed_draws_the_same_roll_off() {
     let b = roll_winners(&field, 1, &mut Rng::new(99));
     assert_eq!(a, b);
     assert_eq!(a.0.len(), 1);
+}
+
+/// Opens `au-9` as `flavor` asking for `live`, and returns the projection.
+fn opened_asking(flavor: Flavor, live: bool) -> (Vec<Envelope>, Auction) {
+    let mut l = Ledger::new();
+    let envelopes = exec(
+        &mut l,
+        &ctx_at(OPENED, Actor::User(OFFICER)),
+        Command::OpenAuction {
+            auction_id: "au-9".into(),
+            item: cloak(),
+            flavor,
+            min_bid: 0,
+            num_items: 1,
+            min_bid_to_lock_for_main: 0,
+            over_bid_to_win_main: 0,
+            duration_ms: DEADLINE - OPENED,
+            debit_dkp: false,
+            live,
+        },
+    )
+    .unwrap();
+    let a = l.state().guild(GUILD).unwrap().auctions["au-9"].clone();
+    (envelopes, a)
+}
+
+fn recorded_live(envelopes: &[Envelope]) -> bool {
+    match &envelopes[0].event {
+        Event::AuctionOpened { live, .. } => *live,
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Ziglax, 2026-10-05: a roll opened without hours runs like a short
+/// auction, in the auction channel with the bell. The fact records it.
+#[test]
+fn a_roll_on_the_bid_time_is_live_and_the_fact_says_so() {
+    let (envelopes, a) = opened_asking(Flavor::Roll, true);
+    assert!(recorded_live(&envelopes));
+    assert!(a.live);
+}
+
+#[test]
+fn a_roll_with_hours_is_not_live() {
+    let (envelopes, a) = opened_asking(Flavor::Roll, false);
+    assert!(!recorded_live(&envelopes));
+    assert!(!a.live);
+}
+
+/// The flavor decides for the others: a short auction is live whatever the
+/// request says, a long one never is, and neither writes `live` in the fact.
+#[test]
+fn only_a_roll_carries_live_in_the_fact() {
+    for asked in [false, true] {
+        let (envelopes, a) = opened_asking(Flavor::Short, asked);
+        assert!(!recorded_live(&envelopes));
+        assert!(a.live, "a short auction is always live");
+
+        let (envelopes, a) = opened_asking(Flavor::Long, asked);
+        assert!(!recorded_live(&envelopes));
+        assert!(!a.live, "a long auction is never live");
+    }
 }

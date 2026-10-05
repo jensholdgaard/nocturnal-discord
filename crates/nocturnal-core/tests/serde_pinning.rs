@@ -113,6 +113,7 @@ fn samples() -> Vec<Event> {
             over_bid_to_win_main: 100,
             deadline_ts_ms: 99,
             debit_dkp: false,
+            live: false,
         },
         Event::BidPlaced {
             auction_id: "a".into(),
@@ -373,4 +374,31 @@ fn v_defaults_to_1_when_absent() {
     let json = r#"{"seq":0,"ts_ms":1,"guild":1,"actor":"system","kind":"auction.closed","payload":{"auction_id":"a"}}"#;
     let env: Envelope = serde_json::from_str(json).unwrap();
     assert_eq!(env.v, 1);
+}
+
+/// `auction.opened` gained `live` on 2026-10-05: a roll auction run on the
+/// bid time, in the auction channel with the bell. Every roll opened before
+/// went to the long auction channel and must still replay as one; a `false`
+/// stays off the wire so every other opening keeps its bytes.
+#[test]
+fn an_auction_opened_without_live_still_loads_and_false_stays_off_the_wire() {
+    let json = r#"{"seq":0,"ts_ms":1,"guild":1,"actor":"system","kind":"auction.opened",
+        "payload":{"auction_id":"a","item":{"id":"9","name":"Cloak"},"flavor":"roll",
+        "min_bid":0,"num_items":1,"min_bid_to_lock_for_main":0,"over_bid_to_win_main":0,
+        "deadline_ts_ms":99,"debit_dkp":false}}"#;
+    let env: Envelope = serde_json::from_str(json).unwrap();
+    match &env.event {
+        Event::AuctionOpened { live, .. } => assert!(!live),
+        other => panic!("{other:?}"),
+    }
+    assert!(!serde_json::to_string(&env).unwrap().contains("live"));
+
+    let mut live_env = env;
+    if let Event::AuctionOpened { live, .. } = &mut live_env.event {
+        *live = true;
+    }
+    let wire = serde_json::to_string(&live_env).unwrap();
+    assert!(wire.contains(r#""live":true"#), "{wire}");
+    let back: Envelope = serde_json::from_str(&wire).unwrap();
+    assert_eq!(back, live_env);
 }

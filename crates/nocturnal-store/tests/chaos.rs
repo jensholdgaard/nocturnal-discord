@@ -161,6 +161,7 @@ fn run_scenario(seed: u64) {
                         over_bid_to_win_main: 0,
                         duration_ms: 30_000,
                         debit_dkp: true,
+                        live: false,
                     },
                 )
                 .is_some()

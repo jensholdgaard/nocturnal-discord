@@ -2507,6 +2507,7 @@ pub async fn stresstest(
                     over_bid_to_win_main: 0,
                     duration_ms: 600_000,
                     debit_dkp: true,
+                    live: false,
                 },
             )
             .await
