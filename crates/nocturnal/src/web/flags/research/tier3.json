@@ -1,0 +1,2441 @@
+{
+  "part": "tier3",
+  "steps": [
+    {
+      "id": "hohtrials-bit0",
+      "flag": "hohtrials",
+      "value": "bit0",
+      "tier": 3,
+      "zone": "hohonora",
+      "title": "Halls of Honor trial 1: Rydda`Dar",
+      "requires": [
+        {
+          "flag": "hohonora zone access",
+          "value": "zone flag 211",
+          "why": "hohonora has flag_needed; zone flag 211 is set by povalor door when aerindar becomes 2 (povalor/player.lua) or potranquility door 23 alternate access"
+        },
+        {
+          "flag": "hohtrials",
+          "value": "bit0 = 0",
+          "why": "Trydan2Say only grants when the first character is not '1'"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Trydan_Faye",
+          "zone": "hohonora",
+          "say": "ready",
+          "detail": "Say ready to Trydan Faye; he depops and A_Custodian_of_Marr spawns at his spot ('hail' and 'trials' are flavor only)."
+        },
+        {
+          "type": "kill",
+          "npc": "A_Custodian_of_Marr",
+          "zone": "hohonora",
+          "detail": "Engage the Custodian within 10 seconds or it depops; keep it between Y 1750 and 2300."
+        },
+        {
+          "type": "kill",
+          "npc": "Rydda`Dar",
+          "zone": "hohonora",
+          "detail": "Rydda`Dar spawns where the Custodian died; kill it, keeping it between Y 1750 and 2300."
+        },
+        {
+          "type": "say",
+          "npc": "#Trydan_Faye",
+          "zone": "hohonora",
+          "say": "hail",
+          "detail": "Every raid member hails the new Trydan Faye that spawns at -1725, 2040."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Trydan_Faye",
+          "zone": "hohonora",
+          "x": -1725.0,
+          "y": 2040.0,
+          "z": -111.4,
+          "spawn": "static",
+          "notes": "npc 211051"
+        },
+        {
+          "name": "A_Custodian_of_Marr",
+          "zone": "hohonora",
+          "x": -1725.0,
+          "y": 2040.0,
+          "z": -111.4,
+          "spawn": "event",
+          "notes": "spawned at Trydan's location on 'ready'"
+        },
+        {
+          "name": "Rydda`Dar",
+          "zone": "hohonora",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "spawned at the Custodian's death spot"
+        },
+        {
+          "name": "#Trydan_Faye",
+          "zone": "hohonora",
+          "x": -1725.0,
+          "y": 2040.0,
+          "z": -111.4,
+          "spawn": "event",
+          "notes": "npc 211117, eq.spawn2 in RyddaDeathComplete"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Rydda`Dar's killer (raid ID if in raid, else group ID, else that client).",
+      "message": "An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Trydan Faye.",
+      "debug": [
+        "Only the raid that killed the event's recorded mob is acknowledged: if your raid ID (or group ID if no raid) differs from the killer's at hail time, the flagger ignores your hail completely (no text).",
+        "Max 72 grants per run (flags < FLAG_LIMIT); the counter resets when someone says 'ready' to start a new run.",
+        "If you already have this bit you see 'You have already received credit for completing this trial.'",
+        "The flagger (# version) depops 10 minutes after spawning (depop timer 600000).",
+        "Custodian depops after 10 s unless engaged (depop timer paused only while in combat); Trydan then returns after ~1 s.",
+        "Rydda`Dar depops after 56 s out of combat (timer pauses while engaged); that is a failure: Trydan respawn timer set to 10 minutes.",
+        "Leash: Custodian or Rydda`Dar leaving Y 1750-2300 is moved home, hate wiped, and casts Balance of the Nameless.",
+        "RyddaDeathComplete returns before spawning #Trydan_Faye if the recorded killer is not a valid client."
+      ],
+      "notes": "On success the room trash is re-enabled with an 18 hour timer. No 'You have received a character flag!' line is printed for trial bits. The recorded raid/group/client IDs are never cleared in this encounter, so earlier winners stay eligible until zone shutdown.",
+      "source": [
+        "hohonora/encounters/RyddaDar.lua:34-48",
+        "hohonora/encounters/RyddaDar.lua:59-78",
+        "hohonora/encounters/RyddaDar.lua:96-176",
+        "povalor/player.lua:13-34"
+      ]
+    },
+    {
+      "id": "hohtrials-bit1",
+      "flag": "hohtrials",
+      "value": "bit1",
+      "tier": 3,
+      "zone": "hohonora",
+      "title": "Halls of Honor trial 2: save the Villagers",
+      "requires": [
+        {
+          "flag": "hohonora zone access",
+          "value": "zone flag 211",
+          "why": "hohonora has flag_needed"
+        },
+        {
+          "flag": "hohtrials",
+          "value": "bit1 = 0",
+          "why": "Rhaliq2Say only grants when the second character is not '1'"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Rhaliq_Trell",
+          "zone": "hohonora",
+          "say": "ready",
+          "detail": "Say ready to Rhaliq Trell; he depops and A_Custodian_of_Marr spawns at his spot."
+        },
+        {
+          "type": "kill",
+          "npc": "A_Custodian_of_Marr",
+          "zone": "hohonora",
+          "detail": "Engage within 10 seconds and kill it while X stays between 350 and 900."
+        },
+        {
+          "type": "event",
+          "npc": "12 named attackers",
+          "zone": "hohonora",
+          "detail": "Seven villagers and 12 attackers spawn; attackers run at the villagers after 4-26 s. Kill all 12."
+        },
+        {
+          "type": "say",
+          "npc": "#Rhaliq_Trell",
+          "zone": "hohonora",
+          "say": "hail",
+          "detail": "Every raid member hails the new Rhaliq Trell at 456, 1374."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Rhaliq_Trell",
+          "zone": "hohonora",
+          "x": 456.0,
+          "y": 1374.0,
+          "z": -110.4,
+          "spawn": "static",
+          "notes": "npc 211050"
+        },
+        {
+          "name": "A_Custodian_of_Marr",
+          "zone": "hohonora",
+          "x": 456.0,
+          "y": 1374.0,
+          "z": -110.4,
+          "spawn": "event",
+          "notes": "spawned at Rhaliq's location"
+        },
+        {
+          "name": "#Rhaliq_Trell",
+          "zone": "hohonora",
+          "x": 456.0,
+          "y": 1374.0,
+          "z": -110.4,
+          "spawn": "event",
+          "notes": "npc 211106, EventSuccess"
+        },
+        {
+          "name": "Granmuck_Reiga, Fligg_Starp, Trann_Berk, Shott_Tarbs, Ruark_Barr, Zullkata_Reeps, Maeryn_Malladry, Thullias_Rhidron, Herot_Terkins, Mirezvakla_Ry`Ten, Yarezka_Tri`Lok, Merken_Lysonn",
+          "zone": "hohonora",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "ATTACKERS table, x 773-1474, y 1201-2110"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the Custodian's killer.",
+      "message": "An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Rhaliq Trell.",
+      "debug": [
+        "Only the raid that killed the event's recorded mob is acknowledged: if your raid ID (or group ID if no raid) differs from the killer's at hail time, the flagger ignores your hail completely (no text).",
+        "Max 72 grants per run (flags < FLAG_LIMIT); the counter resets when someone says 'ready' to start a new run.",
+        "If you already have this bit you see 'You have already received credit for completing this trial.'",
+        "The flagger (# version) depops 10 minutes after spawning (depop timer 600000).",
+        "Each attacker has a 72 s depop timer that only pauses while it is engaged; if any attacker's timer runs out the trial fails (all attackers depop, Rhaliq respawns in 10 minutes). Pick up every attacker.",
+        "Raid credit is recorded from the Custodian's killer, not the last attacker's killer.",
+        "The Custodian's death only starts this trial if it dies at X >= 0.",
+        "The script has no fail check on villager deaths; only attacker timeouts fail it."
+      ],
+      "notes": "Success requires 12 attacker deaths (attackersKilled >= 12). Room trash re-enabled with an 18 hour timer on success.",
+      "source": [
+        "hohonora/encounters/Villagers.lua:62-133",
+        "hohonora/encounters/Villagers.lua:156-265"
+      ]
+    },
+    {
+      "id": "hohtrials-bit2",
+      "flag": "hohtrials",
+      "value": "bit2",
+      "tier": 3,
+      "zone": "hohonora",
+      "title": "Halls of Honor trial 3: the Nomads (crazed Norrathians)",
+      "requires": [
+        {
+          "flag": "hohonora zone access",
+          "value": "zone flag 211",
+          "why": "hohonora has flag_needed"
+        },
+        {
+          "flag": "hohtrials",
+          "value": "bit2 = 0",
+          "why": "Alekson2Say only grants when the third character is not '1'"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Alekson_Garn",
+          "zone": "hohonora",
+          "say": "ready",
+          "detail": "Say ready to Alekson Garn; he depops and A_Custodian_of_Marr spawns at his spot."
+        },
+        {
+          "type": "kill",
+          "npc": "A_Custodian_of_Marr",
+          "zone": "hohonora",
+          "detail": "Engage within 10 seconds and kill it while X stays between -2800 and -2200."
+        },
+        {
+          "type": "event",
+          "npc": "crazed norrathians and recuso nomads",
+          "zone": "hohonora",
+          "detail": "Three groups of trash (6, 5, 5) spawn; clearing each group spawns its boss: Advocent_Joran, Halgoz_Rellinic, Freegan_Haun."
+        },
+        {
+          "type": "kill",
+          "npc": "Advocent_Joran, Halgoz_Rellinic, Freegan_Haun",
+          "zone": "hohonora",
+          "detail": "Kill all three bosses."
+        },
+        {
+          "type": "say",
+          "npc": "#Alekson_Garn",
+          "zone": "hohonora",
+          "say": "hail",
+          "detail": "Every raid member hails the new Alekson Garn at -2330, -1724."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Alekson_Garn",
+          "zone": "hohonora",
+          "x": -2330.0,
+          "y": -1724.0,
+          "z": -110.4,
+          "spawn": "static",
+          "notes": "npc 211060"
+        },
+        {
+          "name": "Miranda_Climmes",
+          "zone": "hohonora",
+          "x": -3160.0,
+          "y": -1719.0,
+          "z": -112.625,
+          "spawn": "event",
+          "notes": ""
+        },
+        {
+          "name": "Ydira_Merok",
+          "zone": "hohonora",
+          "x": -3158.0,
+          "y": -1138.0,
+          "z": -112.625,
+          "spawn": "event",
+          "notes": ""
+        },
+        {
+          "name": "Advocent_Joran",
+          "zone": "hohonora",
+          "x": -2462.0,
+          "y": -1724.0,
+          "z": -112.625,
+          "spawn": "event",
+          "notes": "room 1 boss"
+        },
+        {
+          "name": "Halgoz_Rellinic",
+          "zone": "hohonora",
+          "x": -3163.0,
+          "y": -1734.0,
+          "z": -112.625,
+          "spawn": "event",
+          "notes": "room 2 boss"
+        },
+        {
+          "name": "Freegan_Haun",
+          "zone": "hohonora",
+          "x": -3169.0,
+          "y": -982.0,
+          "z": -112.625,
+          "spawn": "event",
+          "notes": "room 3 boss"
+        },
+        {
+          "name": "#Alekson_Garn",
+          "zone": "hohonora",
+          "x": -2330.0,
+          "y": -1724.0,
+          "z": -110.4,
+          "spawn": "event",
+          "notes": "npc 211108, EventSuccess"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the Custodian's killer.",
+      "message": "An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Alekson Garn.",
+      "debug": [
+        "Only the raid that killed the event's recorded mob is acknowledged: if your raid ID (or group ID if no raid) differs from the killer's at hail time, the flagger ignores your hail completely (no text).",
+        "Max 72 grants per run (flags < FLAG_LIMIT); the counter resets when someone says 'ready' to start a new run.",
+        "If you already have this bit you see 'You have already received credit for completing this trial.'",
+        "The flagger (# version) depops 10 minutes after spawning (depop timer 600000).",
+        "Every trash mob and boss has a 50 s depop timer that only pauses while engaged; any expiry fails the trial with the zone emote 'A woman screams in anguish as she's forcibly taken away by a band of crazed norrathians.'",
+        "Raid credit is recorded from the Custodian's killer.",
+        "The Custodian's death only starts this trial if it dies at Y <= 0.",
+        "On success #Alekson_Garn says 'Congratulations my friends. You've passed the trial I laid before you.'"
+      ],
+      "notes": "#popflags calls this the 'Nomad trial'. Alekson respawns 10 minutes after a failure. The first-room trash spawns at the Custodian's death spot.",
+      "source": [
+        "hohonora/encounters/Crazed.lua:84-155",
+        "hohonora/encounters/Crazed.lua:188-336"
+      ]
+    },
+    {
+      "id": "hohonorb-access",
+      "flag": null,
+      "value": null,
+      "tier": 3,
+      "zone": "hohonora",
+      "title": "Enter the Temple of Marr (hohonorb)",
+      "requires": [
+        {
+          "flag": "hohtrials",
+          "value": "111",
+          "why": "player.lua door 19/20 compares hohtrials == '111' exactly"
+        }
+      ],
+      "actions": [
+        {
+          "type": "click",
+          "npc": "door 19 or 20 (HOHTESWTCH500)",
+          "zone": "hohonora",
+          "detail": "Click either Temple portal; with all three trials you get zone flag 220 (hohonorb)."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "door 19 HOHTESWTCH500",
+          "zone": "hohonora",
+          "x": 116.884,
+          "y": 2.0821,
+          "z": -0.248,
+          "spawn": "static",
+          "notes": "door, not NPC"
+        },
+        {
+          "name": "door 20 HOHTESWTCH500",
+          "zone": "hohonora",
+          "x": 42.4822,
+          "y": -1050.06,
+          "z": -0.248,
+          "spawn": "static",
+          "notes": "door, not NPC"
+        }
+      ],
+      "credit": "the clicking player only",
+      "message": "No text on success; the zone flag is set silently.",
+      "debug": [
+        "Without hohtrials exactly '111' you see 'You lack the will to pass through this portal safely.'",
+        "hohonorb has flag_needed; without zone flag 220 zoning prints 'You do not have the flag to enter hohonorb.'"
+      ],
+      "notes": "Server also has a raid 'will' alternate access (CanRaidWillIntoPopZone) gated by a data bucket; if enabled, unflagged raiders may enter with a qualifying raid.",
+      "source": [
+        "hohonora/player.lua:1-19",
+        "EQMacEmu/zone/zoning.cpp:362-367"
+      ]
+    },
+    {
+      "id": "mmarr-1",
+      "flag": "mmarr",
+      "value": "1",
+      "tier": 3,
+      "zone": "hohonorb",
+      "title": "Kill Mithaniel Marr and hail his Planar Projection (cipher half)",
+      "requires": [
+        {
+          "flag": "hohtrials",
+          "value": "111",
+          "why": "projection grants mmarr only when hohtrials == '111'"
+        },
+        {
+          "flag": "mmarr",
+          "value": "absent",
+          "why": "block skipped if mmarr already set"
+        },
+        {
+          "flag": "cipher",
+          "value": "absent",
+          "why": "block skipped if cipher already set"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Ralthazor,_Champion_of_Marr, Edium,_Guardian_of_Marr, Halon_of_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill all three guardians; Mithaniel becomes targetable about 3 s after the last one dies."
+        },
+        {
+          "type": "kill",
+          "npc": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill Mithaniel Marr; keep him at X >= 2200 or he resets home."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "say": "hail",
+          "detail": "Each raid member hails the Planar Projection that appears where he died."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "x": 2724.0,
+          "y": 0.0,
+          "z": 489.8,
+          "spawn": "static",
+          "notes": "npc 220020; untargetable until Ralthazor, Edium and Halon are dead"
+        },
+        {
+          "name": "Ralthazor,_Champion_of_Marr",
+          "zone": "hohonorb",
+          "x": 2489.0,
+          "y": 0.0,
+          "z": 453.5,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Edium,_Guardian_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": -153.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Halon_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": 150.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 220025, spawned at Mithaniel's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Mithaniel's death_complete e.killer (someone with kill rights).",
+      "message": "The Planar Projection's thoughts enter your own.  'You have done well, now receive the knowledge that Mithaniel Marr once held!'  You look down at your arms to see a set of unintelligible runes being burnt into your arms.  The pain is terrible and searing.  Suddenly the sensation is gone and the runes slowly fade.  Also among your possessions you find a small tattered book as old as the ages.  You recognize it as something that Maelin might be able to translate. / You have received a character flag!",
+      "debug": [
+        "Projection only answers clients in the raid (else group, else solo client) recorded from Mithaniel's death_complete killer; anyone else gets no text at all.",
+        "Projection depops 20 minutes after spawning.",
+        "Grant counter allows hails while flags <= 144; one hail can use two counts (mmarr + book).",
+        "Without hohtrials '111' you get the 'not ready to understand the Knowledge' text and cl_mmarr instead (see cl_mmarr-1).",
+        "If you already have mmarr or cipher the projection prints nothing for this half.",
+        "Any existing cl_mmarr is deleted on success."
+      ],
+      "notes": "The same hail also grants mmarr_book (see mmarr_book-1). mmarr is later consumed by Maelin for cipher.",
+      "source": [
+        "hohonorb/A_Planar_Projection.lua:55-77",
+        "hohonorb/Lord_Mithaniel_Marr.lua:5-8",
+        "hohonorb/Lord_Mithaniel_Marr.lua:38-67"
+      ]
+    },
+    {
+      "id": "cl_mmarr-1",
+      "flag": "cl_mmarr",
+      "value": "1",
+      "tier": 3,
+      "zone": "hohonorb",
+      "title": "Mithaniel kill credit without all trials (checklist)",
+      "requires": [
+        {
+          "flag": "hohtrials",
+          "value": "not 111",
+          "why": "else branch of the hohtrials == '111' check"
+        },
+        {
+          "flag": "mmarr",
+          "value": "absent",
+          "why": "block skipped if mmarr set"
+        },
+        {
+          "flag": "cipher",
+          "value": "absent",
+          "why": "block skipped if cipher set"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Ralthazor,_Champion_of_Marr, Edium,_Guardian_of_Marr, Halon_of_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill all three guardians; Mithaniel becomes targetable about 3 s after the last one dies."
+        },
+        {
+          "type": "kill",
+          "npc": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill Mithaniel Marr; keep him at X >= 2200 or he resets home."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "say": "hail",
+          "detail": "Each raid member hails the Planar Projection that appears where he died."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "x": 2724.0,
+          "y": 0.0,
+          "z": 489.8,
+          "spawn": "static",
+          "notes": "npc 220020; untargetable until Ralthazor, Edium and Halon are dead"
+        },
+        {
+          "name": "Ralthazor,_Champion_of_Marr",
+          "zone": "hohonorb",
+          "x": 2489.0,
+          "y": 0.0,
+          "z": 453.5,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Edium,_Guardian_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": -153.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Halon_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": 150.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 220025, spawned at Mithaniel's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Mithaniel's death_complete e.killer (someone with kill rights).",
+      "message": "The Planar Projection's thoughts enter your own.  'You have done well, however you are not ready to understand the Knowledge gained for defeating Mithaniel Marr.  Once you have learned more this knowledge will be revealed to you.' / You have received a new checklist flag!",
+      "debug": [
+        "Projection only answers clients in the raid (else group, else solo client) recorded from Mithaniel's death_complete killer; anyone else gets no text at all.",
+        "Projection depops 20 minutes after spawning.",
+        "Grant counter allows hails while flags <= 144; one hail can use two counts (mmarr + book).",
+        "Convert it later at the Seer once hohtrials is exactly '111' (see seer-cl_mmarr)."
+      ],
+      "notes": "Raiders brought in via alternate/raid-will access without all trials land here.",
+      "source": [
+        "hohonorb/A_Planar_Projection.lua:71-76"
+      ]
+    },
+    {
+      "id": "mmarr_book-1",
+      "flag": "mmarr_book",
+      "value": "1",
+      "tier": 3,
+      "zone": "hohonorb",
+      "title": "Mithaniel's book half (same projection hail)",
+      "requires": [
+        {
+          "flag": "hohtrials",
+          "value": "111",
+          "why": "projection grants mmarr_book only when hohtrials == '111'"
+        },
+        {
+          "flag": "mmarr_book",
+          "value": "absent",
+          "why": "block skipped if mmarr_book set"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "absent",
+          "why": "block skipped if zebuxoruk set"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Ralthazor,_Champion_of_Marr, Edium,_Guardian_of_Marr, Halon_of_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill all three guardians; Mithaniel becomes targetable about 3 s after the last one dies."
+        },
+        {
+          "type": "kill",
+          "npc": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill Mithaniel Marr; keep him at X >= 2200 or he resets home."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "say": "hail",
+          "detail": "Each raid member hails the Planar Projection that appears where he died."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "x": 2724.0,
+          "y": 0.0,
+          "z": 489.8,
+          "spawn": "static",
+          "notes": "npc 220020; untargetable until Ralthazor, Edium and Halon are dead"
+        },
+        {
+          "name": "Ralthazor,_Champion_of_Marr",
+          "zone": "hohonorb",
+          "x": 2489.0,
+          "y": 0.0,
+          "z": 453.5,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Edium,_Guardian_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": -153.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Halon_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": 150.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 220025, spawned at Mithaniel's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Mithaniel's death_complete e.killer (someone with kill rights).",
+      "message": "No message of its own; it is set silently in the same hail as mmarr (the mmarr text mentions the tattered book).",
+      "debug": [
+        "Projection only answers clients in the raid (else group, else solo client) recorded from Mithaniel's death_complete killer; anyone else gets no text at all.",
+        "Projection depops 20 minutes after spawning.",
+        "Grant counter allows hails while flags <= 144; one hail can use two counts (mmarr + book).",
+        "Independent of mmarr/cipher: a character with cipher but no zebuxoruk still gets the book half.",
+        "Check with #popflags or Seer guided meditation ('The information obtained from Mithaniel is written in a language that you cannot comprehend.')."
+      ],
+      "notes": "Combined with karana 4 at Maelin ('lore') for zebuxoruk 1, which deletes mmarr_book.",
+      "source": [
+        "hohonorb/A_Planar_Projection.lua:79-92"
+      ]
+    },
+    {
+      "id": "cl_mmarr_book-1",
+      "flag": "cl_mmarr_book",
+      "value": "1",
+      "tier": 3,
+      "zone": "hohonorb",
+      "title": "Mithaniel book checklist without all trials",
+      "requires": [
+        {
+          "flag": "hohtrials",
+          "value": "not 111",
+          "why": "else branch"
+        },
+        {
+          "flag": "mmarr_book",
+          "value": "absent",
+          "why": "block skipped if set"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "absent",
+          "why": "block skipped if set"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Ralthazor,_Champion_of_Marr, Edium,_Guardian_of_Marr, Halon_of_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill all three guardians; Mithaniel becomes targetable about 3 s after the last one dies."
+        },
+        {
+          "type": "kill",
+          "npc": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "detail": "Kill Mithaniel Marr; keep him at X >= 2200 or he resets home."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "say": "hail",
+          "detail": "Each raid member hails the Planar Projection that appears where he died."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Lord_Mithaniel_Marr",
+          "zone": "hohonorb",
+          "x": 2724.0,
+          "y": 0.0,
+          "z": 489.8,
+          "spawn": "static",
+          "notes": "npc 220020; untargetable until Ralthazor, Edium and Halon are dead"
+        },
+        {
+          "name": "Ralthazor,_Champion_of_Marr",
+          "zone": "hohonorb",
+          "x": 2489.0,
+          "y": 0.0,
+          "z": 453.5,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Edium,_Guardian_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": -153.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Halon_of_Marr",
+          "zone": "hohonorb",
+          "x": 2356.0,
+          "y": 150.0,
+          "z": 450.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "hohonorb",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 220025, spawned at Mithaniel's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Mithaniel's death_complete e.killer (someone with kill rights).",
+      "message": "No message of its own (set silently in the same hail as cl_mmarr).",
+      "debug": [
+        "Projection only answers clients in the raid (else group, else solo client) recorded from Mithaniel's death_complete killer; anyone else gets no text at all.",
+        "Projection depops 20 minutes after spawning.",
+        "Grant counter allows hails while flags <= 144; one hail can use two counts (mmarr + book)."
+      ],
+      "notes": "",
+      "source": [
+        "hohonorb/A_Planar_Projection.lua:88-91"
+      ]
+    },
+    {
+      "id": "seer-cl_mmarr",
+      "flag": "mmarr",
+      "value": "1",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Mithaniel cipher half",
+      "requires": [
+        {
+          "flag": "cl_mmarr",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "hohtrials",
+          "value": "111",
+          "why": "checklistFlags reqFlag hohtrials = '111' (exact string)"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "Sit, then ask the Seer to unlock memories."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "An Image of Mithaniel flashes before you, 'You have finally earned a place of Honor.  Wear this Cipher with pride.' / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text (trials incomplete): 'An Image of Mithaniel flashes before you, 'You have yet to earn a place of Honor.  When you have, we will speak again.''"
+      ],
+      "notes": "The Seer does not check for an existing cipher; it just sets mmarr 1.",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:120-125",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:332-371",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:384-389"
+      ]
+    },
+    {
+      "id": "seer-cl_mmarr_book",
+      "flag": "mmarr_book",
+      "value": "1",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Mithaniel book half",
+      "requires": [
+        {
+          "flag": "cl_mmarr_book",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "hohtrials",
+          "value": "111",
+          "why": "reqFlag hohtrials = '111'"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "Sit, then ask the Seer to unlock memories (converts cl_mmarr and cl_mmarr_book in one pass)."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "An Image of Mithaniel flashes before you, 'These notes should assist you on your quest for the Fallen.  Justify the Honor that you have been given.' / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text: 'An image of Mithaniel flashes before you.  He looks up from a small book in his hands and smiles at you, 'You have not yet earned the Honor to see these words.''"
+      ],
+      "notes": "Seer does not check zebuxoruk here; guided meditation later deletes mmarr_book if zebuxoruk is set.",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:126-131",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"
+      ]
+    },
+    {
+      "id": "karana-3",
+      "flag": "karana",
+      "value": "3",
+      "tier": 3,
+      "zone": "postorms",
+      "title": "Use the Storms shrine to enter Bastion of Thunder",
+      "requires": [
+        {
+          "flag": "karana",
+          "value": "2",
+          "why": "door 4 needs karana >= 2; karana >= 3 returns early"
+        },
+        {
+          "flag": "mavuin",
+          "value": "3",
+          "why": "door 4 needs mavuin >= 3"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "absent",
+          "why": "returns early if zebuxoruk set"
+        }
+      ],
+      "actions": [
+        {
+          "type": "click",
+          "npc": "door 4 (BOTPOSPORT500)",
+          "zone": "postorms",
+          "detail": "Click the Bastion of Thunder shrine portal in Plane of Storms."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "door 4 BOTPOSPORT500",
+          "zone": "postorms",
+          "x": -361.814,
+          "y": -162.889,
+          "z": -404.13,
+          "spawn": "static",
+          "notes": "door, not NPC"
+        }
+      ],
+      "credit": "the clicking player only",
+      "message": "An aura of soft light gleams around you as the shrine reacts to your Talisman of Thunderous Foyer and sends you forth into the mighty Bastion of Thunder. / You have received a character flag!",
+      "debug": [
+        "karana < 2 or mavuin < 3: 'The shrine calls forth unto your soul in search of a mystic symbol but finds none, you may not pass forth unto this planar location.'",
+        "karana already 3+ or any zebuxoruk: script returns silently (no new flag).",
+        "Also sets zone flag 209 (bothunder) if missing."
+      ],
+      "notes": "karana 1 and 2 come from Askr the Lost in postorms (other part). bothunder itself has no flag_needed in the local zone table.",
+      "source": [
+        "postorms/player.lua:1-27"
+      ]
+    },
+    {
+      "id": "agnarr-access",
+      "flag": null,
+      "value": null,
+      "tier": 3,
+      "zone": "bothunder",
+      "title": "Climb Torden to Agnarr (Evynd, Emmerik, Chaotic Vortex)",
+      "requires": [
+        {
+          "flag": "item",
+          "value": "Symbol of Torden (9433)",
+          "why": "door 51 needs the Symbol on cursor/keyring, or a raid/group member who clicked with it in the last 5 minutes"
+        }
+      ],
+      "actions": [
+        {
+          "type": "click",
+          "npc": "door 51 (BOTPLPORT500)",
+          "zone": "bothunder",
+          "items": [
+            {
+              "id": 9433,
+              "name": "Symbol of Torden"
+            }
+          ],
+          "detail": "Click the tower with the Symbol on your cursor (added to keyring); raid/group then has 5 minutes to click up."
+        },
+        {
+          "type": "kill",
+          "npc": "Evynd_Firestorm",
+          "zone": "bothunder",
+          "detail": "Kill Evynd; #Askr_the_Lost appears."
+        },
+        {
+          "type": "say",
+          "npc": "#Askr_the_Lost",
+          "zone": "bothunder",
+          "say": "transport",
+          "detail": "Each player says transport to be moved to the next Torden level."
+        },
+        {
+          "type": "kill",
+          "npc": "Emmerik_Skyfury",
+          "zone": "bothunder",
+          "detail": "Kill Emmerik; ##Askr_the_Lost appears."
+        },
+        {
+          "type": "say",
+          "npc": "##Askr_the_Lost",
+          "zone": "bothunder",
+          "say": "what storm",
+          "detail": "Say 'what storm' to spawn A_Chaotic_Vortex."
+        },
+        {
+          "type": "click",
+          "npc": "A_Chaotic_Vortex",
+          "zone": "bothunder",
+          "detail": "Right-click (merchant click) the vortex to be moved to Agnarr's level."
+        },
+        {
+          "type": "kill",
+          "npc": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "detail": "Kill Agnarr; Karana spawns at -477, -1758."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "door 51 BOTPLPORT500",
+          "zone": "bothunder",
+          "x": 170.329,
+          "y": 11.3461,
+          "z": -647.998,
+          "spawn": "static",
+          "notes": "door; moves you to -765, -1735, 1270"
+        },
+        {
+          "name": "Evynd_Firestorm",
+          "zone": "bothunder",
+          "x": -1121.0,
+          "y": -1731.0,
+          "z": 1280.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "#Askr_the_Lost",
+          "zone": "bothunder",
+          "x": -1123.0,
+          "y": -1732.0,
+          "z": 1269.0,
+          "spawn": "event",
+          "notes": "55 minute depop; transport goes to -880, -1787, 1729"
+        },
+        {
+          "name": "Emmerik_Skyfury",
+          "zone": "bothunder",
+          "x": -1104.0,
+          "y": -1733.0,
+          "z": 1746.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "##Askr_the_Lost",
+          "zone": "bothunder",
+          "x": -1065.0,
+          "y": -1733.0,
+          "z": 1727.0,
+          "spawn": "event",
+          "notes": "55 minute depop"
+        },
+        {
+          "name": "A_Chaotic_Vortex",
+          "zone": "bothunder",
+          "x": -1110.0,
+          "y": -1735.0,
+          "z": 1740.0,
+          "spawn": "event",
+          "notes": "55 minute depop; click moves to -665, -1735, 2251"
+        },
+        {
+          "name": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "x": -898.0,
+          "y": -1739.0,
+          "z": 2263.6,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "n/a (access step)",
+      "message": "No flag message.",
+      "debug": [
+        "Clicking door 51 without access: 1st 'Magical energies shoot through your body.', 2nd 'You hear the cracking of stones around you.', 3rd wakes the storm watchers (counter is zone-wide).",
+        "Raid/group authorization from a Symbol click lasts 300 s and is matched by raid ID (or group ID if not raided).",
+        "##Askr's hail text shows [Storm] but the script only matches 'what storm'.",
+        "'transport' is per player: everyone must say it themselves."
+      ],
+      "notes": "How to assemble the Symbol of Torden is outside this part (Eindride Icestorm drops the Unadorned Symbol of Torden, item 17169, via ProgressionLoot).",
+      "source": [
+        "bothunder/player.lua:1-82",
+        "bothunder/player.lua:162-188",
+        "bothunder/player.lua:216-224",
+        "bothunder/Evynd_Firestorm.lua:10-12",
+        "bothunder/#Askr_the_Lost.lua:1-11",
+        "bothunder/Emmerik_Skyfury.lua:10-13",
+        "bothunder/##Askr_the_Lost.lua:1-9",
+        "bothunder/Agnarr_the_Storm_Lord.lua:90-93"
+      ]
+    },
+    {
+      "id": "karana-4",
+      "flag": "karana",
+      "value": "4",
+      "tier": 3,
+      "zone": "bothunder",
+      "title": "Kill Agnarr and ask Karana to follow the path of the Fallen",
+      "requires": [
+        {
+          "flag": "karana",
+          "value": "3",
+          "why": "tonumber(karana) == 3 branch"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "detail": "Kill Agnarr (see agnarr-access)."
+        },
+        {
+          "type": "say",
+          "npc": "Karana",
+          "zone": "bothunder",
+          "say": "hail",
+          "detail": "Hail Karana (flavor; confirms he acknowledges you)."
+        },
+        {
+          "type": "say",
+          "npc": "Karana",
+          "zone": "bothunder",
+          "say": "follow the path of the Fallen",
+          "detail": "Say the phrase from his hail text."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Karana",
+          "zone": "bothunder",
+          "x": -477.0,
+          "y": -1758.0,
+          "z": 2355.0,
+          "spawn": "event",
+          "notes": "npc 209136, spawned on Agnarr death_complete; depops after 55 minutes"
+        },
+        {
+          "name": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "x": -898.0,
+          "y": -1739.0,
+          "z": 2263.6,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Agnarr's death_complete e.killer.",
+      "message": "Karana begins to laugh quietly.  You seem to notice a great storm cloud brewing once more above him.  A sudden arching bolt hits you, but you are unharmed.  Instead a tome written in the language of the gods appears in your hands.  'Then let what I know be yours to know as well.  Your path leads you onward <name>.  The path to power or ruin, the choice is up to you.  Speak the words and I will send you on your way.' / You have received a character flag!",
+      "debug": [
+        "Karana ignores every say (even hail) from anyone not in the raid/group recorded from Agnarr's death_complete killer.",
+        "Phrase must contain 'follow the path of the Fallen' (case-insensitive substring).",
+        "72 grants max per Karana spawn.",
+        "Optional: say 'send me' afterwards and he casts Gate on you.",
+        "karana 4 already, or karana < 3 with zebuxoruk set: no response to the phrase.",
+        "karana < 3 without zebuxoruk: you get cl_karana instead (see cl_karana-1).",
+        "Deletes cl_karana if present."
+      ],
+      "notes": "karana 4 + mmarr_book is turned into zebuxoruk 1 by Maelin.",
+      "source": [
+        "bothunder/Karana.lua:24-91",
+        "bothunder/Agnarr_the_Storm_Lord.lua:90-93"
+      ]
+    },
+    {
+      "id": "cl_karana-1",
+      "flag": "cl_karana",
+      "value": "1",
+      "tier": 3,
+      "zone": "bothunder",
+      "title": "Karana checklist (killed Agnarr before the Storms shrine flag)",
+      "requires": [
+        {
+          "flag": "karana",
+          "value": "absent, 1 or 2",
+          "why": "karana < 3 branch"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "absent",
+          "why": "branch requires not zebuxoruk"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "detail": "Kill Agnarr (see agnarr-access)."
+        },
+        {
+          "type": "say",
+          "npc": "Karana",
+          "zone": "bothunder",
+          "say": "hail",
+          "detail": "Hail Karana (flavor; confirms he acknowledges you)."
+        },
+        {
+          "type": "say",
+          "npc": "Karana",
+          "zone": "bothunder",
+          "say": "follow the path of the Fallen",
+          "detail": "Say the phrase from his hail text."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Karana",
+          "zone": "bothunder",
+          "x": -477.0,
+          "y": -1758.0,
+          "z": 2355.0,
+          "spawn": "event",
+          "notes": "npc 209136, spawned on Agnarr death_complete; depops after 55 minutes"
+        },
+        {
+          "name": "Agnarr_the_Storm_Lord",
+          "zone": "bothunder",
+          "x": -898.0,
+          "y": -1739.0,
+          "z": 2263.6,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Agnarr's death_complete e.killer.",
+      "message": "Karana begins to laugh quietly.  You seem to notice a great storm cloud brewing once more above him.  'Your path leads you onward mortals.  The path to power or ruin, the choice is up to you.  Speak the words and I will send you on your way.' / You have received a new checklist flag!",
+      "debug": [
+        "Karana ignores every say (even hail) from anyone not in the raid/group recorded from Agnarr's death_complete killer.",
+        "Phrase must contain 'follow the path of the Fallen' (case-insensitive substring).",
+        "72 grants max per Karana spawn.",
+        "Optional: say 'send me' afterwards and he casts Gate on you.",
+        "No 'already have it' guard: repeated says re-set cl_karana and print the checklist line again."
+      ],
+      "notes": "",
+      "source": [
+        "bothunder/Karana.lua:78-83"
+      ]
+    },
+    {
+      "id": "seer-cl_karana",
+      "flag": "karana",
+      "value": "4",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Karana",
+      "requires": [
+        {
+          "flag": "cl_karana",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "karana",
+          "value": "3",
+          "why": "reqFlag karana = '3' exactly (do the Storms shrine first)"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "After getting karana 3 at the Storms shrine, sit and ask the Seer to unlock memories."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "As you think back to your meeting with Karana the Talisman in your chest warms and a light rain falls from the sky.  When you look down, a small book written in a language you can not read, rests in your hands. / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text: 'You recall meeting with Karana, but the memory is clouded.  You sense that the answer you seek may be in Storms.'"
+      ],
+      "notes": "",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:114-119",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"
+      ]
+    },
+    {
+      "id": "zeks-2",
+      "flag": "zeks",
+      "value": "2",
+      "tier": 1,
+      "zone": "poinnovation",
+      "title": "Report the Manaetic Behemoth's death to Giwin Mirakon",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "1",
+          "why": "#Giwin grants zeks 2 only when zeks == '1' (from Giwin_Mirakon 'test the machine')"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Manaetic_Behemoth",
+          "zone": "poinnovation",
+          "detail": "Kill the Behemoth; #Giwin_Mirakon spawns at 1013, 0."
+        },
+        {
+          "type": "say",
+          "npc": "#Giwin_Mirakon",
+          "zone": "poinnovation",
+          "say": "hail",
+          "detail": "Each raid member hails Giwin."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "#Giwin_Mirakon",
+          "zone": "poinnovation",
+          "x": 1013.0,
+          "y": 0.0,
+          "z": 2.1,
+          "spawn": "event",
+          "notes": "npc 206203; depops after 10 minutes"
+        },
+        {
+          "name": "Giwin_Mirakon",
+          "zone": "poinnovation",
+          "x": 49.0,
+          "y": -52.0,
+          "z": 1.3,
+          "spawn": "static",
+          "notes": "preflag zeks 1 via hail / great warrior / task / test the machine"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the Behemoth's death_complete e.killer.",
+      "message": "Giwin Mirakon gives you a look of disbelief and then concern.  'You destroyed the machine?!  You should come with me to the Plane of Tactics. ...' / You have received a character flag!",
+      "debug": [
+        "No zeks at all: 'Hey what are you doing!  Look at this mess that you have caused.  Rallos is not going to be happy about this.' and cl_behemoth (convert at Seer with zeks 1).",
+        "zeks already 2+: same long text but no flag.",
+        "Not in the recorded raid/group: no response."
+      ],
+      "notes": "Likely also covered by the tier1 part. zeks >= 2 is what opens the potranquility door 24 to potactics (zone flag 214).",
+      "source": [
+        "poinnovation/#Giwin_Mirakon.lua:56-85",
+        "poinnovation/encounters/Behemoth.lua:163-173",
+        "potranquility/player.lua:91-104"
+      ]
+    },
+    {
+      "id": "drunder-giwin",
+      "flag": null,
+      "value": null,
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Find Giwin Mirakon in Drunder (optional)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": ">= 2",
+          "why": "zeks > 1 gives the directions text"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Giwin_Mirakon",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Hail Giwin; he points you at the Zeks. No flag is set here."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Giwin_Mirakon",
+          "zone": "potactics",
+          "x": -169.0,
+          "y": 50.0,
+          "z": -40.1,
+          "spawn": "static",
+          "notes": "npc 214014"
+        }
+      ],
+      "credit": "none (no flag)",
+      "message": "Giwin Mirakon tells you, 'Well then, it took you long enough to get here.  The Zeks have grown tired of waiting for your arrival. ...'",
+      "debug": [
+        "zeks < 2: 'Who are you to talk to me?  Are you a Warrior of Rallos? ...'",
+        "Do not hand him items: event_trade thanks you and keeps them (no return)."
+      ],
+      "notes": "Seer text for zeks 2 says to meet Giwin in Drunder, but the Drunder Giwin has no flag logic.",
+      "source": [
+        "potactics/Giwin_Mirakon.lua:1-34"
+      ]
+    },
+    {
+      "id": "zeks-3",
+      "flag": "zeks",
+      "value": "3",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Kill Vallon Zek and hail his Planar Projection (first Zek)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "2",
+          "why": "zeks == 2 -> 3"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Vallon_Zek",
+          "zone": "potactics",
+          "detail": "At 50% Vallon fades into five figures (one real); each real one splits again at 50% until the 4th wave, whose real one must be killed."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at the real Vallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Vallon_Zek",
+          "zone": "potactics",
+          "x": -821.0,
+          "y": 1980.0,
+          "z": 217.6,
+          "spawn": "static",
+          "notes": "npc 214316, north wing; splits at 50%"
+        },
+        {
+          "name": "Vallon_Zek (real)",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": 204.5,
+          "spawn": "event",
+          "notes": "npc 214317 at random x -645..-565, y 1940..2020; fakes are 214318/214319"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214324 at the real Vallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the real Vallon's death_complete e.killer.",
+      "message": "You realize that the image is a projection of Maelin Starpyre's thoughts.  His thoughts enter into your own.  'The pack of notes you now possess from Vallon, bring them to me.  I would like to more closely study them' / You have received a character flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count.",
+        "Only the real Vallon (214317) spawns the projection; fakes (214318/214319) do nothing.",
+        "Real and fake Vallons depop after 120 s out of combat; a real one depopping resets the encounter (spawn_from_spawn2 369265).",
+        "Leash: Vallons pulled below Y 1750 are moved back to -625, 1980.",
+        "zeks 3, 5, 6 or 7: no response. zeks < 2: cl_vallon instead.",
+        "Wing doors 2/3 say 'The doors are held shut by magical forces.' while Vallon is up."
+      ],
+      "notes": "Deletes cl_vallon if present.",
+      "source": [
+        "potactics/214324.lua:57-87",
+        "potactics/214316.lua:7-30",
+        "potactics/214317.lua:16-69",
+        "potactics/player.lua:16-28"
+      ]
+    },
+    {
+      "id": "zeks-4",
+      "flag": "zeks",
+      "value": "4",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Kill Tallon Zek and hail his Planar Projection (first Zek)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "2",
+          "why": "zeks == 2 -> 4"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Tallon_Zek",
+          "zone": "potactics",
+          "detail": "Kill Tallon Zek in the south wing."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at Tallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Tallon_Zek",
+          "zone": "potactics",
+          "x": -619.0,
+          "y": -1958.0,
+          "z": 207.6,
+          "spawn": "static",
+          "notes": "npc 214026, south wing; shadowsteps every 20 s and wipes hate"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214323 at Tallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Tallon's death_complete e.killer.",
+      "message": "You realize that the image is a projection of Maelin Starpyre's thoughts.  His thoughts enter into your own.  'The pack of notes you now possess from Tallon, bring them to me.  I would like to more closely study them' / You have received a character flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count.",
+        "zeks 4, 5, 6 or 7: no response. zeks < 2: cl_tallon instead.",
+        "Wing doors 4/5 say 'The doors are held shut by magical forces.' while Tallon is up."
+      ],
+      "notes": "Deletes cl_tallon if present.",
+      "source": [
+        "potactics/214323.lua:57-87",
+        "potactics/214026.lua:5-8",
+        "potactics/player.lua:30-40"
+      ]
+    },
+    {
+      "id": "zeks-5-vallon",
+      "flag": "zeks",
+      "value": "5",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Kill Vallon Zek after Tallon (both Zeks)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "4",
+          "why": "Vallon projection: zeks == 4 -> 5"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Vallon_Zek",
+          "zone": "potactics",
+          "detail": "At 50% Vallon fades into five figures (one real); each real one splits again at 50% until the 4th wave, whose real one must be killed."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at the real Vallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Vallon_Zek",
+          "zone": "potactics",
+          "x": -821.0,
+          "y": 1980.0,
+          "z": 217.6,
+          "spawn": "static",
+          "notes": "npc 214316, north wing; splits at 50%"
+        },
+        {
+          "name": "Vallon_Zek (real)",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": 204.5,
+          "spawn": "event",
+          "notes": "npc 214317 at random x -645..-565, y 1940..2020; fakes are 214318/214319"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214324 at the real Vallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the real Vallon's death_complete e.killer.",
+      "message": "You realize that the image is a projection of Maelin Starpyre's thoughts.  His thoughts enter into your own.  'The pack of notes you now possess from Vallon, bring them to me.  I would like to more closely study them' / You have received a character flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count."
+      ],
+      "notes": "zeks 5 = both Vallon and Tallon done.",
+      "source": [
+        "potactics/214324.lua:66-78"
+      ]
+    },
+    {
+      "id": "zeks-5-tallon",
+      "flag": "zeks",
+      "value": "5",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Kill Tallon Zek after Vallon (both Zeks)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "3",
+          "why": "Tallon projection: zeks == 3 -> 5"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Tallon_Zek",
+          "zone": "potactics",
+          "detail": "Kill Tallon Zek in the south wing."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at Tallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Tallon_Zek",
+          "zone": "potactics",
+          "x": -619.0,
+          "y": -1958.0,
+          "z": 207.6,
+          "spawn": "static",
+          "notes": "npc 214026, south wing; shadowsteps every 20 s and wipes hate"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214323 at Tallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Tallon's death_complete e.killer.",
+      "message": "You realize that the image is a projection of Maelin Starpyre's thoughts.  His thoughts enter into your own.  'The pack of notes you now possess from Tallon, bring them to me.  I would like to more closely study them' / You have received a character flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count."
+      ],
+      "notes": "",
+      "source": [
+        "potactics/214323.lua:66-78"
+      ]
+    },
+    {
+      "id": "cl_vallon-1",
+      "flag": "cl_vallon",
+      "value": "1",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Vallon checklist (killed before zeks 2)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "absent or 1",
+          "why": "zeks < 2 and not cl_vallon"
+        },
+        {
+          "flag": "cl_vallon",
+          "value": "absent",
+          "why": "not re-given"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Vallon_Zek",
+          "zone": "potactics",
+          "detail": "At 50% Vallon fades into five figures (one real); each real one splits again at 50% until the 4th wave, whose real one must be killed."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at the real Vallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Vallon_Zek",
+          "zone": "potactics",
+          "x": -821.0,
+          "y": 1980.0,
+          "z": 217.6,
+          "spawn": "static",
+          "notes": "npc 214316, north wing; splits at 50%"
+        },
+        {
+          "name": "Vallon_Zek (real)",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": 204.5,
+          "spawn": "event",
+          "notes": "npc 214317 at random x -645..-565, y 1940..2020; fakes are 214318/214319"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214324 at the real Vallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the real Vallon's death_complete e.killer.",
+      "message": "The Planar Projection seems to flicker in and out of existence.  It seems to be impressed by the defeat of Vallon Zek. / You have received a new checklist flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count."
+      ],
+      "notes": "",
+      "source": [
+        "potactics/214324.lua:79-84"
+      ]
+    },
+    {
+      "id": "cl_tallon-1",
+      "flag": "cl_tallon",
+      "value": "1",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Tallon checklist (killed before zeks 2)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "absent or 1",
+          "why": "zeks < 2 and not cl_tallon"
+        },
+        {
+          "flag": "cl_tallon",
+          "value": "absent",
+          "why": "not re-given"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Tallon_Zek",
+          "zone": "potactics",
+          "detail": "Kill Tallon Zek in the south wing."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at Tallon's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Tallon_Zek",
+          "zone": "potactics",
+          "x": -619.0,
+          "y": -1958.0,
+          "z": 207.6,
+          "spawn": "static",
+          "notes": "npc 214026, south wing; shadowsteps every 20 s and wipes hate"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214323 at Tallon's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from Tallon's death_complete e.killer.",
+      "message": "The Planar Projection seems to flicker in and out of existence.  It seems to be impressed by the defeat of Tallon Zek. / You have received a new checklist flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "The Tallon and Vallon that walk out during the Rallos Zek event (npc 214313/214320) do NOT spawn projections; only the wing bosses count."
+      ],
+      "notes": "",
+      "source": [
+        "potactics/214323.lua:79-84"
+      ]
+    },
+    {
+      "id": "seer-cl_vallon",
+      "flag": "zeks",
+      "value": "3 (or 5)",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Vallon Zek",
+      "requires": [
+        {
+          "flag": "cl_vallon",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "zeks",
+          "value": "2 or 4",
+          "why": "zeks 2 -> 3; special case zeks 4 -> 5"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "Sit and ask the Seer to unlock memories."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "Giwin's invitation to Drunder reminds you of some notes you found around Vallon's body. / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text (zeks not 2/4): 'Vallon fell before you with great ease, you seem to remember some strange pouches around his body, but... well it is probably nothing.'",
+        "Entries are processed in order cl_behemoth, cl_vallon, cl_tallon with updated values, so one unlock can chain zeks 1 -> 2 -> 3 -> 5 if you hold all three checklist flags."
+      ],
+      "notes": "",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:96-101",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:337-365"
+      ]
+    },
+    {
+      "id": "seer-cl_tallon",
+      "flag": "zeks",
+      "value": "4 (or 5)",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Tallon Zek",
+      "requires": [
+        {
+          "flag": "cl_tallon",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "zeks",
+          "value": "2 or 3",
+          "why": "zeks 2 -> 4; special case zeks 3 -> 5"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "Sit and ask the Seer to unlock memories."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "Giwin's invitation to Drunder reminds you of some notes you found around Tallon's body. / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text (zeks not 2/3): 'Tallon fell before you with great ease, you seem to remember some strange pouches around his body, but... well it is probably nothing.'"
+      ],
+      "notes": "",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:102-107",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:343-353"
+      ]
+    },
+    {
+      "id": "cipher-1",
+      "flag": "cipher",
+      "value": "1",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Show Maelin both cipher halves (Saryrn + Mithaniel)",
+      "requires": [
+        {
+          "flag": "mmarr",
+          "value": "1",
+          "why": "hail branch needs mmarr and saryrn"
+        },
+        {
+          "flag": "saryrn",
+          "value": "1",
+          "why": "hail branch needs mmarr and saryrn"
+        },
+        {
+          "flag": "cipher",
+          "value": "absent",
+          "why": "cipher branch is checked earlier and only prints 'Welcome back'"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "not 2",
+          "why": "zebuxoruk 2 / time branches come first"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "say": "hail",
+          "detail": "Hail Maelin."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "x": 1016.0,
+          "y": 6.0,
+          "z": 387.8,
+          "spawn": "static",
+          "notes": "Maelin Starpyre; Library of Myrist in PoK"
+        }
+      ],
+      "credit": "the hailing player only",
+      "message": "Maelin tells you, 'Astounding, this truly is the Cipher of Druzzil!  I shall take notes from your knowledge and try to learn from it. ...' / You have received a character flag!",
+      "debug": [
+        "Missing either half: default text 'Welcome to Myrist!  This is truly something for me to be proud of. ...'",
+        "Already have cipher: 'Welcome back my friends.  I assure you that I have been studying the Cipher of Druzzil very diligently. ...'",
+        "Deletes mmarr and saryrn on success."
+      ],
+      "notes": "saryrn comes from the Plane of Torment (other part).",
+      "source": [
+        "poknowledge/Grand_Librarian_Maelin.lua:4-23"
+      ]
+    },
+    {
+      "id": "zeks-6",
+      "flag": "zeks",
+      "value": "6",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Bring both Zek note packs to Maelin",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "5",
+          "why": "information branch: zeks == '5' with cipher"
+        },
+        {
+          "flag": "cipher",
+          "value": "1",
+          "why": "only the cipher sub-branch grants"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "not 2",
+          "why": "zebuxoruk 2 branch is checked first"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "say": "information",
+          "detail": "Say 'new information' to Maelin."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "x": 1016.0,
+          "y": 6.0,
+          "z": 387.8,
+          "spawn": "static",
+          "notes": "Maelin Starpyre; Library of Myrist in PoK"
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "Maelin tells you, 'This cannot be.  You must hurry!  Rallos Zek seems to be planing a massive raid on Norrath. ...  Go challenge Rallos, hurry!' / You have received a character flag!",
+      "debug": [
+        "No cipher and zeks 3/4/5: 'Notes written in the language of the gods!  Unfortunately only one with the Cipher of Druzzil could translate these. ...'",
+        "With cipher but only one Zek (zeks 3 or 4): Maelin says nothing at all. Kill the other brother.",
+        "Do not include 'hail' or 'lore' in the sentence; those branches are matched first."
+      ],
+      "notes": "",
+      "source": [
+        "poknowledge/Grand_Librarian_Maelin.lua:52-83"
+      ]
+    },
+    {
+      "id": "zeks-7",
+      "flag": "zeks",
+      "value": "7",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Kill Rallos Zek the Warlord and hail his Planar Projection",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "6",
+          "why": "zeks == 6 -> 7"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Decorin_Berik, Decorin_Grunhork",
+          "zone": "potactics",
+          "detail": "Kill both door guards; ~3 s later Tallon and Vallon walk out (event versions)."
+        },
+        {
+          "type": "kill",
+          "npc": "Tallon_Zek, Vallon_Zek (event)",
+          "zone": "potactics",
+          "detail": "Kill both brothers; Rallos_Zek spawns at the #Rallos_Zek_ spot."
+        },
+        {
+          "type": "kill",
+          "npc": "Rallos_Zek",
+          "zone": "potactics",
+          "detail": "At 50% he leaps into the arena and Rallos_Zek_the_Warlord spawns at 705, 0, -290."
+        },
+        {
+          "type": "kill",
+          "npc": "Rallos_Zek_the_Warlord",
+          "zone": "potactics",
+          "detail": "Kill the Warlord in the arena pit."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Each raid member hails the projection at the Warlord's corpse."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Decorin_Berik",
+          "zone": "potactics",
+          "x": 320.0,
+          "y": 301.0,
+          "z": 168.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "Decorin_Grunhork",
+          "zone": "potactics",
+          "x": 320.0,
+          "y": -286.0,
+          "z": 168.3,
+          "spawn": "static",
+          "notes": ""
+        },
+        {
+          "name": "#Rallos_Zek_",
+          "zone": "potactics",
+          "x": 500.0,
+          "y": 20.0,
+          "z": 194.1,
+          "spawn": "static",
+          "notes": "untargetable placeholder; must be up for the event to start"
+        },
+        {
+          "name": "Tallon_Zek (event)",
+          "zone": "potactics",
+          "x": 621.0,
+          "y": -560.0,
+          "z": 158.0,
+          "spawn": "event",
+          "notes": "npc 214313"
+        },
+        {
+          "name": "Vallon_Zek (event)",
+          "zone": "potactics",
+          "x": 594.0,
+          "y": 581.0,
+          "z": 158.0,
+          "spawn": "event",
+          "notes": "npc 214320"
+        },
+        {
+          "name": "Rallos_Zek_the_Warlord",
+          "zone": "potactics",
+          "x": 705.0,
+          "y": 0.0,
+          "z": -290.0,
+          "spawn": "event",
+          "notes": "npc 214312"
+        },
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214322 at the Warlord's death spot; depops after 20 minutes"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the Warlord's death_complete e.killer.",
+      "message": "Maelin Starpyre's thoughts enter into your own.  'The singed parchment of Rallos lies in his dead hand.  Bring it back to me I will translate them using the Cipher of Druzzil.' / You have received a character flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes.",
+        "zeks < 6 and no cl_rallos: cl_rallos instead (see cl_rallos-1). zeks 7 or (zeks < 6 with cl_rallos): no response.",
+        "Event timeouts: brothers 20 min, Rallos 19.5 min until first hit to 98%, Warlord 20 min out of combat; any expiry resets the door guards (10 min).",
+        "Pit teleporter door 24 drops you onto the Warlord only while he is engaged; otherwise it sends you to potranquility."
+      ],
+      "notes": "Deletes cl_rallos if present. Event reset on success is 66 hours. In guild instances the failure timeouts are 2.5 hours.",
+      "source": [
+        "potactics/214322.lua:57-83",
+        "potactics/encounters/Rallos.lua:103-137",
+        "potactics/encounters/Rallos.lua:348-367",
+        "potactics/encounters/Rallos.lua:460-466",
+        "potactics/player.lua:42-50"
+      ]
+    },
+    {
+      "id": "cl_rallos-1",
+      "flag": "cl_rallos",
+      "value": "1",
+      "tier": 3,
+      "zone": "potactics",
+      "title": "Rallos checklist (killed before zeks 6)",
+      "requires": [
+        {
+          "flag": "zeks",
+          "value": "< 6",
+          "why": "zeks < 6 and not cl_rallos"
+        },
+        {
+          "flag": "cl_rallos",
+          "value": "absent",
+          "why": "not re-given"
+        }
+      ],
+      "actions": [
+        {
+          "type": "kill",
+          "npc": "Rallos_Zek_the_Warlord",
+          "zone": "potactics",
+          "detail": "Same kill as zeks-7."
+        },
+        {
+          "type": "say",
+          "npc": "A_Planar_Projection",
+          "zone": "potactics",
+          "say": "hail",
+          "detail": "Hail the projection."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "A_Planar_Projection",
+          "zone": "potactics",
+          "x": null,
+          "y": null,
+          "z": null,
+          "spawn": "event",
+          "notes": "npc 214322"
+        }
+      ],
+      "credit": "ClientCanFlag: hailing client whose current raid ID == recorded raid ID, else current group ID == recorded group ID, else the recorded solo client; recorded from the Warlord's death_complete e.killer.",
+      "message": "The Planar Projection seems to flicker in and out of existence.  It seems to be impressed by the defeat of Rallos Zek. / You have received a new checklist flag!",
+      "debug": [
+        "Projection only answers the raid (else group, else solo) recorded from the boss's death_complete killer; others get no text.",
+        "72 grants max per projection; it depops after 20 minutes."
+      ],
+      "notes": "",
+      "source": [
+        "potactics/214322.lua:75-80"
+      ]
+    },
+    {
+      "id": "seer-cl_rallos",
+      "flag": "zeks",
+      "value": "7",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Unlock memories: Rallos Zek",
+      "requires": [
+        {
+          "flag": "cl_rallos",
+          "value": "1",
+          "why": "checklist entry"
+        },
+        {
+          "flag": "zeks",
+          "value": "6",
+          "why": "reqFlag zeks = '6' exactly (get it from Maelin first)"
+        }
+      ],
+      "actions": [
+        {
+          "type": "seer",
+          "npc": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "say": "unlock memories",
+          "detail": "After Maelin gives zeks 6, sit and ask the Seer to unlock memories."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Seer_Mal_Nae`Shi",
+          "zone": "poknowledge",
+          "x": -224.0,
+          "y": -42.0,
+          "z": -156.2,
+          "spawn": "static",
+          "notes": ""
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "The Cipher on your arm glows for a moment, the booming voice of the Warlord rings through your ears, 'You have finally earned the right to claim you have 'defeated' me.' / You have received a character flag!",
+      "debug": [
+        "You must be sitting when you say it; standing gets 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+        "The text must contain both 'unlock' and 'memories' (two separate findi checks).",
+        "With no cl_* flag at all you get 'You manage to recover some images from your childhood, but no recent events spark a memory.'",
+        "The cl_* flag is deleted only on success; on the locked path it stays and you can retry later.",
+        "Locked text: 'Your heart beat speeds as you recall the Warlord's flaming axe, behind the dark sockets of his helm you sense darker intentions.'"
+      ],
+      "notes": "",
+      "source": [
+        "poknowledge/Seer_Mal_Nae-Shi.lua:108-113",
+        "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"
+      ]
+    },
+    {
+      "id": "zebuxoruk-1",
+      "flag": "zebuxoruk",
+      "value": "1",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Give Maelin the Mithaniel and Karana lore",
+      "requires": [
+        {
+          "flag": "mmarr_book",
+          "value": "1",
+          "why": "lore branch needs mmarr_book and karana == '4'"
+        },
+        {
+          "flag": "karana",
+          "value": "4",
+          "why": "lore branch needs mmarr_book and karana == '4'"
+        },
+        {
+          "flag": "zebuxoruk",
+          "value": "absent",
+          "why": "zebuxoruk branch is taken first"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "say": "lore",
+          "detail": "Say 'new lore' to Maelin."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "x": 1016.0,
+          "y": 6.0,
+          "z": 387.8,
+          "spawn": "static",
+          "notes": "Maelin Starpyre; Library of Myrist in PoK"
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "Maelin tells you, 'This is quite interesting friends.  It is a detailed document on what has become of Zebuxoruk. ...' / You have received a character flag!",
+      "debug": [
+        "Only one of the two: 'What is this that you have found?  It appears to be written in the divine language. ... there must be another piece.'",
+        "Neither: 'Come now, I don't see any new lore about you.  There is no reason to be dishonest with me.'",
+        "No cipher is required for this step.",
+        "Deletes mmarr_book and karana on success."
+      ],
+      "notes": "With zebuxoruk 1 and zeks 7, saying lore again only gives the Rallos parchment story (no flag).",
+      "source": [
+        "poknowledge/Grand_Librarian_Maelin.lua:25-50"
+      ]
+    },
+    {
+      "id": "zebuxoruk-2",
+      "flag": "zebuxoruk",
+      "value": "2",
+      "tier": 3,
+      "zone": "poknowledge",
+      "title": "Ask Maelin for new information (Meldrath's machine)",
+      "requires": [
+        {
+          "flag": "zebuxoruk",
+          "value": "1",
+          "why": "information branch: zebuxoruk == '1' and zeks == '7'"
+        },
+        {
+          "flag": "zeks",
+          "value": "7",
+          "why": "information branch: zebuxoruk == '1' and zeks == '7'"
+        }
+      ],
+      "actions": [
+        {
+          "type": "say",
+          "npc": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "say": "information",
+          "detail": "Say 'new information' to Maelin."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Grand_Librarian_Maelin",
+          "zone": "poknowledge",
+          "x": 1016.0,
+          "y": 6.0,
+          "z": 387.8,
+          "spawn": "static",
+          "notes": "Maelin Starpyre; Library of Myrist in PoK"
+        }
+      ],
+      "credit": "the speaking player only",
+      "message": "Maelin tells you, 'There is no way to escape from the prison that is The Plane of Time. ...' then 'Maelin takes a deep breath and continues, ...' / You have received a character flag!",
+      "debug": [
+        "zebuxoruk 1 with zeks 6 and cipher: 'As I have already told you, Rallos must be stopped! ...' (do Rallos first).",
+        "zebuxoruk 1 with zeks 5 and cipher: this say grants zeks 6 instead; say it again after Rallos.",
+        "Already zebuxoruk 2: 'As I have told you, you must retrieve the elemental essence from each elemental plane ...'"
+      ],
+      "notes": "zebuxoruk 2 is the elemental planes access value per the Seer header.",
+      "source": [
+        "poknowledge/Grand_Librarian_Maelin.lua:52-62"
+      ]
+    }
+  ]
+}

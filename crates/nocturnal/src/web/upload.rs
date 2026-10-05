@@ -44,6 +44,10 @@ pub struct Head {
     pub filename: Option<String>,
     /// The spell tracker's CSRF header (`X-Spelltracker: 1`).
     pub spelltracker: bool,
+    /// The site's own CSRF header (`X-Nocturnal: 1`) on a script's POST: a
+    /// cross-site form cannot set it, and a cross-site fetch that does would
+    /// need a CORS preflight this server never answers.
+    pub xhr: bool,
 }
 
 /// Parse the head of a request from the bytes read so far. `None` until the
@@ -69,6 +73,7 @@ pub fn parse_head(buf: &[u8]) -> Option<(Head, usize)> {
             "cookie" => head.cookie = Some(value.to_owned()),
             "x-filename" => head.filename = Some(value.to_owned()),
             "x-spelltracker" => head.spelltracker = value == "1",
+            "x-nocturnal" => head.xhr = value == "1",
             _ => {}
         }
     }

@@ -1,0 +1,1608 @@
+{
+ "part": "tier45",
+ "steps": [
+  {
+   "id": "solrotower-access",
+   "flag": null,
+   "value": null,
+   "tier": 3,
+   "zone": "potranquility",
+   "title": "Unlock the Tower of Solusek Ro portal",
+   "requires": [
+    {
+     "flag": "cipher",
+     "value": "present",
+     "why": "potranquility/player.lua door 22 checks qglobals.cipher"
+    },
+    {
+     "flag": "zeks",
+     "value": ">=6",
+     "why": "door 22 checks tonumber(zeks) >= 6"
+    }
+   ],
+   "actions": [
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "potranquility",
+     "detail": "Click the Solusek Ro portal (door 22, SOLROPORT500); this sets zone flag 212 and the door sends you to solrotower -1,-2915,-766."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 22 SOLROPORT500",
+     "zone": "potranquility",
+     "x": 30.9853,
+     "y": -202.877,
+     "z": -618.342,
+     "spawn": "static",
+     "notes": "door, not an NPC"
+    }
+   ],
+   "credit": "the clicking player only (SetZoneFlag(212) on e.self)",
+   "message": "No flag message; you are teleported. On failure: 'You lack the will to pass through this portal safely.'",
+   "debug": [
+    "Door 22 only sets zone flag 212 if you have the cipher qglobal AND zeks >= 6; otherwise you get 'You lack the will to pass through this portal safely.'",
+    "solrotower has flag_needed set in the zone table, so without zone flag 212 the door teleport is silently refused by CanBeInZone.",
+    "Zone min_level for solrotower is 46.",
+    "Once zone flag 212 is set it is permanent; losing cipher later does not remove it."
+   ],
+   "notes": "Tier per #popflags: sol_room and pofire count toward Tier 3 completion (PopFlagsTier3Complete). The level-bypass lines in potranquility/player.lua are commented out.",
+   "source": [
+    "potranquility/player.lua:107-118",
+    "EQMacEmu/zone/zoning.cpp:1319-1325",
+    "EQMacEmu/zone/doors.cpp:346"
+   ]
+  },
+  {
+   "id": "pofire-1",
+   "flag": "pofire",
+   "value": "1",
+   "tier": 3,
+   "zone": "potranquility",
+   "title": "Ask Miak about the Plane of Fire portal",
+   "requires": [
+    {
+     "flag": "pofire",
+     "value": "absent",
+     "why": "set_global only runs when not qglobals.pofire; with pofire=2 Miak gives different dialogue"
+    }
+   ],
+   "actions": [
+    {
+     "type": "say",
+     "npc": "Miak_the_Searedsoul",
+     "zone": "potranquility",
+     "say": "hail",
+     "detail": "Hail Miak."
+    },
+    {
+     "type": "say",
+     "npc": "Miak_the_Searedsoul",
+     "zone": "potranquility",
+     "say": "plane of fire",
+     "detail": "Say plane of fire."
+    },
+    {
+     "type": "say",
+     "npc": "Miak_the_Searedsoul",
+     "zone": "potranquility",
+     "say": "demise",
+     "detail": "Say demise."
+    },
+    {
+     "type": "say",
+     "npc": "Miak_the_Searedsoul",
+     "zone": "potranquility",
+     "say": "portal's destination",
+     "detail": "Say portal's destination; this sets pofire=1."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Miak_the_Searedsoul",
+     "zone": "potranquility",
+     "x": -2255,
+     "y": 255,
+     "z": -921.1,
+     "spawn": "static",
+     "notes": "next to the Plane of Fire portal"
+    }
+   ],
+   "credit": "the speaking player only",
+   "message": "Miak says: 'I do not know if I will ever be able to correct the portal's destination, but if you have the true route for the portal in your mind I will be able to channel the portal to the correct location.' then 'You have received a character flag!'",
+   "debug": [
+    "Only the 'portal's destination' keyword sets the flag; the earlier keywords are flavor and can be skipped.",
+    "No other flag or level is checked; anyone can get pofire=1.",
+    "The 'You have received a character flag!' line prints even if you already had pofire=1 (set_global is skipped, value stays 1).",
+    "If you already have pofire=2 every keyword returns the 'You are the one that discovered the portal's destination' text instead."
+   ],
+   "notes": "pofire=1 is only needed for the direct grant at Solusek Ro's projection. If you kill Solusek without pofire=1 you get cl_solusek instead, and the Seer converts that to pofire=2 without ever checking pofire=1.",
+   "source": [
+    "potranquility/Miak_the_Searedsoul.lua:1-36"
+   ]
+  },
+  {
+   "id": "sol_room-bit0",
+   "flag": "sol_room",
+   "value": "bit0",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Touch Xuzl's burning cauldron",
+   "requires": [],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Xuzl",
+     "zone": "solrotower",
+     "detail": "Kill Xuzl. Xuzl.lua resets him (Annul Self, hate wipe) if he is pulled below y -914."
+    },
+    {
+     "type": "click",
+     "npc": "a_flaming_cauldron",
+     "zone": "solrotower",
+     "detail": "While the cauldron NPC (212410) is up, click the cauldron door 12 (SRTCLDRN500) in Xuzl's room."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Xuzl",
+     "zone": "solrotower",
+     "x": 1835,
+     "y": -716,
+     "z": 327.6,
+     "spawn": "static",
+     "notes": "wing boss"
+    },
+    {
+     "name": "a_flaming_cauldron (212410)",
+     "zone": "solrotower",
+     "x": 1780,
+     "y": -336,
+     "z": 339,
+     "spawn": "event",
+     "notes": "spawned on Xuzl death; depops after 30 min (1800000 ms)"
+    },
+    {
+     "name": "door 12 SRTCLDRN500",
+     "zone": "solrotower",
+     "x": 1835.84,
+     "y": -314.83,
+     "z": 336.001,
+     "spawn": "static",
+     "notes": "the clickable cauldron; teleports you to 1296,-601,-381 in solrotower"
+    }
+   ],
+   "credit": "every player who clicks door 12 while NPC 212410 exists in the zone; no raid, group, hate list or distance check (player.lua only calls IsMobSpawnedByNpcTypeID(212410))",
+   "message": "As you place your hand on the burning cauldron, you feel arcane wisdom pulsing in your mind. then 'You have received a character flag!'",
+   "debug": [
+    "The bit is only set if a_flaming_cauldron 212410 is currently spawned; it depops 30 min after the kill. If it is gone you see 'You become disoriented as you pass through the portal of flames.' and get no flag.",
+    "The door also teleports you (dest 1296,-601,-381), so a failed click still moves you.",
+    "sol_room is a 5-character string; this wing is character 1 (Xuzl,Arlyxir,Dresolik,Rizlona,Jiva). Missing global is treated as 00000, other bits are preserved.",
+    "Check progress with #popflags (Tower of Solusek Ro section) or Seer guided meditation while pofire=1 ('Xuzl's arcane wisdom pulses in your mind.')."
+   ],
+   "notes": "Seer meditation only lists sol_room bits when pofire=1. Anyone in the zone, even not in the killing raid, can click while the cauldron is up.",
+   "source": [
+    "solrotower/player.lua:79",
+    "solrotower/Xuzl.lua:1-6",
+    "solrotower/a_flaming_cauldron.lua:1-9"
+   ]
+  },
+  {
+   "id": "sol_room-bit1",
+   "flag": "sol_room",
+   "value": "bit1",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Touch Arlyxir's burning cauldron",
+   "requires": [],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Arlyxir",
+     "zone": "solrotower",
+     "detail": "Kill Arlyxir. He resets if pulled below y 1230 and fully heals ('is immolated in flames, and is reborn!') every 750 s of combat."
+    },
+    {
+     "type": "click",
+     "npc": "a_flaming_cauldron",
+     "zone": "solrotower",
+     "detail": "While the cauldron NPC (212411) is up, click the cauldron door 7 (SRTCLDRN500) in Arlyxir's room."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Arlyxir",
+     "zone": "solrotower",
+     "x": 1726,
+     "y": 1684,
+     "z": 636.5,
+     "spawn": "static",
+     "notes": "wing boss"
+    },
+    {
+     "name": "a_flaming_cauldron (212411)",
+     "zone": "solrotower",
+     "x": 1607,
+     "y": 1891,
+     "z": 627,
+     "spawn": "event",
+     "notes": "spawned on Arlyxir death; depops after 30 min (1800000 ms)"
+    },
+    {
+     "name": "door 7 SRTCLDRN500",
+     "zone": "solrotower",
+     "x": 1570.63,
+     "y": 1944.28,
+     "z": 624.001,
+     "spawn": "static",
+     "notes": "the clickable cauldron; teleports you to 413,299,2 in solrotower"
+    }
+   ],
+   "credit": "every player who clicks door 7 while NPC 212411 exists in the zone; no raid, group, hate list or distance check (player.lua only calls IsMobSpawnedByNpcTypeID(212411))",
+   "message": "As you place your hand on the burning cauldron, you feel a wealth of knowledge enter your mind. then 'You have received a character flag!'",
+   "debug": [
+    "The bit is only set if a_flaming_cauldron 212411 is currently spawned; it depops 30 min after the kill. If it is gone you see 'You become disoriented as you pass through the portal of flames.' and get no flag.",
+    "The door also teleports you (dest 413,299,2), so a failed click still moves you.",
+    "sol_room is a 5-character string; this wing is character 2 (Xuzl,Arlyxir,Dresolik,Rizlona,Jiva). Missing global is treated as 00000, other bits are preserved.",
+    "Check progress with #popflags (Tower of Solusek Ro section) or Seer guided meditation while pofire=1 ('Arlyxir's wealth of knowledge flows through your mind.')."
+   ],
+   "notes": "Seer meditation only lists sol_room bits when pofire=1. Anyone in the zone, even not in the killing raid, can click while the cauldron is up.",
+   "source": [
+    "solrotower/player.lua:40",
+    "solrotower/Arlyxir.lua:1-6",
+    "solrotower/a_flaming_cauldron.lua:1-9"
+   ]
+  },
+  {
+   "id": "sol_room-bit2",
+   "flag": "sol_room",
+   "value": "bit2",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Touch Dresolik's burning cauldron",
+   "requires": [],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "The_Protector_of_Dresolik",
+     "zone": "solrotower",
+     "detail": "Kill all four Guardian_of_Dresolik; when the last dies The_Protector_of_Dresolik spawns at 606,1584,-152. Kill the Protector. Both reset if pulled outside x 558-978."
+    },
+    {
+     "type": "click",
+     "npc": "a_flaming_cauldron",
+     "zone": "solrotower",
+     "detail": "While the cauldron NPC (212414) is up, click the cauldron door 10 (SRTCLDRN500) in Dresolik's room."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Guardian_of_Dresolik",
+     "zone": "solrotower",
+     "x": 837,
+     "y": 1519,
+     "z": -155.4,
+     "spawn": "static",
+     "notes": "wing boss"
+    },
+    {
+     "name": "The_Protector_of_Dresolik",
+     "zone": "solrotower",
+     "x": 606,
+     "y": 1584,
+     "z": -152,
+     "spawn": "event",
+     "notes": "unique_spawn when the last Guardian_of_Dresolik dies; depops after 2.5 h out of combat"
+    },
+    {
+     "name": "a_flaming_cauldron (212414)",
+     "zone": "solrotower",
+     "x": 166,
+     "y": 1449,
+     "z": -68,
+     "spawn": "event",
+     "notes": "spawned on The_Protector_of_Dresolik death; depops after 30 min (1800000 ms)"
+    },
+    {
+     "name": "door 10 SRTCLDRN500",
+     "zone": "solrotower",
+     "x": 215.742,
+     "y": 1478.72,
+     "z": -71.999,
+     "spawn": "static",
+     "notes": "the clickable cauldron; teleports you to -1295,-606,-381 in solrotower"
+    }
+   ],
+   "credit": "every player who clicks door 10 while NPC 212414 exists in the zone; no raid, group, hate list or distance check (player.lua only calls IsMobSpawnedByNpcTypeID(212414))",
+   "message": "As you place your hand on the burning cauldron, you feel a bolt of energy surge through your arm. then 'You have received a character flag!'",
+   "debug": [
+    "The bit is only set if a_flaming_cauldron 212414 is currently spawned; it depops 30 min after the kill. If it is gone you see 'You become disoriented as you pass through the portal of flames.' and get no flag.",
+    "The door also teleports you (dest -1295,-606,-381), so a failed click still moves you.",
+    "sol_room is a 5-character string; this wing is character 3 (Xuzl,Arlyxir,Dresolik,Rizlona,Jiva). Missing global is treated as 00000, other bits are preserved.",
+    "Check progress with #popflags (Tower of Solusek Ro section) or Seer guided meditation while pofire=1 ('The power of Dresolik surges through you.')."
+   ],
+   "notes": "Seer meditation only lists sol_room bits when pofire=1. Anyone in the zone, even not in the killing raid, can click while the cauldron is up.",
+   "source": [
+    "solrotower/player.lua:53",
+    "solrotower/The_Protector_of_Dresolik.lua:3-8",
+    "solrotower/a_flaming_cauldron.lua:1-9"
+   ]
+  },
+  {
+   "id": "sol_room-bit3",
+   "flag": "sol_room",
+   "value": "bit3",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Touch Rizlona's burning cauldron",
+   "requires": [],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "#Rizlona",
+     "zone": "solrotower",
+     "detail": "Kill Rizlona; a second form #Rizlona spawns where she died. Kill #Rizlona. Both reset if pulled outside y 2047-2538."
+    },
+    {
+     "type": "click",
+     "npc": "a_flaming_cauldron",
+     "zone": "solrotower",
+     "detail": "While the cauldron NPC (212413) is up, click the cauldron door 6 (SRTCLDRN500) in Rizlona's room."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Rizlona",
+     "zone": "solrotower",
+     "x": -1103,
+     "y": 2384,
+     "z": -905.7,
+     "spawn": "static",
+     "notes": "wing boss"
+    },
+    {
+     "name": "#Rizlona",
+     "zone": "solrotower",
+     "x": -1103,
+     "y": 2384,
+     "z": -905.7,
+     "spawn": "event",
+     "notes": "spawns at Rizlona's death location; depops after 2.5 h out of combat"
+    },
+    {
+     "name": "a_flaming_cauldron (212413)",
+     "zone": "solrotower",
+     "x": -980,
+     "y": 2717,
+     "z": -908,
+     "spawn": "event",
+     "notes": "spawned on #Rizlona death; depops after 30 min (1800000 ms)"
+    },
+    {
+     "name": "door 6 SRTCLDRN500",
+     "zone": "solrotower",
+     "x": -943.834,
+     "y": 2663.88,
+     "z": -911.999,
+     "spawn": "static",
+     "notes": "the clickable cauldron; teleports you to -397,300,2 in solrotower"
+    }
+   ],
+   "credit": "every player who clicks door 6 while NPC 212413 exists in the zone; no raid, group, hate list or distance check (player.lua only calls IsMobSpawnedByNpcTypeID(212413))",
+   "message": "As you place your hand on the burning cauldron, you feel relaxed as a short tune slips into your thoughts. then 'You have received a character flag!'",
+   "debug": [
+    "The bit is only set if a_flaming_cauldron 212413 is currently spawned; it depops 30 min after the kill. If it is gone you see 'You become disoriented as you pass through the portal of flames.' and get no flag.",
+    "The door also teleports you (dest -397,300,2), so a failed click still moves you.",
+    "sol_room is a 5-character string; this wing is character 4 (Xuzl,Arlyxir,Dresolik,Rizlona,Jiva). Missing global is treated as 00000, other bits are preserved.",
+    "Check progress with #popflags (Tower of Solusek Ro section) or Seer guided meditation while pofire=1 ('Rizlona's song slips through your thoughts.')."
+   ],
+   "notes": "Seer meditation only lists sol_room bits when pofire=1. Anyone in the zone, even not in the killing raid, can click while the cauldron is up.",
+   "source": [
+    "solrotower/player.lua:27",
+    "solrotower/#Rizlona.lua:3-8",
+    "solrotower/a_flaming_cauldron.lua:1-9"
+   ]
+  },
+  {
+   "id": "sol_room-bit4",
+   "flag": "sol_room",
+   "value": "bit4",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Touch Jiva's burning cauldron",
+   "requires": [],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Jiva",
+     "zone": "solrotower",
+     "detail": "Kill Jiva. She calls one add every 45 s of combat, cycling through eight named adds."
+    },
+    {
+     "type": "click",
+     "npc": "a_flaming_cauldron",
+     "zone": "solrotower",
+     "detail": "While the cauldron NPC (212412) is up, click the cauldron door 11 (SRTCLDRN500) in Jiva's room."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Jiva",
+     "zone": "solrotower",
+     "x": -2252,
+     "y": -257,
+     "z": -1079.4,
+     "spawn": "static",
+     "notes": "wing boss"
+    },
+    {
+     "name": "a_flaming_cauldron (212412)",
+     "zone": "solrotower",
+     "x": -2126,
+     "y": 105,
+     "z": -1100,
+     "spawn": "event",
+     "notes": "spawned on Jiva death; depops after 30 min (1800000 ms)"
+    },
+    {
+     "name": "door 11 SRTCLDRN500",
+     "zone": "solrotower",
+     "x": -2093.81,
+     "y": 59.0749,
+     "z": -1104,
+     "spawn": "static",
+     "notes": "the clickable cauldron; teleports you to 184,673,-381 in solrotower"
+    }
+   ],
+   "credit": "every player who clicks door 11 while NPC 212412 exists in the zone; no raid, group, hate list or distance check (player.lua only calls IsMobSpawnedByNpcTypeID(212412))",
+   "message": "As you place your hand on the burning cauldron, you feel your body fill with strength. then 'You have received a character flag!'",
+   "debug": [
+    "The bit is only set if a_flaming_cauldron 212412 is currently spawned; it depops 30 min after the kill. If it is gone you see 'You become disoriented as you pass through the portal of flames.' and get no flag.",
+    "The door also teleports you (dest 184,673,-381), so a failed click still moves you.",
+    "sol_room is a 5-character string; this wing is character 5 (Xuzl,Arlyxir,Dresolik,Rizlona,Jiva). Missing global is treated as 00000, other bits are preserved.",
+    "Check progress with #popflags (Tower of Solusek Ro section) or Seer guided meditation while pofire=1 ('Jiva's strength fills your body.')."
+   ],
+   "notes": "Seer meditation only lists sol_room bits when pofire=1. Anyone in the zone, even not in the killing raid, can click while the cauldron is up.",
+   "source": [
+    "solrotower/player.lua:66",
+    "solrotower/Jiva.lua:25-30",
+    "solrotower/a_flaming_cauldron.lua:1-9"
+   ]
+  },
+  {
+   "id": "solusek-chamber",
+   "flag": null,
+   "value": null,
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Pass the lava runes to Solusek Ro's chamber",
+   "requires": [
+    {
+     "flag": "sol_room",
+     "value": "11111",
+     "why": "player.lua doors 44/45 require sol_room == '11111'"
+    },
+    {
+     "flag": "zeks",
+     "value": "7",
+     "why": "doors 44/45 require zeks == '7'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "solrotower",
+     "detail": "Click the lava runes (door 44 or 45, SRTGRUNES503/504) to be moved to 0,-847,244."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 44 SRTGRUNES503",
+     "zone": "solrotower",
+     "x": -0.91941,
+     "y": -698.246,
+     "z": -455.624,
+     "spawn": "static",
+     "notes": ""
+    },
+    {
+     "name": "door 45 SRTGRUNES504",
+     "zone": "solrotower",
+     "x": -0.65131,
+     "y": -840.551,
+     "z": -455.242,
+     "spawn": "static",
+     "notes": ""
+    }
+   ],
+   "credit": "the clicking player (MovePC on e.self; non-charmed pet follows)",
+   "message": "No flag; you are moved into the chamber.",
+   "debug": [
+    "Without sol_room 11111: 'The lava runes scorch your skin as you run your hand across them.' then 'You lack the will to pass through this portal safely.'",
+    "With sol_room 11111 but zeks not 7: 'The runes of lava begin to radiate, the knowledge of passing through slips through your mind but is lost.  The lack of experience and a warring spirit prevents your passage.' then 'You lack the will...'",
+    "All five wings must be done on this character; partial strings like 11011 fail."
+   ],
+   "notes": "Players without the flags can still be inside the chamber by other means (e.g. raid summon); flag grants at the projection additionally require sol_room 11111.",
+   "source": [
+    "solrotower/player.lua:4-25"
+   ]
+  },
+  {
+   "id": "pofire-2-projection",
+   "flag": "pofire",
+   "value": "2",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Hail Solusek Ro's projection (direct Plane of Fire flag)",
+   "requires": [
+    {
+     "flag": "sol_room",
+     "value": "11111",
+     "why": "A_Planar_Projection event_say returns if sol_room ~= '11111'"
+    },
+    {
+     "flag": "pofire",
+     "value": "1",
+     "why": "direct grant branch checks pofire == '1'"
+    },
+    {
+     "flag": "zeks",
+     "value": "7",
+     "why": "direct grant branch checks zeks == '7'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Solusek_Ro",
+     "zone": "solrotower",
+     "detail": "Kill Solusek Ro in his chamber."
+    },
+    {
+     "type": "say",
+     "npc": "A_Planar_Projection",
+     "zone": "solrotower",
+     "say": "hail",
+     "detail": "Hail the Planar Projection that appears at 0,-815,244."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Solusek_Ro",
+     "zone": "solrotower",
+     "x": 0,
+     "y": -1590,
+     "z": 270.7,
+     "spawn": "static",
+     "notes": "heals 100000 and pulls Guardian_of_Fire if dragged below z 240 under 50% HP"
+    },
+    {
+     "name": "A_Planar_Projection",
+     "zone": "solrotower",
+     "x": 0,
+     "y": -815,
+     "z": 244,
+     "spawn": "event",
+     "notes": "212420; spawned on Solusek Ro death; depops after 20 min; max 72 flags"
+    }
+   ],
+   "credit": "any client in the killer's raid (raid ID match), else the killer's group, else the killer alone; each must hail (ClientCanFlag in A_Planar_Projection.lua)",
+   "message": "'Miak the Searedsoul's thoughts enter into your own.  'That is it!  The portal into the Plane of Fire lies within the Lava Well of Ro.  You must now fall into this well to gain access into that plane.  I will make adjustments to the Plane of Tranquility portal so that you can access that Element from here as well.'' then 'You have received a character flag!'",
+   "debug": [
+    "You must be in the same raid (or group, or be the person if solo) as the client Solusek Ro credited with the kill (e.killer from death_complete). Others get no response.",
+    "The projection silently ignores you unless sol_room is exactly 11111.",
+    "Only 'hail' works and only if pofire is not already 2.",
+    "The projection depops 20 min (1200000 ms) after spawning and stops after 72 flag grants (FLAG_LIMIT).",
+    "If you raid-joined after the kill, ClientCanFlag compares raid ID, so joining the killing raid before hailing works.",
+    "Deletes cl_solusek if you had it."
+   ],
+   "notes": "If pofire is not 1 or zeks is not 7 you get cl_solusek instead (see cl_solusek-1).",
+   "source": [
+    "solrotower/Solusek_Ro.lua:27-30",
+    "solrotower/A_Planar_Projection.lua:55-86"
+   ]
+  },
+  {
+   "id": "cl_solusek-1",
+   "flag": "cl_solusek",
+   "value": "1",
+   "tier": 3,
+   "zone": "solrotower",
+   "title": "Hail Solusek Ro's projection (checklist flag)",
+   "requires": [
+    {
+     "flag": "sol_room",
+     "value": "11111",
+     "why": "projection returns silently otherwise"
+    },
+    {
+     "flag": "pofire",
+     "value": "not 2",
+     "why": "hail branch requires pofire ~= '2'"
+    },
+    {
+     "flag": "cl_solusek",
+     "value": "absent",
+     "why": "elseif not qglobals.cl_solusek"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Solusek_Ro",
+     "zone": "solrotower",
+     "detail": "Kill Solusek Ro."
+    },
+    {
+     "type": "say",
+     "npc": "A_Planar_Projection",
+     "zone": "solrotower",
+     "say": "hail",
+     "detail": "Hail the Planar Projection without having both pofire=1 and zeks=7."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Solusek_Ro",
+     "zone": "solrotower",
+     "x": 0,
+     "y": -1590,
+     "z": 270.7,
+     "spawn": "static",
+     "notes": "heals 100000 and pulls Guardian_of_Fire if dragged below z 240 under 50% HP"
+    },
+    {
+     "name": "A_Planar_Projection",
+     "zone": "solrotower",
+     "x": 0,
+     "y": -815,
+     "z": 244,
+     "spawn": "event",
+     "notes": "212420; spawned on Solusek Ro death; depops after 20 min; max 72 flags"
+    }
+   ],
+   "credit": "same as pofire-2-projection: killer's raid, else group, else killer",
+   "message": "'The Planar Projection flickers in and out of existence.  It seems to be impressed by the defeat of Solusek Ro.' then 'You have received a new checklist flag!'",
+   "debug": [
+    "You must be in the same raid (or group, or be the person if solo) as the client Solusek Ro credited with the kill (e.killer from death_complete). Others get no response.",
+    "The projection silently ignores you unless sol_room is exactly 11111.",
+    "Only 'hail' works and only if pofire is not already 2.",
+    "The projection depops 20 min (1200000 ms) after spawning and stops after 72 flag grants (FLAG_LIMIT).",
+    "If you raid-joined after the kill, ClientCanFlag compares raid ID, so joining the killing raid before hailing works.",
+    "You get this instead of pofire=2 when pofire is not 1 OR zeks is not 7."
+   ],
+   "notes": "Convert at the Seer once zeks=7 (see pofire-2-seer).",
+   "source": [
+    "solrotower/A_Planar_Projection.lua:78-83"
+   ]
+  },
+  {
+   "id": "pofire-2-seer",
+   "flag": "pofire",
+   "value": "2",
+   "tier": 3,
+   "zone": "poknowledge",
+   "title": "Unlock memories at the Seer (Solusek Ro)",
+   "requires": [
+    {
+     "flag": "cl_solusek",
+     "value": "1",
+     "why": "checklist entry for cl_solusek"
+    },
+    {
+     "flag": "zeks",
+     "value": "7",
+     "why": "cl_solusek unlock requires zeks == '7'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "seer",
+     "npc": "Seer_Mal_Nae`Shi",
+     "zone": "poknowledge",
+     "say": "unlock memories",
+     "detail": "Sit down, then say unlock memories (script needs both 'unlock' and 'memories')."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer_Mal_Nae`Shi",
+     "zone": "poknowledge",
+     "x": -224,
+     "y": -42,
+     "z": -156.2,
+     "spawn": "static",
+     "notes": ""
+    }
+   ],
+   "credit": "the speaking player",
+   "message": "A blank purple line (unlocked text is empty in the script) then 'You have received a character flag!'",
+   "debug": [
+    "You must be sitting; otherwise: 'You will never be able to focus unless you are relaxed.  Please, sit down for a moment and allow me to [unlock your memories].'",
+    "If zeks is not 7 you see 'Besting the Burning Prince proves your might, but you still must prove your warrior's spirit.' and keep cl_solusek.",
+    "The Seer does not check pofire=1 or sol_room; cl_solusek plus zeks 7 is enough.",
+    "On success cl_solusek is deleted."
+   ],
+   "notes": "The Seer processes every cl_* flag you hold in one say.",
+   "source": [
+    "poknowledge/Seer_Mal_Nae-Shi.lua:132-137",
+    "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"
+   ]
+  },
+  {
+   "id": "pofire-access",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "solrotower",
+   "title": "Jump into the Lava Well to enter the Plane of Fire",
+   "requires": [
+    {
+     "flag": "pofire",
+     "value": "2",
+     "why": "solrotower/player.lua event_zone sets zone flag 217 only if pofire == '2'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "zone",
+     "npc": null,
+     "zone": "solrotower",
+     "detail": "Fall into the Lava Well of Ro (solrotower zone point 1 to pofire -1387,1210,-180). Your first entry sets zone flag 217."
+    },
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "potranquility",
+     "detail": "Afterwards the potranquility Plane of Fire portal (door 82, POTRNQFIRE500 at -2191.06,255.335,-913.81) works."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 82 POTRNQFIRE500",
+     "zone": "potranquility",
+     "x": -2191.06,
+     "y": 255.335,
+     "z": -913.81,
+     "spawn": "static",
+     "notes": "leads to pofire -1387,1210,-180"
+    }
+   ],
+   "credit": "the zoning player only",
+   "message": "No flag message.",
+   "debug": [
+    "The potranquility door 82 never grants zone flag 217 (level bypass is commented out); without it you get 'You lack the will to pass through this portal safely.'",
+    "Zone flag 217 is set in solrotower EVENT_ZONE, which runs before the server flag check, so the first trip must be through the Lava Well from inside the Tower.",
+    "Without zone flag 217 the server prints 'You do not have the flag to enter pofire.' when zoning.",
+    "Server zoning (zone/zoning.cpp CanBeInZone and Handle_OP_ZoneChange) requires the zone flag unless data bucket pop_alt_access_enabled=1 and >= pop_raid_flagged_percent (default 85) of your raid hold that zone flag (only zones 215-219 qualify for this raid-willing bypass).",
+    "pofire zone min_level is 46."
+   ],
+   "notes": "Miak at pofire=2 says to simply touch the portal, but per the code that only works after the Lava Well entry has set zone flag 217.",
+   "source": [
+    "solrotower/player.lua:102-106",
+    "potranquility/player.lua:120-130",
+    "EQMacEmu/zone/zoning.cpp:218-224",
+    "EQMacEmu/zone/zoning.cpp:362-368"
+   ]
+  },
+  {
+   "id": "zebuxoruk-2",
+   "flag": "zebuxoruk",
+   "value": "2",
+   "tier": 3,
+   "zone": "poknowledge",
+   "title": "Ask Maelin for information (elemental planes)",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "1",
+     "why": "Maelin 'information' branch requires zebuxoruk == '1'"
+    },
+    {
+     "flag": "zeks",
+     "value": "7",
+     "why": "same branch requires zeks == '7'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "say",
+     "npc": "Grand_Librarian_Maelin",
+     "zone": "poknowledge",
+     "say": "information",
+     "detail": "Say information to Grand Librarian Maelin."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Grand_Librarian_Maelin",
+     "zone": "poknowledge",
+     "x": 1016,
+     "y": 6,
+     "z": 387.8,
+     "spawn": "static",
+     "notes": ""
+    }
+   ],
+   "credit": "the speaking player",
+   "message": "Two long Maelin texts about Meldrath's time machine, then 'You have received a character flag!'",
+   "debug": [
+    "If you already have zebuxoruk=2, 'information' returns the 'you must retrieve the elemental essence from each elemental plane' reminder.",
+    "With zebuxoruk=1 but zeks below 7 you get no flag."
+   ],
+   "notes": "Included here because it gates the elemental planes; it may also appear in the tier 3 part.",
+   "source": [
+    "poknowledge/Grand_Librarian_Maelin.lua:52-61"
+   ]
+  },
+  {
+   "id": "elemental-access",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "potranquility",
+   "title": "Open the Air, Water and Earth portals",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "potranquility/player.lua doors 81/83/84 require zebuxoruk == '2'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "potranquility",
+     "detail": "Click any of the Air (81), Earth (83) or Water (84) portals; the first click sets zone flags 215, 216 and 218 together."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 81 POTRANBURN500 (Air)",
+     "zone": "potranquility",
+     "x": -687.5,
+     "y": 851.869,
+     "z": -624.75,
+     "spawn": "static",
+     "notes": "to poair 532,884,-90"
+    },
+    {
+     "name": "door 83 POTBLDR500 (Earth)",
+     "zone": "potranquility",
+     "x": 2211.33,
+     "y": -1326.48,
+     "z": -723.578,
+     "spawn": "static",
+     "notes": "to poeartha -1150,200,71"
+    },
+    {
+     "name": "door 84 POTPOWTRG500 (Water)",
+     "zone": "potranquility",
+     "x": 960.5,
+     "y": -1161.25,
+     "z": -781,
+     "spawn": "static",
+     "notes": "to powater -93,-1234,11"
+    }
+   ],
+   "credit": "the clicking player only",
+   "message": "No flag message; you are teleported.",
+   "debug": [
+    "Without zebuxoruk=2: 'You lack the will to pass through this portal safely.'",
+    "Clicking one portal flags all three zones (215 poair, 216 powater, 218 poeartha).",
+    "Server zoning (zone/zoning.cpp CanBeInZone and Handle_OP_ZoneChange) requires the zone flag unless data bucket pop_alt_access_enabled=1 and >= pop_raid_flagged_percent (default 85) of your raid hold that zone flag (only zones 215-219 qualify for this raid-willing bypass).",
+    "Plane of Earth B (222) is not unlocked here; it needs earthb_key."
+   ],
+   "notes": "Sarhya_the_Dawnbreeze (potranquility -686,885,-608.9) only talks about Air when you have zebuxoruk=2.",
+   "source": [
+    "potranquility/player.lua:132-144"
+   ]
+  },
+  {
+   "id": "poair-xegony-key",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "poair",
+   "title": "Make the Wind Etched Key for Xegony",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "Sarhya only hands out the pouch at zebuxoruk == '2'"
+    }
+   ],
+   "actions": [
+    {
+     "type": "say",
+     "npc": "Sarhya_the_Dawnbreeze",
+     "zone": "potranquility",
+     "say": "plane of air",
+     "detail": "Say plane of air to receive a Pouch of Swirling Winds (only if you do not already have one).",
+     "items": [
+      {
+       "id": 17888,
+       "name": "Pouch of Swirling Winds"
+      }
+     ]
+    },
+    {
+     "type": "loot",
+     "npc": null,
+     "zone": "poair",
+     "detail": "Collect the four Mystical Essences from the Air avatars.",
+     "items": [
+      {
+       "id": 28639,
+       "name": "Mystical Essence of Wind"
+      },
+      {
+       "id": 28640,
+       "name": "Mystical Essence of Smoke"
+      },
+      {
+       "id": 28641,
+       "name": "Mystical Essence of Mist"
+      },
+      {
+       "id": 28642,
+       "name": "Mystical Essence of Dust"
+      }
+     ]
+    },
+    {
+     "type": "event",
+     "npc": null,
+     "zone": "poair",
+     "detail": "Combine the four essences in the pouch (recipe 9646) to make A Wind Etched Key.",
+     "items": [
+      {
+       "id": 28638,
+       "name": "A Wind Etched Key"
+      }
+     ]
+    },
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "poair",
+     "detail": "Click the rainbow (door 1, POARNBOW502) with the key on your cursor; it is added to your keyring and you are moved to -617,5,1450."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Sarhya_the_Dawnbreeze",
+     "zone": "potranquility",
+     "x": -686,
+     "y": 885,
+     "z": -608.9,
+     "spawn": "static",
+     "notes": ""
+    },
+    {
+     "name": "door 1 POARNBOW502",
+     "zone": "poair",
+     "x": -397.879,
+     "y": 905.247,
+     "z": 432.427,
+     "spawn": "static",
+     "notes": "Xegony rainbow"
+    }
+   ],
+   "credit": "key holder; a key click also authorizes the holder's raid (or group) for 300 seconds so members without a key can click through",
+   "message": "No flag.",
+   "debug": [
+    "The rainbow checks the cursor slot (GetItemIDAt(0) == 28638) or your keyring; a key in a bag does not work.",
+    "Raid/group authorization lasts 300 s after a key holder clicks, and is keyed on raid ID (or group ID if not in a raid); solo players without a key cannot use it.",
+    "Sarhya gives no pouch if you already have one anywhere (HasItem includes bank)."
+   ],
+   "notes": "Avatar loot sources for the four Mystical Essences were not traced in this pass.",
+   "source": [
+    "potranquility/Sarhya_the_Dawnbreeze.lua:11-19",
+    "poair/player.lua:88-116"
+   ]
+  },
+  {
+   "id": "essence-pofire",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "pofire",
+   "title": "Get the Globe of Dancing Flame from the Essence of Fire",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "needed to enter the elemental planes (zone flags 215/216/218); pofire 2 for pofire; earthb_key for poearthb"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Fennin_Ro_the_Tyrant_of_Fire",
+     "zone": "pofire",
+     "detail": "Kill Fennin Ro, the Tyrant of Fire (spawned by the Doomfire event controller)."
+    },
+    {
+     "type": "say",
+     "npc": "Essence_of_Fire",
+     "zone": "pofire",
+     "say": "hail",
+     "detail": "Hail the Essence_of_Fire that appears where the boss died.",
+     "items": [
+      {
+       "id": 29147,
+       "name": "Globe of Dancing Flame"
+      }
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence_of_Fire",
+     "zone": "pofire",
+     "x": null,
+     "y": null,
+     "z": null,
+     "spawn": "event",
+     "notes": "217454; spawned at the boss's death location; 20 min depop; max 72 hand-outs"
+    }
+   ],
+   "credit": "each hailing client in the killer's raid (raid ID match), else the killer's group, else the killer (ClientCanFlag)",
+   "message": "The item is summoned to your cursor; no flag message.",
+   "debug": [
+    "Must be in the same raid/group as the client credited with the kill (e.killer).",
+    "No item if you already have Globe of Dancing Flame or a Quintessence of Elements (29165) anywhere, including bank (lua_modules/client_ext.lua HasItem).",
+    "The projection depops 20 min (1200000 ms) after spawning and after 72 hand-outs (FLAG_LIMIT)."
+   ],
+   "notes": "Not a qglobal; this is an item step toward the time flag.",
+   "source": [
+    "pofire/Essence_of_Fire.lua:63-76",
+    "pofire/encounters/Fennin.lua:298-300"
+   ]
+  },
+  {
+   "id": "essence-powater",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "powater",
+   "title": "Get the Sphere of Coalesced Water from the Essence of Water",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "needed to enter the elemental planes (zone flags 215/216/218); pofire 2 for pofire; earthb_key for poearthb"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "Coirnav_the_Avatar_of_Water",
+     "zone": "powater",
+     "detail": "Kill Coirnav the Avatar of Water (at -859,1095,-505.8 after its guardian/add/mini-boss phases)."
+    },
+    {
+     "type": "say",
+     "npc": "Essence_of_Water",
+     "zone": "powater",
+     "say": "hail",
+     "detail": "Hail the Essence_of_Water that appears where the boss died.",
+     "items": [
+      {
+       "id": 29163,
+       "name": "Sphere of Coalesced Water"
+      }
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence_of_Water",
+     "zone": "powater",
+     "x": null,
+     "y": null,
+     "z": null,
+     "spawn": "event",
+     "notes": "216266; spawned at the boss's death location; 20 min depop; max 72 hand-outs"
+    }
+   ],
+   "credit": "each hailing client in the killer's raid (raid ID match), else the killer's group, else the killer (ClientCanFlag)",
+   "message": "The item is summoned to your cursor; no flag message.",
+   "debug": [
+    "Must be in the same raid/group as the client credited with the kill (e.killer).",
+    "No item if you already have Sphere of Coalesced Water or a Quintessence of Elements (29165) anywhere, including bank (lua_modules/client_ext.lua HasItem).",
+    "The projection depops 20 min (1200000 ms) after spawning and after 72 hand-outs (FLAG_LIMIT)."
+   ],
+   "notes": "Not a qglobal; this is an item step toward the time flag.",
+   "source": [
+    "powater/Essence_of_Water.lua:63-76",
+    "powater/encounters/Coirnav.lua:190-197"
+   ]
+  },
+  {
+   "id": "essence-poearthb",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "poearthb",
+   "title": "Get the Mound of Living Stone from the Essence of Earth",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "needed to enter the elemental planes (zone flags 215/216/218); pofire 2 for pofire; earthb_key for poearthb"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "#Avatar_of_Earth",
+     "zone": "poearthb",
+     "detail": "Kill all twelve Rathe Councilmen; #Avatar_of_Earth spawns at 2050,410,-210 (guild instance only). Kill it."
+    },
+    {
+     "type": "say",
+     "npc": "Essence_of_Earth",
+     "zone": "poearthb",
+     "say": "hail",
+     "detail": "Hail the Essence_of_Earth that appears where the boss died.",
+     "items": [
+      {
+       "id": 29146,
+       "name": "Mound of Living Stone"
+      }
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence_of_Earth",
+     "zone": "poearthb",
+     "x": null,
+     "y": null,
+     "z": null,
+     "spawn": "event",
+     "notes": "222041; spawned at the boss's death location; 20 min depop; max 72 hand-outs"
+    }
+   ],
+   "credit": "each hailing client in the killer's raid (raid ID match), else the killer's group, else the killer (ClientCanFlag)",
+   "message": "The item is summoned to your cursor; no flag message.",
+   "debug": [
+    "Must be in the same raid/group as the client credited with the kill (e.killer).",
+    "No item if you already have Mound of Living Stone or a Quintessence of Elements (29165) anywhere, including bank (lua_modules/client_ext.lua HasItem).",
+    "The projection depops 20 min (1200000 ms) after spawning and after 72 hand-outs (FLAG_LIMIT)."
+   ],
+   "notes": "Not a qglobal; this is an item step toward the time flag.",
+   "source": [
+    "poearthb/Essence_of_Earth.lua:63-76",
+    "poearthb/#Avatar_of_Earth.lua:10-14"
+   ]
+  },
+  {
+   "id": "essence-poair",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "poair",
+   "title": "Get the Amorphous Cloud of Air from the Essence of Air",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "needed to enter the elemental planes (zone flags 215/216/218); pofire 2 for pofire; earthb_key for poearthb"
+    }
+   ],
+   "actions": [
+    {
+     "type": "kill",
+     "npc": "#Xegony_the_Queen_of_Air",
+     "zone": "poair",
+     "detail": "Kill Xegony the Queen of Air (79,20,1467.2) behind the rainbow."
+    },
+    {
+     "type": "say",
+     "npc": "Essence_of_Air",
+     "zone": "poair",
+     "say": "hail",
+     "detail": "Hail the Essence_of_Air that appears where the boss died.",
+     "items": [
+      {
+       "id": 29164,
+       "name": "Amorphous Cloud of Air"
+      }
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence_of_Air",
+     "zone": "poair",
+     "x": null,
+     "y": null,
+     "z": null,
+     "spawn": "event",
+     "notes": "215432; spawned at the boss's death location; 20 min depop; max 72 hand-outs"
+    }
+   ],
+   "credit": "each hailing client in the killer's raid (raid ID match), else the killer's group, else the killer (ClientCanFlag)",
+   "message": "The item is summoned to your cursor; no flag message.",
+   "debug": [
+    "Must be in the same raid/group as the client credited with the kill (e.killer).",
+    "No item if you already have Amorphous Cloud of Air or a Quintessence of Elements (29165) anywhere, including bank (lua_modules/client_ext.lua HasItem).",
+    "The projection depops 20 min (1200000 ms) after spawning and after 72 hand-outs (FLAG_LIMIT)."
+   ],
+   "notes": "Not a qglobal; this is an item step toward the time flag.",
+   "source": [
+    "poair/Essence_of_Air.lua:63-76",
+    "poair/encounters/Xegony.lua:137-140"
+   ]
+  },
+  {
+   "id": "quintessence",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "poknowledge",
+   "title": "Combine the four essences into the Quintessence",
+   "requires": [],
+   "actions": [
+    {
+     "type": "event",
+     "npc": null,
+     "zone": null,
+     "detail": "Place the four essences in an Odylic Vial and combine (recipe 9148, no-fail).",
+     "items": [
+      {
+       "id": 29146,
+       "name": "Mound of Living Stone"
+      },
+      {
+       "id": 29147,
+       "name": "Globe of Dancing Flame"
+      },
+      {
+       "id": 29163,
+       "name": "Sphere of Coalesced Water"
+      },
+      {
+       "id": 29164,
+       "name": "Amorphous Cloud of Air"
+      },
+      {
+       "id": 17186,
+       "name": "Odylic Vial"
+      },
+      {
+       "id": 29165,
+       "name": "Quintessence of Elements"
+      }
+     ]
+    }
+   ],
+   "npcs": [],
+   "credit": "the combining player",
+   "message": "Quintessence of Elements (29165) is created.",
+   "debug": [
+    "Odylic Vial (17186) is a 4-slot container made by pottery recipe 9042 (2 High Quality Firing Sheet, Unfired Medium Container, Multielement Glaze).",
+    "In the items table the four essences and the Quintessence have nodrop=0 (no-trade) and norent=-1 (they persist), so they cannot be traded to another player."
+   ],
+   "notes": "Recipe 9148 has nofail=1 and skillneeded 0. The vial recipe entry lists no container, so where it is fired was not resolved.",
+   "source": [
+    "DB tradeskill_recipe 9148",
+    "DB tradeskill_recipe 9042"
+   ]
+  },
+  {
+   "id": "time-1",
+   "flag": "time",
+   "value": "1",
+   "tier": 4,
+   "zone": "poinnovation",
+   "title": "Activate Meldrath's time machine",
+   "requires": [
+    {
+     "flag": "zebuxoruk",
+     "value": "2",
+     "why": "machine door 145, Muon and Loreseeker all check zebuxoruk == '2'"
+    },
+    {
+     "item": 29165,
+     "value": "Quintessence of Elements",
+     "why": "door 145 checks HasItem(29165); Muon checks main inventory/containers only"
+    }
+   ],
+   "actions": [
+    {
+     "type": "say",
+     "npc": "Grand_Librarian_Maelin",
+     "zone": "poknowledge",
+     "say": "hail",
+     "detail": "Optional: Maelin points you to Chronographer Muon in the Plane of Innovation. He does not set the flag."
+    },
+    {
+     "type": "say",
+     "npc": "#Chronographer_Muon",
+     "zone": "poinnovation",
+     "say": "hail",
+     "detail": "Hail Chronographer Muon with the Quintessence in your inventory."
+    },
+    {
+     "type": "say",
+     "npc": "#Chronographer_Muon",
+     "zone": "poinnovation",
+     "say": "yes",
+     "detail": "Say yes to be moved to the time-projection chamber (291,-860,-1850); Loreseeker_Maelin spawns there."
+    },
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "poinnovation",
+     "detail": "Click the time machine (door 145, POITMMCHN500). You get the time flag and are moved into potimea 223,140,11."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "#Chronographer_Muon",
+     "zone": "poinnovation",
+     "x": -310,
+     "y": 34,
+     "z": 5.6,
+     "spawn": "static",
+     "notes": ""
+    },
+    {
+     "name": "Loreseeker_Maelin",
+     "zone": "poinnovation",
+     "x": 763,
+     "y": -837,
+     "z": -1887.122,
+     "spawn": "event",
+     "notes": "206209; unique_spawn by Muon; depops after 15 min; flavor only ('hail', 'researched')"
+    },
+    {
+     "name": "door 145 POITMMCHN500",
+     "zone": "poinnovation",
+     "x": 885.642,
+     "y": -857.587,
+     "z": -1888,
+     "spawn": "static",
+     "notes": "the time machine"
+    },
+    {
+     "name": "Grand_Librarian_Maelin",
+     "zone": "poknowledge",
+     "x": 1016,
+     "y": 6,
+     "z": 387.8,
+     "spawn": "static",
+     "notes": ""
+    }
+   ],
+   "credit": "the clicking player only; it also sets zone flags 219 (potimea) and 223 (potimeb)",
+   "message": "'You have received a character flag!' then 'The ages begin to tear through your body.  You wake to find yourself in another time.'",
+   "debug": [
+    "Door 145 does nothing (no message) unless zebuxoruk is exactly 2 and you hold item 29165; HasItem here also counts bank and shared bank.",
+    "Muon answers 'Greeting acknowledged.  I have no use for you at this time.  Good bye.' if zebuxoruk is not 2 or the Quintessence is not in main inventory/bags (bank does not count for Muon).",
+    "The Quintessence is not consumed.",
+    "Seer guided meditation confirms: 'Your soul has formed a bond with the Plane of Time.  You can now pass through the portal in the Plane of Tranquility safely.'"
+   ],
+   "notes": "#popflags tells players to 'return to Grand Librarian Maelin', but in the Lua Maelin in PoK only gives a hint; the flag is set by the poinnovation machine. The brief's 'combining essences and returning to Maelin' maps to Muon/the machine here.",
+   "source": [
+    "poinnovation/player.lua:17-27",
+    "poinnovation/#Chronographer_Muon.lua:22-42",
+    "poinnovation/Loreseeker_Maelin.lua:1-13",
+    "poknowledge/Grand_Librarian_Maelin.lua:4-10",
+    "EQMacEmu/zone/gm_commands/popflags.cpp:858-863"
+   ]
+  },
+  {
+   "id": "potime-access",
+   "flag": null,
+   "value": null,
+   "tier": 5,
+   "zone": "potranquility",
+   "title": "Enter the Plane of Time from Tranquility",
+   "requires": [
+    {
+     "flag": "time",
+     "value": "1",
+     "why": "potranquility/player.lua door 18 message branch checks qglobals.time"
+    },
+    {
+     "zoneflag": 219,
+     "why": "server flag_needed potimea; set only by the poinnovation machine"
+    }
+   ],
+   "actions": [
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "potranquility",
+     "detail": "Click the Plane of Time portal (door 18, INVISWITCH500) to go to potimea 223,140,9."
+    },
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "potimea",
+     "detail": "In potimea click one of the five dials (doors 8-12) to enter potimeb."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 18 INVISWITCH500",
+     "zone": "potranquility",
+     "x": 1220.24,
+     "y": -2257.11,
+     "z": -905.925,
+     "spawn": "static",
+     "notes": "to potimea 223,140,9"
+    }
+   ],
+   "credit": "the clicking player",
+   "message": "'The ages begin to tear through your body.  You wake to find yourself in another time.' when eligible.",
+   "debug": [
+    "Door 18 Lua prints the success text only if level >= 65, zone flag 219 and the time qglobal; otherwise 'You lack the will to pass through this portal safely.' The actual teleport is the door's own destination and is gated by the server (level >= 64 zone min_level, zone flag 219 or raid-willing bypass), so the red text can appear even when you still zone.",
+    "potimea dials (doors 8-12): level < 65 gives 'You lack the will to pass through this portal safely.'; not in a raid of at least 7 gives 'You don't have sufficient power to affect things in the Plane of Time. Gather your forces to increase your strength.'",
+    "In a guild zone outside the guild raid window: 'The flow of time is too stable for this portal to open.'",
+    "Saved to another guild's active timeline: 'The portal recoils from your touch. Your fate is bound to another guild's thread of time.'",
+    "Saved to another unexpired instance: 'The portal recoils from your touch. Your fate is already bound to another thread of time.'",
+    "Trial full (18 per dial in phase 1, 90 total): 'The energy has been drained from this portal.  You must wait before you can use it.'",
+    "Server zoning (zone/zoning.cpp CanBeInZone and Handle_OP_ZoneChange) requires the zone flag unless data bucket pop_alt_access_enabled=1 and >= pop_raid_flagged_percent (default 85) of your raid hold that zone flag (only zones 215-219 qualify for this raid-willing bypass)."
+   ],
+   "notes": "potimea and potimeb have zone min_level 64. Zone flag 223 (potimeb) is also set by the machine.",
+   "source": [
+    "potranquility/player.lua:146-155",
+    "potimea/player.lua:7-62",
+    "potimea/219053.lua:77-209",
+    "EQMacEmu/zone/zoning.cpp:42-73"
+   ]
+  },
+  {
+   "id": "earthb_key-1",
+   "flag": "earthb_key",
+   "value": "1",
+   "tier": 4,
+   "zone": "poeartha",
+   "title": "Hail the projection after the Mystical Arbitor",
+   "requires": [
+    {
+     "flag": "earthb_key",
+     "value": "absent",
+     "why": "projection only grants when not qglobals.earthb_key"
+    }
+   ],
+   "actions": [
+    {
+     "type": "event",
+     "npc": "arbitor_guy",
+     "zone": "poeartha",
+     "detail": "Complete the four rings (Stone=signal 1, Mud=2, Vine=3, Dust=4); each must be finished within 24 hours of the latest one."
+    },
+    {
+     "type": "kill",
+     "npc": "A_Mystical_Arbitor_of_Earth",
+     "zone": "poeartha",
+     "detail": "Kill the Arbitor that spawns at 1530,-2739,28. It drops hate on its target randomly (about every 20 s)."
+    },
+    {
+     "type": "say",
+     "npc": "A_Planar_Projection",
+     "zone": "poeartha",
+     "say": "hail",
+     "detail": "Hail the Planar Projection that appears where the Arbitor died."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "arbitor_guy",
+     "zone": "poeartha",
+     "x": -386,
+     "y": 423,
+     "z": 0.625,
+     "spawn": "static",
+     "notes": "controller"
+    },
+    {
+     "name": "A_Mystical_Arbitor_of_Earth",
+     "zone": "poeartha",
+     "x": 1530,
+     "y": -2739,
+     "z": 28,
+     "spawn": "event",
+     "notes": "218375; depops after 50 min (3000000 ms)"
+    },
+    {
+     "name": "A_Planar_Projection",
+     "zone": "poeartha",
+     "x": null,
+     "y": null,
+     "z": null,
+     "spawn": "event",
+     "notes": "218398; at the Arbitor's death spot; 20 min depop paused in combat; max 54 keys"
+    }
+   ],
+   "credit": "any client in the killer's raid (raid ID match), else the killer's group, else the killer, who hails",
+   "message": "'Your will must be strong <name>. Seek council with the council of twelve if you so wish.' then 'You have received a character flag!'",
+   "debug": [
+    "Arbitor only spawns if all four rings were completed and none is older than 24 hours (86400 s) when a ring finishes.",
+    "Must be in the raid/group of the client credited with the Arbitor kill (e.killer).",
+    "No response if you already have earthb_key.",
+    "Projection stops after 54 keys (MAX_KEYS) or 20 minutes."
+   ],
+   "notes": "No other flag is checked by the projection, but reaching poeartha needs zebuxoruk=2.",
+   "source": [
+    "poeartha/arbitor_guy.lua:1-30",
+    "poeartha/A_Mystical_Arbitor_of_Earth.lua:46-49",
+    "poeartha/A_Planar_Projection.lua:62-82"
+   ]
+  },
+  {
+   "id": "poearthb-access",
+   "flag": null,
+   "value": null,
+   "tier": 4,
+   "zone": "poeartha",
+   "title": "Enter Plane of Earth B",
+   "requires": [
+    {
+     "flag": "earthb_key",
+     "value": "present",
+     "why": "poeartha/player.lua doors 9-11 check earthb_key"
+    }
+   ],
+   "actions": [
+    {
+     "type": "click",
+     "npc": null,
+     "zone": "poeartha",
+     "detail": "Click one of the poearthb doors (9, 10 near the Arbitor area, or 11); sets zone flag 222 and moves you to poearthb -764,333,-59."
+    }
+   ],
+   "npcs": [
+    {
+     "name": "door 9 POEDRS500",
+     "zone": "poeartha",
+     "x": 1585.99,
+     "y": -2723.97,
+     "z": 0,
+     "spawn": "static",
+     "notes": ""
+    },
+    {
+     "name": "door 10 POEDRS504",
+     "zone": "poeartha",
+     "x": 1585.99,
+     "y": -2755.98,
+     "z": 0,
+     "spawn": "static",
+     "notes": ""
+    },
+    {
+     "name": "door 11 POEDRS500",
+     "zone": "poeartha",
+     "x": -1167.47,
+     "y": 130.083,
+     "z": 43.001,
+     "spawn": "static",
+     "notes": ""
+    }
+   ],
+   "credit": "the clicking player",
+   "message": "No message; you are moved.",
+   "debug": [
+    "Without earthb_key the Lua does nothing and the door teleport is refused silently because poearthb has flag_needed and you lack zone flag 222.",
+    "The raid-willing bypass does not cover poearthb (zone 222 is not in IsPopRaidWillingZone).",
+    "Seer meditation has no earthb_key text; check with #popflags tier 4 ('Plane of Earth B access')."
+   ],
+   "notes": "Zone min_level 46.",
+   "source": [
+    "poeartha/player.lua:1-13",
+    "EQMacEmu/zone/zoning.cpp:44-55"
+   ]
+  }
+ ]
+}

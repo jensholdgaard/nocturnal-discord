@@ -14,10 +14,12 @@ out="$DEST/nocturnal-$stamp.tar.gz"
 # The WAL is append-only and every record is checksummed, so a tar taken while
 # the bot is running is consistent: a record either made it or it did not, and
 # replay truncates a torn tail exactly as it would after a crash.
-# The spell tracker's shared document (2026-09-30) sits beside the ledger; it
-# is written by rename, so a copy is always a whole document.
+# The spell tracker's shared document (2026-09-30) and the members' pasted PoP
+# flags (2026-10-05) sit beside the ledger; both are written by rename, so a
+# copy is always a whole document.
 extra=""
 [ -f "$DATA_DIR/spells-state.json" ] && extra="spells-state.json"
+[ -f "$DATA_DIR/popflags.json" ] && extra="$extra popflags.json"
 tar -C "$DATA_DIR" -czf "$out.tmp" events wal $extra
 mv "$out.tmp" "$out"
 

@@ -79,6 +79,7 @@ pub(crate) fn site_nav(current: &str) -> Markup {
             a class="tab" href="/roster" aria-current=[cur("roster")] { "Roster" }
             a class="tab" href="/loot" aria-current=[cur("loot")] { "Loot" }
             a class="tab" href="/kills" aria-current=[cur("kills")] { "Kills" }
+            a class="tab" href="/flags" aria-current=[cur("flags")] title="Planes of Power flag progression" { "Flags" }
             a class="tab" href="/spells/" aria-current=[cur("spells")] title="Ziglax's spell turn-in tracker" { "Spells" }
             a class="tab" href="/perses/" title="The full Perses dashboards" { "Dashboards ↗" }
             span class="who" id="who" { "…" }
@@ -87,7 +88,7 @@ pub(crate) fn site_nav(current: &str) -> Markup {
 }
 
 /// Every page is wide now; prose constrains itself with .read.
-fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
+pub(crate) fn layout(title: &str, current: &str, body: Markup, island: bool) -> String {
     layout_full(title, current, body, island, true)
 }
 

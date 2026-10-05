@@ -1,0 +1,671 @@
+{
+  "part": "tier2",
+  "steps": [
+    {
+      "id": "access-valor-storms",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "potranquility",
+      "title": "Unlock the Valor and Storms portals",
+      "requires": [ {"flag": "mavuin", "value": "3", "why": "potranquility/player.lua only sets zone flags 208/210 when mavuin == 3"} ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "potranquility", "detail": "Click the Plane of Valor portal (door 21, HONORPORT500) or the Plane of Storms portal (door 16, POTRANRAIN500) in the Plane of Tranquility."}
+      ],
+      "npcs": [],
+      "credit": "the clicking player only; clicking either door sets both zone flags 210 (postorms) and 208 (povalor)",
+      "message": "No message on success; the door zones you.",
+      "debug": [
+        "Without mavuin 3 you see 'You lack the will to pass through this portal safely.' and the server refuses the zone with 'You do not have the flag to enter postorms/povalor.'",
+        "Door 21 is at 1.72,-231.8,-618.3; door 16 is at 1230.4,-720.9,-828.5 (potranquility doors table)."
+      ],
+      "notes": "Zone flags are stored separately from qglobals (character_zone_flags). Both povalor and postorms have flag_needed set in the zone table. A level-55 bypass exists only as commented-out code.",
+      "source": ["potranquility/player.lua:13-23", "EQMacEmu/zone/zoning.cpp:362-367"]
+    },
+    {
+      "id": "aerindar-1",
+      "flag": "aerindar", "value": "1",
+      "tier": 2,
+      "zone": "povalor",
+      "title": "Kill Aerin`Dar and hail the Planar Projection",
+      "requires": [
+        {"flag": "mavuin", "value": "3", "why": "projection only flags when mavuin == 3 (the 'meaning of Justice')"},
+        {"flag": "aerindar", "value": "absent", "why": "projection only flags when there is no aerindar global"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "#Aerin`Dar", "zone": "povalor", "detail": "Kill Aerin`Dar in her lair; adds wake at 85/65/45/25% HP."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "povalor", "say": "hail", "detail": "Hail the Planar Projection that appears at Aerin`Dar's lair after she dies."}
+      ],
+      "npcs": [
+        {"name": "#Aerin`Dar", "zone": "povalor", "x": 366, "y": 2672, "z": 64, "spawn": "static", "notes": "npc 208074, respawn 259200s. The dragon orb teleporter (door 6) moves you to 352,2172,33 only while she is up."},
+        {"name": "A_Planar_Projection", "zone": "povalor", "x": 360, "y": 2528, "z": 39, "spawn": "event", "notes": "npc 208207, spawned on Aerin`Dar death_complete; depops after 20 minutes."}
+      ],
+      "credit": "Aerin`Dar signals the projection with e.killer (someone with kill rights). The projection accepts hails from that player's raid if in a raid, else that player's group, else only that player (ClientCanFlag). Max 72 flags per spawn.",
+      "message": "The Planar Projection's thoughts enter your own.  'You have done well. You will now be able to enter the Halls of Honor.'  (no 'You have received a character flag!' line; it is commented out)",
+      "debug": [
+        "No reply at all if you are not in the raid/group of the player who got kill credit.",
+        "No reply at all if your mavuin flag is not exactly 3, or if you already have any aerindar value.",
+        "No reply once 72 players have been flagged or after the 20 minute depop timer.",
+        "This projection never prints a character-flag message; check #popflags 2 for 'Aerin`Dar defeated; the meaning of Justice remains'."
+      ],
+      "notes": "Nothing in the scripts sets cl_aerindar: a player who kills Aerin`Dar without mavuin 3 gets nothing and must kill her again. In practice you cannot enter povalor without mavuin 3, so this should not happen.",
+      "source": ["povalor/#Aerin-Dar.lua:37-40", "povalor/A_Planar_Projection.lua:1-71"]
+    },
+    {
+      "id": "aerindar-2",
+      "flag": "aerindar", "value": "2",
+      "tier": 2,
+      "zone": "povalor",
+      "title": "Step through the Halls of Honor portal",
+      "requires": [ {"flag": "aerindar", "value": "1", "why": "player.lua upgrades any existing aerindar value other than 2"} ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "povalor", "detail": "Click the HoH teleporter (door 3, HOHTELEPORT501) at 656.5,4275.6,-90.2 in the Plane of Valor."}
+      ],
+      "npcs": [],
+      "credit": "the clicking player only",
+      "message": "You have received a character flag!",
+      "debug": [
+        "Without any aerindar flag you see 'You lack the will to pass through this portal safely.' and then 'You do not have the flag to enter hohonora.'",
+        "The same click also sets zone flag 211 (hohonora) and deletes cl_aerindar if present.",
+        "If you already have aerindar 2 the script returns early and does NOT set zone flag 211; if you got aerindar 2 some other way (e.g. a Seer conversion) and still cannot zone, that is why."
+      ],
+      "notes": "The PoTranquility Halls of Honor portal (door 23) only sets zone flag 211 via the alternate-access Ring of Marr keyring path; normally it relies on the zone flag set here.",
+      "source": ["povalor/player.lua:1-27", "potranquility/player.lua:73-89"]
+    },
+    {
+      "id": "seer-cl_aerindar",
+      "flag": "aerindar", "value": "2",
+      "tier": 2,
+      "zone": "poknowledge",
+      "title": "Seer: unlock the Aerin`Dar memory",
+      "requires": [
+        {"flag": "cl_aerindar", "value": "1", "why": "checklist flag the Seer converts"},
+        {"flag": "mavuin", "value": "3", "why": "required flag/value in the Seer's checklist table"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock", "detail": "Sit down near the Seer and say a sentence containing both 'unlock' and 'memories'."}
+      ],
+      "npcs": [ {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": "npc 202006"} ],
+      "credit": "the speaking player",
+      "message": "You have learned the meaning of both Justice and Honor.  You may now pass into the Halls of Honor.  then  You have received a character flag!",
+      "debug": [
+        "No script in the quest repo sets cl_aerindar, so this conversion should never be needed.",
+        "If cl_aerindar exists but mavuin is not 3: 'You have defeated Aerin`Dar but have yet to learn the true meaning of Justice.'",
+        "Standing up: 'You will never be able to focus unless you are relaxed...'"
+      ],
+      "notes": "The conversion does not set zone flag 211; you would still need to click the PoValor HoH portal, which returns early for aerindar 2 without setting the zone flag (see aerindar-2).",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:66-71", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371", "poknowledge/Seer_Mal_Nae-Shi.lua:384-389"]
+    },
+    {
+      "id": "askr-bag",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "postorms",
+      "title": "Show Askr a storm giant head and get his Bag of Verity",
+      "requires": [ {"flag": "karana", "value": "absent", "why": "the head/bag dialogue only runs when karana == 0 and no zebuxoruk"} ],
+      "actions": [
+        {"type": "loot", "npc": null, "zone": "postorms", "items": [{"id": 28749, "name": "Storm Giant Head"}, {"id": 28781, "name": "Storm Giant Head"}, {"id": 28782, "name": "Storm Giant Head"}], "detail": "Loot any one of the three Storm Giant Heads from the storm giants."},
+        {"type": "give", "npc": "Askr_the_Lost", "zone": "postorms", "items": [{"id": 28749, "name": "Storm Giant Head"}], "detail": "Hand Askr one Storm Giant Head (28749, 28781 or 28782); he returns a useless Storm Giant Head (11486)."},
+        {"type": "say", "npc": "Askr_the_Lost", "zone": "postorms", "say": "it was me", "detail": "Say 'it was me' (or 'yes')."},
+        {"type": "say", "npc": "Askr_the_Lost", "zone": "postorms", "say": "paying attention", "detail": "Say 'paying attention' (or 'yes')."},
+        {"type": "say", "npc": "Askr_the_Lost", "zone": "postorms", "say": "continue", "detail": "Say 'continue'."},
+        {"type": "say", "npc": "Askr_the_Lost", "zone": "postorms", "say": "continue", "detail": "Say 'continue' again; Askr puts Askr's Bag of Verity (17192) on your cursor."}
+      ],
+      "npcs": [ {"name": "Askr_the_Lost", "zone": "postorms", "x": -2576, "y": -1255, "z": -471.9, "spawn": "static", "notes": "npc 210062"} ],
+      "credit": "the trading/speaking player",
+      "message": "Askr the Lost says '... When you have acquired the three of these items, seal them in this bag and return them to me...' and the bag appears on your cursor.",
+      "debug": [
+        "Conversation state is kept in memory per character name and is wiped within ~15s of you leaving the zone; zoning mid-dialogue means handing in a head again.",
+        "Who handed in a head is remembered until the zone script reloads; hailing afterwards jumps straight to the 'continue' stage with 'I was afraid you would not return...'.",
+        "Saying 'continue' after you already got the bag only gives 'You did well defeating one giant...'.",
+        "If you already have karana 1+ none of this dialogue runs."
+      ],
+      "notes": "The head turn-in itself gives 1 exp. Heads drop from Srerendi (28749), Krendic (28781) and Kelek`Vor (28782) giants per the DB loot tables.",
+      "source": ["postorms/Askr_the_Lost.lua:75-131", "postorms/Askr_the_Lost.lua:154-168"]
+    },
+    {
+      "id": "karana-1",
+      "flag": "karana", "value": "1",
+      "tier": 2,
+      "zone": "postorms",
+      "title": "Hand Askr the Sealed Bag of Verity",
+      "requires": [ {"flag": "karana", "value": "absent", "why": "trade only flags when karana == 0"} ],
+      "actions": [
+        {"type": "loot", "npc": null, "zone": "postorms", "items": [{"id": 28750, "name": "Storm Volaas Beard"}, {"id": 28751, "name": "Storm Taarid Bone"}, {"id": 28764, "name": "Storm Satuur Sash"}], "detail": "Loot a beard from Srerendi giants, a bone from Krendic giants and a sash from Kelek`Vor giants."},
+        {"type": "event", "npc": null, "zone": "postorms", "items": [{"id": 17192, "name": "Askr's Bag of Verity"}], "detail": "Combine the three items in Askr's Bag of Verity to make Askr's Sealed Bag of Verity (11487), tradeskill recipe 9658."},
+        {"type": "give", "npc": "Askr_the_Lost", "zone": "postorms", "items": [{"id": 11487, "name": "Askr's Sealed Bag of Verity"}], "detail": "Hand the sealed bag to Askr."}
+      ],
+      "npcs": [ {"name": "Askr_the_Lost", "zone": "postorms", "x": -2576, "y": -1255, "z": -471.9, "spawn": "static", "notes": ""} ],
+      "credit": "the trading player",
+      "message": "Askr looks over the remnants of the storm giants in his hands then looks up at you with a glimmer of hope in his eyes. 'Then it's true! ...'  then  You have received a character flag!",
+      "debug": [
+        "The flag is only set if karana is absent (0); with karana already set nothing is said and you get no reward.",
+        "Wrong items are returned by item_lib.return_items."
+      ],
+      "notes": "Also grants 1000 exp. Beard drops from a_fannsk/an_her_megir/a_hleytis_maor/a_hleyta_menn; bone from a_jotna_*; sash from an_irmin_* (DB loot tables).",
+      "source": ["postorms/Askr_the_Lost.lua:170-179", "db:tradeskill_recipe_entries recipe 9658"]
+    },
+    {
+      "id": "askr-meld",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "postorms",
+      "title": "Get a new bag from Askr and make the Esoteric Meld",
+      "requires": [ {"flag": "karana", "value": "1", "why": "the 'bastion of thunder' keyword is only handled when karana == 1"} ],
+      "actions": [
+        {"type": "say", "npc": "Askr_the_Lost", "zone": "postorms", "say": "bastion of thunder", "detail": "Say 'bastion of thunder' to Askr; he gives another Askr's Bag of Verity (17192)."},
+        {"type": "loot", "npc": null, "zone": "postorms", "items": [{"id": 28765, "name": "Esoteric Medallion (Srerendi)"}, {"id": 28780, "name": "Esoteric Medallion (Krendic)"}, {"id": 28783, "name": "Esoteric Medallion (Kelek`Vor)"}], "detail": "Loot two Esoteric Medallions of different tribes from the tribe lords (Jeplak, Gurebk, Neffiken), their minibosses, or their event giants."},
+        {"type": "event", "npc": null, "zone": "postorms", "items": [{"id": 17192, "name": "Askr's Bag of Verity"}], "detail": "Combine two different medallions in the bag to make the Esoteric Meld (11488), recipes 9758-9760."}
+      ],
+      "npcs": [
+        {"name": "Askr_the_Lost", "zone": "postorms", "x": -2576, "y": -1255, "z": -471.9, "spawn": "static", "notes": ""},
+        {"name": "Jeplak,_Lord_of_Srerendi", "zone": "postorms", "x": 346, "y": -2512, "z": -440.5, "spawn": "static", "notes": "npc 210403, Srerendi medallion 28765"},
+        {"name": "Gurebk,_Lord_of_Krendic", "zone": "postorms", "x": 2028, "y": 203, "z": -432.9, "spawn": "static", "notes": "npc 210332, Krendic medallion 28780"},
+        {"name": "Neffiken,_Lord_of_Kelek`Vor", "zone": "postorms", "x": -1970, "y": 1267, "z": -439.5, "spawn": "static", "notes": "npc 210251, Kelek`Vor medallion 28783"},
+        {"name": "Paruek_the_Strong", "zone": "postorms", "x": 740, "y": -1954, "z": -422.2, "spawn": "static", "notes": "miniboss, 28765"},
+        {"name": "Faruek_the_Bold", "zone": "postorms", "x": 255, "y": -1760, "z": -426.2, "spawn": "static", "notes": "miniboss, 28765"},
+        {"name": "Pendubk_the_Turbulent", "zone": "postorms", "x": 972, "y": -69, "z": -432.9, "spawn": "static", "notes": "miniboss, 28780"},
+        {"name": "Solnebk_the_Unruly", "zone": "postorms", "x": 2094, "y": -158, "z": -432.9, "spawn": "static", "notes": "miniboss, 28780"},
+        {"name": "Laruken_the_Rigid", "zone": "postorms", "x": -1945, "y": 1340, "z": -438.3, "spawn": "static", "notes": "miniboss, 28783"},
+        {"name": "Zertuken_the_Unyielding", "zone": "postorms", "x": -1959, "y": 1031, "z": -438, "spawn": "static", "notes": "miniboss, 28783"}
+      ],
+      "credit": "the speaking player gets the bag; medallions are normal loot",
+      "message": "Askr the Lost says 'To be honest, I cannot say that it is entirely possible... If you can find and seal two pieces of the medallion in this bag, I will be able to forge them into the medallion...'",
+      "debug": [
+        "Askr only reacts to 'bastion of thunder' when karana is exactly 1 (and you have no zebuxoruk).",
+        "Each recipe uses two medallions of different item ids (28765+28783, 28765+28780, 28780+28783); two of the same tribe will not combine.",
+        "Each miniboss spawns with 1-3 medallions of its tribe (1-2 in the guild-1 instance); tribe event trash has a 20% chance (2% in guild-1 instance)."
+      ],
+      "notes": "Medallions are added by Lua (encounters/*.lua), not by DB loot tables.",
+      "source": ["postorms/Askr_the_Lost.lua:133-142", "postorms/encounters/MiniBosses.lua:9-25", "postorms/encounters/Gurebk.lua:2-5", "postorms/encounters/Jeplak.lua:3-5", "postorms/encounters/Neffiken.lua:2-4", "db:tradeskill_recipe_entries recipes 9758-9760"]
+    },
+    {
+      "id": "karana-2",
+      "flag": "karana", "value": "2",
+      "tier": 2,
+      "zone": "postorms",
+      "title": "Hand Askr the Esoteric Meld",
+      "requires": [ {"flag": "karana", "value": "1", "why": "trade only flags when karana == 1"} ],
+      "actions": [
+        {"type": "give", "npc": "Askr_the_Lost", "zone": "postorms", "items": [{"id": 11488, "name": "Esoteric Meld"}], "detail": "Hand the Esoteric Meld to Askr."}
+      ],
+      "npcs": [ {"name": "Askr_the_Lost", "zone": "postorms", "x": -2576, "y": -1255, "z": -471.9, "spawn": "static", "notes": ""} ],
+      "credit": "the trading player",
+      "message": "The mystical medallion given to you by Askr settles around your neck and then disappears into nothingness. There is no call for alarm, for the medallion is now a part of your soul.  then  Askr the Lost says 'You have retrieved the pieces! ...'  then  You have received a character flag!",
+      "debug": [
+        "If karana is not exactly 1 you get 'Askr merely glances at you with a questioning look...' and the Meld comes back on your cursor.",
+        "After this, hailing Askr gives 'You have returned to me, but for what purpose? You already have the way to the Bastion of Thunder...'."
+      ],
+      "notes": "Grants 10000 exp. #popflags 2 then shows 'Complete Mavuin's case, then use the Storms shrine to enter Bastion of Thunder'.",
+      "source": ["postorms/Askr_the_Lost.lua:181-193", "postorms/Askr_the_Lost.lua:144-148"]
+    },
+    {
+      "id": "karana-3",
+      "flag": "karana", "value": "3",
+      "tier": 2,
+      "zone": "postorms",
+      "title": "Use the Storms shrine to enter Bastion of Thunder",
+      "requires": [
+        {"flag": "karana", "value": "2", "why": "shrine requires karana >= 2"},
+        {"flag": "mavuin", "value": "3", "why": "shrine requires mavuin >= 3"}
+      ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "postorms", "detail": "Click the shrine teleporter (door 4, BOTPOSPORT500) at -361.8,-162.9,-404.1 deep in Mount Grenidor."}
+      ],
+      "npcs": [],
+      "credit": "the clicking player only",
+      "message": "An aura of soft light gleams around you as the shrine reacts to your Talisman of Thunderous Foyer and sends you forth into the mighty Bastion of Thunder.  then  You have received a character flag!",
+      "debug": [
+        "If karana < 2 or mavuin < 3: 'The shrine calls forth unto your soul in search of a mystic symbol but finds none, you may not pass forth unto this planar location.'",
+        "The same click sets zone flag 209 (bothunder). With karana >= 3 or zebuxoruk the script returns early and only the door teleports you.",
+        "Afterwards the PoTranquility Bastion portal (door 48) also works, since it accepts karana >= 3 or zebuxoruk."
+      ],
+      "notes": "Door dest is bothunder 178,207,-1620. karana 4 (Karana in bothunder) and cl_karana are tier 3, outside these zones.",
+      "source": ["postorms/player.lua:1-24", "potranquility/player.lua:59-70"]
+    },
+    {
+      "id": "seer-cl_karana",
+      "flag": "karana", "value": "4",
+      "tier": 2,
+      "zone": "poknowledge",
+      "title": "Seer: unlock the Karana memory",
+      "requires": [
+        {"flag": "cl_karana", "value": "1", "why": "set by Karana in bothunder when you say 'follow the path of the Fallen' with karana < 3"},
+        {"flag": "karana", "value": "3", "why": "required flag/value in the Seer's checklist table"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock", "detail": "Get karana 3 from the Storms shrine, then sit near the Seer and say a sentence with both 'unlock' and 'memories'."}
+      ],
+      "npcs": [ {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""} ],
+      "credit": "the speaking player",
+      "message": "As you think back to your meeting with Karana the Talisman in your chest warms and a light rain falls from the sky.  When you look down, a small book written in a language you can not read, rests in your hands.  then  You have received a character flag!",
+      "debug": [
+        "If karana is not exactly 3: 'You recall meeting with Karana, but the memory is clouded.  You sense that the answer you seek may be in Storms.'",
+        "Must be sitting, otherwise the Seer tells you to sit down."
+      ],
+      "notes": "cl_karana is set in bothunder (not a tier-2 zone); it is listed here because the conversion needs karana 3 from the Storms shrine.",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:114-119", "bothunder/Karana.lua:63-82", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "access-codecay",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "podisease",
+      "title": "Get Crypt of Decay zone access",
+      "requires": [ {"flag": "grummus", "value": "1", "why": "podisease/player.lua sets zone flag 200 on zoning into codecay only with the grummus global"} ],
+      "actions": [
+        {"type": "zone", "npc": null, "zone": "podisease", "detail": "After the Grummus flag, take the zone line from the Plane of Disease into the Crypt of Decay once."}
+      ],
+      "npcs": [],
+      "credit": "the zoning player",
+      "message": "No message.",
+      "debug": [
+        "The PoTranquility Crypt of Decay portal (door 12) does not set zone flag 200 except via the alternate-access Bangle of Disease Warding (9294) keyring; without the zone flag it says 'You lack the will to pass through this portal safely.'",
+        "codecay has no flag_needed in the zone table, so the PoTranquility portal script is the gate there."
+      ],
+      "notes": "grummus is tier 1. Listed as the entry prerequisite for the bertox_key and Bertoxxulous steps.",
+      "source": ["podisease/player.lua:1-5", "potranquility/player.lua:25-42"]
+    },
+    {
+      "id": "bertox_key-1",
+      "flag": "bertox_key", "value": "1",
+      "tier": 2,
+      "zone": "codecay",
+      "title": "Clear the upper crypt and hail Tarkil Adan",
+      "requires": [ {"flag": "bertox_key", "value": "absent", "why": "Tarkil only flags when there is no bertox_key"} ],
+      "actions": [
+        {"type": "kill", "npc": "#_Carprin_Deatharn", "zone": "codecay", "detail": "Engage Carprin Deatharn; kill his three lieutenants Breddan Rutyl, Fran Prisoal and Abroan Drian to drop his shield."},
+        {"type": "kill", "npc": "#Carprin_Deatharn", "zone": "codecay", "detail": "Kill the killable Carprin Deatharn that spawns when the last lieutenant dies."},
+        {"type": "kill", "npc": "#Avhi_Escron", "zone": "codecay", "detail": "Kill Avhi Escron (spawns at 405,135,-54)."},
+        {"type": "kill", "npc": "#Bishop_Toluwon", "zone": "codecay", "detail": "Kill Bishop Toluwon (spawns at 258,84,-70)."},
+        {"type": "kill", "npc": "#Raex_Pwodill", "zone": "codecay", "detail": "Kill both generals Raex Pwodill and Vindor Mawnil; the High Priest becomes attackable when the second dies."},
+        {"type": "kill", "npc": "#High_Priest_Ultor_Szanvon", "zone": "codecay", "detail": "Kill High Priest Ultor Szanvon (306,318,-64)."},
+        {"type": "say", "npc": "Tarkil_Adan", "zone": "codecay", "say": "hail", "detail": "Hail Tarkil Adan, who appears after the High Priest dies."}
+      ],
+      "npcs": [
+        {"name": "#_Carprin_Deatharn", "zone": "codecay", "x": 384, "y": -112, "z": -53.9, "spawn": "static", "notes": "npc 200007, respawn 259200s"},
+        {"name": "#Carprin_Deatharn", "zone": "codecay", "x": 0, "y": 0, "z": 0, "spawn": "event", "notes": "npc 200232, spawned at the last lieutenant's position"},
+        {"name": "#Avhi_Escron", "zone": "codecay", "x": 405, "y": 135, "z": -54, "spawn": "event", "notes": "npc 200225"},
+        {"name": "#Bishop_Toluwon", "zone": "codecay", "x": 258, "y": 84, "z": -70, "spawn": "event", "notes": "npc 200228"},
+        {"name": "#High_Priest_Ultor_Szanvon", "zone": "codecay", "x": 306, "y": 318, "z": -64, "spawn": "event", "notes": "npc 200245"},
+        {"name": "#Vindor_Mawnil", "zone": "codecay", "x": 200, "y": 294, "z": -59, "spawn": "event", "notes": "npc 200261, grid 24"},
+        {"name": "#Raex_Pwodill", "zone": "codecay", "x": 496, "y": 241, "z": -74, "spawn": "event", "notes": "npc 200258, grid 25"},
+        {"name": "Tarkil_Adan", "zone": "codecay", "x": 309, "y": 330, "z": -72.122, "spawn": "event", "notes": "npc 200267, depops after 10 minutes"}
+      ],
+      "credit": "The High Priest signals Tarkil with e.killer (someone with kill rights). Tarkil accepts hails from that player's raid if in a raid, else group, else only that player. Max 72 keys per spawn.",
+      "message": "Tarkil Adan lets out a groan ... passes you a small glowing bone fragment etched in runes ... 'Go to the bone throne at the ruins entrance there you will find access to the depths.'  then  You have received a character flag!",
+      "debug": [
+        "No reply if you are not in the raid/group of the player credited with the High Priest kill.",
+        "No reply if you already have bertox_key, after 72 keys, or after Tarkil's 10 minute depop timer.",
+        "Event mobs depop on timers (lieutenants ~13 min, generals 165 min, others 195 min) if left unengaged."
+      ],
+      "notes": "Hailing Tarkil is the only non-GM way to get bertox_key in the quest scripts.",
+      "source": ["codecay/#_Carprin_Deatharn.lua:1-12", "codecay/#Breddan_Rutyl.lua:12-21", "codecay/#Carprin_Deatharn.lua:16-19", "codecay/#Avhi_Escron.lua:41-44", "codecay/#Bishop_Toluwon.lua:22-31", "codecay/#Raex_Pwodill.lua:17-28", "codecay/#Vindor_Mawnil.lua:17-28", "codecay/#High_Priest_Ultor_Szanvon.lua:17-21", "codecay/Tarkil_Adan.lua:1-79"]
+    },
+    {
+      "id": "lower-crypt",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "codecay",
+      "title": "Use the bone throne to reach the lower crypt",
+      "requires": [ {"flag": "bertox_key", "value": "1", "why": "the throne only moves you if bertox_key exists"} ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "codecay", "detail": "Click the bone throne (door 7, CDTHRONE501) at -221.8,-62.9,-96.4."}
+      ],
+      "npcs": [],
+      "credit": "the clicking player only",
+      "message": "You are moved to 0,-16,-290 in the lower crypt.",
+      "debug": [
+        "Without bertox_key: 'You lack the key required to enter the lower crypt. Seek Tarkil Adan after defeating Carprin Deatharn.'",
+        "Charmed pets lose their charm; you are removed from all hate lists on use."
+      ],
+      "notes": "",
+      "source": ["codecay/player.lua:1-23"]
+    },
+    {
+      "id": "fuirstel-3",
+      "flag": "fuirstel", "value": "3",
+      "tier": 2,
+      "zone": "potranquility",
+      "title": "Bring the ward to Elder Fuirstel (Milyk)",
+      "requires": [ {"flag": "fuirstel", "value": "2", "why": "Elder Fuirstel upgrades only fuirstel 2 to 3"} ],
+      "actions": [
+        {"type": "say", "npc": "Elder_Fuirstel", "zone": "potranquility", "say": "hail", "detail": "Hail Elder Fuirstel after getting the ward from Grummus (fuirstel 2)."}
+      ],
+      "npcs": [ {"name": "Elder_Fuirstel", "zone": "potranquility", "x": -1417, "y": -291, "z": -905.9, "spawn": "static", "notes": "npc 203375; this is Milyk"} ],
+      "credit": "the hailing player",
+      "message": "Elder Fuirstel slowly turns towards you. ... 'I fear the only way to remove this pox would be to weaken Bertoxxulous enough that his curse would be lifted...'  then  You have received a character flag!",
+      "debug": [
+        "With no fuirstel or fuirstel 1 he only groans: 'Elder Fuirstel groans in agony.  His tainted breath surrounds your face.'",
+        "With fuirstel 3 he repeats the same text AND prints 'You have received a character flag!' but nothing changes; check #popflags."
+      ],
+      "notes": "Adler Fuirstel at fuirstel 3 says to go into disease and move the rotted pipe behind Grummus to reach Bertoxxulous (flavour; the actual route is the codecay bone throne).",
+      "source": ["potranquility/Elder_Fuirstel.lua:1-15", "potranquility/Adler_Fuirstel.lua:36-37"]
+    },
+    {
+      "id": "fuirstel-4",
+      "flag": "fuirstel", "value": "4",
+      "tier": 2,
+      "zone": "codecay",
+      "title": "Kill Bertoxxulous and hail the Planar Projection",
+      "requires": [
+        {"flag": "bertox_key", "value": "1", "why": "projection returns without reply if bertox_key is missing"},
+        {"flag": "fuirstel", "value": "3", "why": "projection grants fuirstel 4 only when fuirstel == 3"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "#Spectre_of_Corruption", "zone": "codecay", "detail": "Kill the Spectre of Corruption in the lower crypt to start the event; trash begins 5m50s later."},
+        {"type": "kill", "npc": null, "zone": "codecay", "detail": "Kill Knight/Priest/Necromancer of Decay trash; at 44,48,52,56,84,88,92,96 trash kills a King of Lxanvom spawns. After 8 kings, four more spawn (Meedo, Qezzin, Pzo, Bhaly)."},
+        {"type": "kill", "npc": "#Bertoxxulous", "zone": "codecay", "detail": "After the 12th king dies Bertoxxulous spawns at 0,280,-243; kill him."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "codecay", "say": "hail", "detail": "Hail the Planar Projection that appears where Bertoxxulous died."}
+      ],
+      "npcs": [
+        {"name": "#Spectre_of_Corruption", "zone": "codecay", "x": 200, "y": 0, "z": -270.1, "spawn": "static", "notes": "npc 200016, respawn 259200s; set to 66h after a win, 5 min after a failed event"},
+        {"name": "#Bertoxxulous", "zone": "codecay", "x": 0, "y": 280, "z": -243, "spawn": "event", "notes": "npc 200226, grid 58"},
+        {"name": "A_Planar_Projection", "zone": "codecay", "x": 0, "y": 280, "z": -243, "spawn": "event", "notes": "npc 200269, spawned at Bertoxxulous's death location (moves on grid, so coordinates vary); 20 minute depop"}
+      ],
+      "credit": "Bertoxxulous signals the projection with e.killer (someone with kill rights). The projection accepts hails from that player's raid if in a raid, else group, else only that player. Max 72 flags per spawn.",
+      "message": "Milyk Fuirstel's thoughts enter into your own.  'Bertoxxulous is slain, for this my brother and I are forever in your debt.  Please, when you have the opportunity come visit me in the Plane of Tranquility...'  then  You have received a character flag!",
+      "debug": [
+        "No reply at all without bertox_key (hail Tarkil Adan first).",
+        "No reply if you are not in the raid/group of the credited killer, after 72 flags, or after the 20 minute depop.",
+        "With fuirstel below 3 you get the checklist flag instead (see cl_bertox-1); with fuirstel 4 or 5 no reply.",
+        "The event fails 123 minutes after the Spectre dies: 'Harsh laughter echoes around the crypt...' and all summoned minions vanish."
+      ],
+      "notes": "Clears cl_bertox if you had it.",
+      "source": ["codecay/encounters/Bertox.lua:70-190", "codecay/A_Planar_Projection.lua:55-77"]
+    },
+    {
+      "id": "cl_bertox-1",
+      "flag": "cl_bertox", "value": "1",
+      "tier": 2,
+      "zone": "codecay",
+      "title": "Bertoxxulous checklist flag (not yet at Milyk's stage)",
+      "requires": [
+        {"flag": "bertox_key", "value": "1", "why": "projection returns without reply if bertox_key is missing"},
+        {"flag": "fuirstel", "value": "absent|1|2", "why": "checklist branch runs when fuirstel < 3"},
+        {"flag": "cl_bertox", "value": "absent", "why": "only set when you do not already have cl_bertox"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "codecay", "say": "hail", "detail": "Hail the Bertoxxulous Planar Projection as in fuirstel-4."}
+      ],
+      "npcs": [ {"name": "A_Planar_Projection", "zone": "codecay", "x": 0, "y": 280, "z": -243, "spawn": "event", "notes": "npc 200269"} ],
+      "credit": "same as fuirstel-4 (credited killer's raid/group/self)",
+      "message": "The Planar Projection seems to flicker in and out of existence.  It seems joyous that Bertoxxulous has been slain.  then  You have received a new checklist flag!",
+      "debug": [
+        "Same raid/group, 72-flag and 20-minute limits as fuirstel-4.",
+        "Convert later at the Seer once fuirstel is exactly 3 (hail Elder Fuirstel with fuirstel 2 first)."
+      ],
+      "notes": "",
+      "source": ["codecay/A_Planar_Projection.lua:78-83"]
+    },
+    {
+      "id": "seer-cl_bertox",
+      "flag": "fuirstel", "value": "4",
+      "tier": 2,
+      "zone": "poknowledge",
+      "title": "Seer: unlock the Bertoxxulous memory",
+      "requires": [
+        {"flag": "cl_bertox", "value": "1", "why": "checklist flag the Seer converts"},
+        {"flag": "fuirstel", "value": "3", "why": "required flag/value in the Seer's checklist table"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock", "detail": "Sit near the Seer and say a sentence containing both 'unlock' and 'memories'."}
+      ],
+      "npcs": [ {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""} ],
+      "credit": "the speaking player",
+      "message": "You focus back to your battle with the Plaguebringer, memories of his death give you a moment of clarity.  You now have the knowledge to help Milyk.  then  You have received a character flag!",
+      "debug": [
+        "If fuirstel is not exactly 3: 'As you recall your memory of your battle against the Plaguebringer, an image of the Fuirstel brothers flashes through your mind.' and cl_bertox is kept.",
+        "Must be sitting."
+      ],
+      "notes": "The Seer deletes cl_bertox on success.",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:78-83", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "fuirstel-5",
+      "flag": "fuirstel", "value": "5",
+      "tier": 2,
+      "zone": "potranquility",
+      "title": "Return to Elder Fuirstel",
+      "requires": [ {"flag": "fuirstel", "value": "4", "why": "Elder Fuirstel upgrades only fuirstel 4 to 5"} ],
+      "actions": [
+        {"type": "say", "npc": "Elder_Fuirstel", "zone": "potranquility", "say": "hail", "detail": "Hail Elder Fuirstel after Bertoxxulous is dead (fuirstel 4)."}
+      ],
+      "npcs": [ {"name": "Elder_Fuirstel", "zone": "potranquility", "x": -1417, "y": -291, "z": -905.9, "spawn": "static", "notes": "npc 203375"} ],
+      "credit": "the hailing player",
+      "message": "Elder Fuirstel tells you, 'Welcome back friend.  I must tell you that my brother and I shall never forget what you have done for us...'  then  You have received a character flag!",
+      "debug": [
+        "With fuirstel 5 he repeats the text and the flag message, but nothing changes.",
+        "fuirstel 5 (plus thelin 4) is what opens the Plane of Torment portal and Fahlia's Tylis quest."
+      ],
+      "notes": "",
+      "source": ["potranquility/Elder_Fuirstel.lua:16-21"]
+    },
+    {
+      "id": "access-potorment",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "potranquility",
+      "title": "Unlock the Plane of Torment portal",
+      "requires": [
+        {"flag": "fuirstel", "value": "5", "why": "door 93 requires fuirstel == 5"},
+        {"flag": "thelin", "value": "4", "why": "door 93 requires thelin == 4"}
+      ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "potranquility", "detail": "Click the Torment portal (door 93, POTORMFNT500) at -1640.5,698.7,-912.4."}
+      ],
+      "npcs": [],
+      "credit": "the clicking player only (sets zone flag 207)",
+      "message": "No message on success.",
+      "debug": [
+        "Without both flags: 'You lack the will to pass through this portal safely.' and the server refuses with 'You do not have the flag to enter potorment.'",
+        "Alternate access: Symbol of Torment (29213) on cursor/keyring only when the pop_alt_access_enabled data bucket is 1."
+      ],
+      "notes": "",
+      "source": ["potranquility/player.lua:44-57"]
+    },
+    {
+      "id": "tylis-1",
+      "flag": "tylis", "value": "1",
+      "tier": 2,
+      "zone": "potranquility",
+      "title": "Agree to help Fahlia Shadyglade free Tylis",
+      "requires": [
+        {"flag": "thelin", "value": "4", "why": "every keyword after 'condition' checks thelin == 4"},
+        {"flag": "fuirstel", "value": "5", "why": "every keyword after 'condition' checks fuirstel == 5"},
+        {"flag": "tylis", "value": "absent", "why": "tylis 1 is only set when no tylis global exists"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Fahlia_Shadyglade", "zone": "potranquility", "say": "condition", "detail": "Say 'condition'."},
+        {"type": "say", "npc": "Fahlia_Shadyglade", "zone": "potranquility", "say": "black cube", "detail": "Say 'black cube'."},
+        {"type": "say", "npc": "Fahlia_Shadyglade", "zone": "potranquility", "say": "plane of torment", "detail": "Say 'plane of torment'."},
+        {"type": "say", "npc": "Fahlia_Shadyglade", "zone": "potranquility", "say": "will go", "detail": "Say 'will go' (e.g. 'I will go')."}
+      ],
+      "npcs": [ {"name": "Fahlia_Shadyglade", "zone": "potranquility", "x": -1365, "y": -301, "z": -905.3, "spawn": "static", "notes": "npc 203372"} ],
+      "credit": "the speaking player",
+      "message": "Fahlia Shadyglade tells you, 'Wonderful. ... You must find Maareq and do what you must to release Tylis from this torture.'  then  You have received a character flag!",
+      "debug": [
+        "thelin 4 but fuirstel not 5: she sends you to Adler Fuirstel ('...perhaps you should help one that is in more dire need. Go talk to Adler Fuirstel...').",
+        "Otherwise without both flags: 'I can see that you may be passionate to help others but now I must ask you to be about your own business...'.",
+        "Only 'will go' sets the flag; the earlier keywords are optional flavour. If you already have tylis she still prints the flag message but nothing changes."
+      ],
+      "notes": "",
+      "source": ["potranquility/Fahlia_Shadyglade.lua:1-51"]
+    },
+    {
+      "id": "keeper-access",
+      "flag": null, "value": null,
+      "tier": 2,
+      "zone": "potorment",
+      "title": "Kill Maareq and have Tylis channel you to the Keeper",
+      "requires": [ {"flag": "tylis", "value": "1", "why": "Tylis_Newleaf only channels players with any tylis global"} ],
+      "actions": [
+        {"type": "kill", "npc": "Maareq_the_Prophet", "zone": "potorment", "detail": "Kill Maareq the Prophet; Tylis in his cage becomes targetable."},
+        {"type": "say", "npc": "Tylis_Newleaf", "zone": "potorment", "say": "will assist you", "detail": "Say 'will assist you' to Tylis Newleaf (optional confirmation)."},
+        {"type": "say", "npc": "Tylis_Newleaf", "zone": "potorment", "say": "we are ready", "detail": "Say 'we are ready' or 'i am ready'; Tylis casts Insanity of Tylis (1134) on you, a teleport within potorment."}
+      ],
+      "npcs": [
+        {"name": "Maareq_the_Prophet", "zone": "potorment", "x": 32, "y": -118, "z": 460.3, "spawn": "static", "notes": "npc 207004, respawn 259200s"},
+        {"name": "Tylis_Newleaf", "zone": "potorment", "x": 0, "y": -6, "z": 466.6, "spawn": "static", "notes": "npc 207014, untargetable (bodytype 11) until Maareq dies"}
+      ],
+      "credit": "each player must say the keyword themselves; the teleport is cast only on the speaker",
+      "message": "Tylis says 'Please tell me when you are ready...' then you are teleported by Insanity of Tylis.",
+      "debug": [
+        "Requires that you, or any raid member (or group member, or yourself when solo), has A Screaming Sphere (22954) in inventory or keyring.",
+        "tylis set but no sphere: 'The Screaming Sphere carries an echo of this place.  Bring one near, and perhaps I can channel you into the shadows of my pain.'",
+        "No tylis flag: 'I sense the desire in you to help... Please seek out my companion Fahlia...'"
+      ],
+      "notes": "Spell 1134 effect values are 804,-175,-956 in spells_new; the Keeper of Sorrows spawns at -174,354,-759.2, so the exact landing point could not be confirmed. The source of A Screaming Sphere was not found in the quest scripts or DB loot tables.",
+      "source": ["potorment/Maareq_the_Prophet.lua:90-97", "potorment/Tylis_Newleaf.lua:1-78"]
+    },
+    {
+      "id": "tylis-2",
+      "flag": "tylis", "value": "2",
+      "tier": 2,
+      "zone": "potorment",
+      "title": "Kill the Keeper of Sorrows and hail the freed Tylis",
+      "requires": [ {"flag": "tylis", "value": "1", "why": "#Tylis_Newleaf only upgrades tylis 1 to 2"} ],
+      "actions": [
+        {"type": "kill", "npc": "The_Keeper_of_Sorrows", "zone": "potorment", "detail": "Kill The Keeper of Sorrows."},
+        {"type": "say", "npc": "#Tylis_Newleaf", "zone": "potorment", "say": "hail", "detail": "Hail the freed Tylis Newleaf that appears near the Keeper."},
+        {"type": "say", "npc": "#Tylis_Newleaf", "zone": "potorment", "say": "ready to return", "detail": "Optional: say 'ready to return' to be cast Torment's Beckon (1136) back out."}
+      ],
+      "npcs": [
+        {"name": "The_Keeper_of_Sorrows", "zone": "potorment", "x": -174, "y": 354, "z": -759.2, "spawn": "static", "notes": "npc 207015, respawn 216000s"},
+        {"name": "#Tylis_Newleaf", "zone": "potorment", "x": -176, "y": 368, "z": -764.8, "spawn": "event", "notes": "npc 207318, depops after 10 minutes"}
+      ],
+      "credit": "anyone who hails #Tylis_Newleaf while it is up; there is no raid/group or kill-credit check. Limit of 72 counted with <=, so up to 73.",
+      "message": "Tylis Newleaf tells you, 'I must thank you for your kind efforts friends.  This place has laid claim to me for far too long...'  then  You have received a character flag!",
+      "debug": [
+        "#Tylis depops 10 minutes after spawning; hail quickly.",
+        "Without any tylis flag you get the checklist flag instead (see cl_keeper-1).",
+        "With tylis 2 you see the thank-you text but no flag message.",
+        "Killing the Keeper also depops (with respawn timer) the caged Tylis_Newleaf."
+      ],
+      "notes": "Also deletes cl_keeper if present.",
+      "source": ["potorment/The_Keeper_of_Sorrows.lua:1-4", "potorment/#Tylis_Newleaf.lua:1-46"]
+    },
+    {
+      "id": "cl_keeper-1",
+      "flag": "cl_keeper", "value": "1",
+      "tier": 2,
+      "zone": "potorment",
+      "title": "Keeper of Sorrows checklist flag (no Tylis quest yet)",
+      "requires": [
+        {"flag": "tylis", "value": "absent", "why": "checklist branch runs only without a tylis global"},
+        {"flag": "cl_keeper", "value": "absent", "why": "only set if you do not already have it"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "#Tylis_Newleaf", "zone": "potorment", "say": "hail", "detail": "Hail the freed Tylis after the Keeper dies."}
+      ],
+      "npcs": [ {"name": "#Tylis_Newleaf", "zone": "potorment", "x": -176, "y": 368, "z": -764.8, "spawn": "event", "notes": "npc 207318"} ],
+      "credit": "anyone who hails while it is up (no raid/group check)",
+      "message": "Tylis Newleaf tells you, 'I don't recognize you, stranger. ... please tell me when you're [ready to return] and I will send you out first.'  then  You have received a new checklist flag!",
+      "debug": [
+        "Same 10 minute depop as tylis-2.",
+        "Convert later at the Seer once tylis is exactly 1 (Fahlia's 'will go')."
+      ],
+      "notes": "",
+      "source": ["potorment/#Tylis_Newleaf.lua:33-41"]
+    },
+    {
+      "id": "seer-cl_keeper",
+      "flag": "tylis", "value": "2",
+      "tier": 2,
+      "zone": "poknowledge",
+      "title": "Seer: unlock the Keeper of Sorrows memory",
+      "requires": [
+        {"flag": "cl_keeper", "value": "1", "why": "checklist flag the Seer converts"},
+        {"flag": "tylis", "value": "1", "why": "required flag/value in the Seer's checklist table"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock", "detail": "Sit near the Seer and say a sentence containing both 'unlock' and 'memories'."}
+      ],
+      "npcs": [ {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""} ],
+      "credit": "the speaking player",
+      "message": "Tylis voice rings in your ears, 'Now I remember you.  Thank you for saving me, your spirit now may access places in my prison where it could not.  Beware Sorrowsong.'  then  You have received a character flag!",
+      "debug": [
+        "If tylis is not exactly 1: 'Although it was kind of you to help him, Tylis still seems to have no idea who you are.'",
+        "Must be sitting."
+      ],
+      "notes": "The Seer processes checklist flags in table order (cl_keeper before cl_saryrn) and updates its local copy, so one 'unlock memories' with cl_keeper and cl_saryrn and tylis 1 grants tylis 2 and then saryrn 1.",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:84-89", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "saryrn-1",
+      "flag": "saryrn", "value": "1",
+      "tier": 2,
+      "zone": "potorment",
+      "title": "Kill Saryrn and hail the Planar Projection",
+      "requires": [
+        {"flag": "tylis", "value": "2", "why": "projection grants saryrn only with tylis == 2"},
+        {"flag": "saryrn", "value": "absent", "why": "hail ignored if you have saryrn"},
+        {"flag": "cipher", "value": "absent", "why": "hail ignored if you have cipher"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "Saryrn", "zone": "potorment", "detail": "Kill Saryrn at the top of her tower; Sorrowsong becomes attackable at 25%."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "potorment", "say": "hail", "detail": "Hail the Planar Projection that appears where Saryrn died."}
+      ],
+      "npcs": [
+        {"name": "Saryrn", "zone": "potorment", "x": 3, "y": 9, "z": 587.2, "spawn": "static", "notes": "npc 207001, respawn 259200s; warps home and wipes hate if pulled below z 575"},
+        {"name": "A_Planar_Projection", "zone": "potorment", "x": 3, "y": 9, "z": 587.2, "spawn": "event", "notes": "npc 207317, spawned at Saryrn's death location; 20 minute depop"}
+      ],
+      "credit": "Saryrn signals the projection with e.killer (someone with kill rights). The projection accepts hails from that player's raid if in a raid, else group, else only that player. Max 72 flags per spawn.",
+      "message": "The Planar Projection's thoughts enter your own.  'You have done well, now receive the knowledge that Saryrn once held!' ...  then  You have received a character flag!",
+      "debug": [
+        "No reply if you are not in the raid/group of the credited killer, after 72 flags, or after the 20 minute depop.",
+        "No reply if you already have saryrn or cipher.",
+        "Without tylis 2 you get the checklist flag instead (see cl_saryrn-1)."
+      ],
+      "notes": "Clears cl_saryrn if present. Grand Librarian Maelin deletes saryrn when granting cipher (tier 3).",
+      "source": ["potorment/Saryrn.lua:114-118", "potorment/A_Planar_Projection.lua:55-72"]
+    },
+    {
+      "id": "cl_saryrn-1",
+      "flag": "cl_saryrn", "value": "1",
+      "tier": 2,
+      "zone": "potorment",
+      "title": "Saryrn checklist flag (Tylis not yet freed)",
+      "requires": [
+        {"flag": "tylis", "value": "absent|1", "why": "checklist branch runs when tylis is not 2"},
+        {"flag": "saryrn", "value": "absent", "why": "hail ignored if you have saryrn"},
+        {"flag": "cipher", "value": "absent", "why": "hail ignored if you have cipher"},
+        {"flag": "cl_saryrn", "value": "absent", "why": "only set if you do not already have it"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "potorment", "say": "hail", "detail": "Hail the Saryrn Planar Projection as in saryrn-1."}
+      ],
+      "npcs": [ {"name": "A_Planar_Projection", "zone": "potorment", "x": 3, "y": 9, "z": 587.2, "spawn": "event", "notes": "npc 207317"} ],
+      "credit": "same as saryrn-1 (credited killer's raid/group/self)",
+      "message": "The Planar Projection seems to flicker in and out of existence.  It seems to be impressed and grateful for the death of Saryrn.  then  You have received a new checklist flag!",
+      "debug": [
+        "Same raid/group, 72-flag and 20-minute limits as saryrn-1.",
+        "Convert at the Seer once tylis is exactly 2."
+      ],
+      "notes": "",
+      "source": ["potorment/A_Planar_Projection.lua:73-78"]
+    },
+    {
+      "id": "seer-cl_saryrn",
+      "flag": "saryrn", "value": "1",
+      "tier": 2,
+      "zone": "poknowledge",
+      "title": "Seer: unlock the Saryrn memory",
+      "requires": [
+        {"flag": "cl_saryrn", "value": "1", "why": "checklist flag the Seer converts"},
+        {"flag": "tylis", "value": "2", "why": "required flag/value in the Seer's checklist table"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock", "detail": "Sit near the Seer and say a sentence containing both 'unlock' and 'memories'."}
+      ],
+      "npcs": [ {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""} ],
+      "credit": "the speaking player",
+      "message": "You feel the searing pain of torment as half of the Cipher of the Gods glows on your arm.  then  You have received a character flag!",
+      "debug": [
+        "If tylis is not exactly 2: 'You attempt to recall your defeat of Saryrn, but whenever you try to focus you feel a searing pain on your arm.'",
+        "Must be sitting."
+      ],
+      "notes": "The Seer does not check cipher here; if you already have cipher, a later 'guided meditation' deletes the redundant saryrn flag.",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:90-95", "poknowledge/Seer_Mal_Nae-Shi.lua:180-187", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    }
+  ]
+}

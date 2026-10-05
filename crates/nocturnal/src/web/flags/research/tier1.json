@@ -1,0 +1,754 @@
+{
+  "part": "tier1",
+  "steps": [
+    {
+      "id": "mavuin-1",
+      "flag": "mavuin", "value": "1",
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Hear Mavuin's plea in his cell",
+      "requires": [
+        {"flag": "mavuin", "value": "absent", "why": "information only sets mavuin=1 when mavuinFlag == 0, and only answers at all when mavuinFlag <= 1"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "#Mavuin", "zone": "pojustice", "say": "hail", "items": [], "detail": "Hail Mavuin in his prison cell; with no mavuin flag he offers his journal and mentions [information]."},
+        {"type": "say", "npc": "#Mavuin", "zone": "pojustice", "say": "information", "items": [], "detail": "Say information to receive the flag."}
+      ],
+      "npcs": [
+        {"name": "#Mavuin", "zone": "pojustice", "x": 742, "y": -455, "z": -26.2, "spawn": "static", "notes": "npc 201081, spawn2 345345, respawn 1170s"}
+      ],
+      "credit": "Only the player who says information (e.other); set_global with no group loop.",
+      "message": "Mavuin tells you, 'I know it has been said for years before me, and will be said for years after me, but I was truly framed for my crime. ... Please go before the tribunal and plead my case. ...' then 'You have received a character flag!'",
+      "debug": [
+        "The information keyword is ignored once mavuin >= 2 (condition mavuinFlag <= 1).",
+        "If you already have mavuin=1 the text and 'You have received a character flag!' repeat but the value is not changed.",
+        "Hail with mavuin=1 answers 'Please it is the only hope that I live for...' - that means you already have stage 1; go to the Tribunal."
+      ],
+      "notes": "findi is a substring match, so any sentence containing 'information' works. #popflags shows stage 1 as 'The evidence needed to save Mavuin has been requested'. Seer guided meditation: 'The evidence of Mavuin is the only thing that can save him now.'",
+      "source": ["pojustice/#Mavuin.lua:1-27"]
+    },
+    {
+      "id": "poj-trial-mark",
+      "flag": null, "value": null,
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Win a Tribunal trial and loot its Mark",
+      "requires": [],
+      "actions": [
+        {"type": "say", "npc": "The_Tribunal", "zone": "pojustice", "say": "prove", "items": [], "detail": "Optional flavor: the Tribunal asks if you are prepared."},
+        {"type": "say", "npc": "The_Tribunal", "zone": "pojustice", "say": "prepared", "items": [], "detail": "Optional: the Tribunal you speak to describes its trial (each of the six trial-room Tribunals runs a different trial)."},
+        {"type": "say", "npc": "The_Tribunal", "zone": "pojustice", "say": "ready to begin the Trial of Lashing", "items": [], "detail": "Say this exact phrase to the Lashing Tribunal (or 'ready to begin the Trial of Execution' / Stoning / Torture / Hanging / Flame to the matching Tribunal) to start and be teleported in."},
+        {"type": "kill", "npc": "#Lashman_Azakal", "zone": "pojustice", "items": [], "detail": "Win the trial; the trial boss spawns at the end (Lashing #Lashman_Azakal, Execution #Prime_Executioner_Vathoch, Stoning #Yurae_Zhaleem, Torture #Punisher_Veshtaq, Hanging #Gallows_Master_Teion, Flame #Punisher_of_Flame)."},
+        {"type": "loot", "npc": "#Lashman_Azakal", "zone": "pojustice", "items": [{"id": 31960, "name": "Mark of Lashing"}, {"id": 31842, "name": "Mark of Execution"}, {"id": 31845, "name": "Mark of Stone"}, {"id": 31844, "name": "Mark of Torture"}, {"id": 31846, "name": "Mark of Suffocation"}, {"id": 31796, "name": "Mark of Flame"}], "detail": "Each boss drops its own Mark (100% chance, multiplier 6 per DB loot table); every player must loot one for themselves."}
+      ],
+      "npcs": [
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 417, "y": 817, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345327 = Trial of Lashing"},
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 393, "y": 765, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345328 = Trial of Execution"},
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 418, "y": 714, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345329 = Trial of Stoning"},
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 521, "y": 713, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345330 = Trial of Torture"},
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 543, "y": 764, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345331 = Trial of Hanging"},
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 521, "y": 816, "z": 17.3, "spawn": "static", "notes": "npc 201508, spawn2 345332 = Trial of Flame"}
+      ],
+      "credit": "No flag. Marks are loot (lore, no-drop) from the trial boss corpse; each player loots their own.",
+      "message": "The Tribunal says 'Then begin.' and you are teleported into the trial.",
+      "debug": [
+        "The start phrase must contain 'ready to begin the ' plus that Tribunal's own trial name; saying another trial's name to the wrong Tribunal does nothing.",
+        "'That trial is already underway.  You must wait.' means the trial is locked (trialsUnderway) or a non-GM client or non-pet NPC is still inside its boundary box.",
+        "Lockout after success is 10 minutes (players warned at 9 min with 'The Tribunal will summon you from the trial in one minute.' and returned at ~10 min); after failure it is 1 minute.",
+        "Only your group members within 50 units of the speaker are teleported in; in a raid, only the speaker's raid group within 50 units; ungrouped = just you.",
+        "On failure you see '<Trial name> has failed.  The Tribunal's judgment has been rendered.  You will be returned from the trial shortly.' and are returned 10 s later; player corpses in the trial are moved to the graveyard.",
+        "The boss corpse decay timer is set to 8 minutes (SetDecayTimer 480000), and the success boot happens at ~10 minutes: loot your Mark promptly.",
+        "Marks are lore: you cannot loot a second copy of a Mark you already hold."
+      ],
+      "notes": "Each Mark is lore and no-drop (items table). Failure conditions are per trial (e.g. a prisoner dying: 'You have failed.' emotes). Logging in inside a trial area moves you to 473,685,10 (pojustice/player.lua).",
+      "source": ["pojustice/The_Tribunal.lua:17-34", "pojustice/The_Tribunal.lua:186-233", "pojustice/The_Tribunal.lua:265-284", "pojustice/encounters/LashingTrial.lua:116-130", "pojustice/player.lua:3-8"]
+    },
+    {
+      "id": "mavuin-2",
+      "flag": "mavuin", "value": "2",
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Plead Mavuin's case to the Tribunal",
+      "requires": [
+        {"flag": "mavuin", "value": "1", "why": "Tribunal only sets 2 when mavuin == '1' and FindMarks > 0"},
+        {"flag": null, "value": "any one trial Mark in inventory, bank or shared bank", "why": "FindMarks counts Marks via Client:HasItem"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "The_Tribunal", "zone": "pojustice", "say": "mavuin", "items": [], "detail": "Say mavuin to any Tribunal in the trial room while holding at least one trial Mark."}
+      ],
+      "npcs": [
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 417, "y": 817, "z": 17.3, "spawn": "static", "notes": "any of the six npc 201508 trial-room Tribunals answers 'mavuin'"}
+      ],
+      "credit": "Only the speaker (e.other).",
+      "message": "The Tribunal tells you, 'You have completed a trial - impressive for mortals.  You can tell Mavuin that we will hear his plea.  We will seek him out as time befits us.' then 'You have received a character flag!'",
+      "debug": [
+        "With no mavuin flag at all the Tribunal says nothing to 'mavuin' (if qglobals.mavuin).",
+        "mavuin=1 but no Mark: 'So, mortal, you wish us to allow a prisioner to plead his case? ... You must prove yourself in one of our trials before we will consider hearing this plea.'",
+        "Marks are found by Client:HasItem: worn/inventory slots 0-30, cursor queue, bags 250-339, bank 2000-2007 and bank bags 2030-2109, shared bank 2531-2550. Marks left on a corpse do not count.",
+        "Hail only gives the emote 'What do you want, mortal?' - you must say mavuin.",
+        "With mavuin=3 the reply is 'Do not worry about Mavuin...' (already done)."
+      ],
+      "notes": "#popflags stage 2: 'The Tribunal has agreed to hear Mavuin's case'. The Seventh Hammer room Tribunals (npc 201427) share the same script file but are not normally reachable.",
+      "source": ["pojustice/The_Tribunal.lua:47-56", "pojustice/The_Tribunal.lua:244-263", "lua_modules/client_ext.lua:135-176"]
+    },
+    {
+      "id": "mavuin-3",
+      "flag": "mavuin", "value": "3",
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Tell Mavuin the Tribunal will hear him",
+      "requires": [
+        {"flag": "mavuin", "value": "2", "why": "Mavuin sets 3 only when mavuinFlag == 2"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "#Mavuin", "zone": "pojustice", "say": "hail", "items": [], "detail": "Return to Mavuin's cell and hail him."}
+      ],
+      "npcs": [
+        {"name": "#Mavuin", "zone": "pojustice", "x": 742, "y": -455, "z": -26.2, "spawn": "static", "notes": ""}
+      ],
+      "credit": "Only the hailing player.",
+      "message": "Mavuin tells you, 'So you have pleaded my case to the Tribunal, I am most thankful. ... seek an audience with Karana and Mithaniel Marr. ... Also seek from Marr a way to translate the divine language. ...' then 'You have received a character flag!'",
+      "debug": [
+        "Hail with mavuin=1 gives 'Please it is the only hope that I live for...' - you still need the Tribunal step.",
+        "The flag line prints on every hail at mavuin >= 2, so seeing it again does not mean a new flag."
+      ],
+      "notes": "mavuin=3 opens the Plane of Valor and Plane of Storms portals in PoTranquility (door 16 / 21 set zone flags 210 and 208). #popflags stage 3: 'Mavuin's case is complete'. cl_aerindar (tier 2) later requires mavuin=3.",
+      "source": ["pojustice/#Mavuin.lua:5-12", "potranquility/player.lua:13-23"]
+    },
+    {
+      "id": "seventh-1",
+      "flag": "seventh", "value": "1",
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Show all six Marks to the Tribunal",
+      "requires": [
+        {"flag": null, "value": "all 6 trial Marks held (or seventh already set)", "why": "condition qglobals.seventh or marks == 6"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "The_Tribunal", "zone": "pojustice", "say": "knowledge", "items": [{"id": 31599, "name": "The Mark of Justice"}], "detail": "Holding all six Marks, say knowledge to a trial-room Tribunal; you receive the flag and The Mark of Justice."}
+      ],
+      "npcs": [
+        {"name": "The_Tribunal", "zone": "pojustice", "x": 417, "y": 817, "z": 17.3, "spawn": "static", "notes": "any trial-room Tribunal (npc 201508)"}
+      ],
+      "credit": "Only the speaker.",
+      "message": "The Tribunal tells you, 'Most impressive.  It has been long since a mortal has shown such prowess.'  It considers you for a long moment.  'There is one final test that you must undergo.'  A gleaming metal disc appears in your hand.  'Hold up the Mark of Justice as you enter the portal, and prepare for your judgement.' then 'You have received a character flag!'",
+      "debug": [
+        "1-5 Marks: 'You have done well, mortal, but there are more trials yet for you to complete.'",
+        "0 Marks: 'The knowledge of the gods is not so easily given to an unproven mortal.'",
+        "Once seventh is set, saying knowledge again re-summons The Mark of Justice if you no longer have it (HasItem check).",
+        "Marks count from inventory, bags, bank and shared bank (Client:HasItem)."
+      ],
+      "notes": "The Seer header says the keyword is 'information', but the script matches 'knowledge'. The seventh flag is not checked by any script: the Seventh Hammer port is gated by the Mark of Justice item only. Not required for tier-1 completion in #popflags (which shows 'Seventh Hammer access: Unlocked/Locked').",
+      "source": ["pojustice/The_Tribunal.lua:286-305", "poknowledge/Seer_Mal_Nae-Shi.lua:5"]
+    },
+    {
+      "id": "seventh-hammer",
+      "flag": null, "value": null,
+      "tier": 1,
+      "zone": "pojustice",
+      "title": "Enter the Seventh Hammer's room (optional)",
+      "requires": [
+        {"flag": null, "value": "The Mark of Justice (31599) on your cursor", "why": "player.lua checks GetItemIDAt(0) == 31599 (slot 0 is the cursor)"}
+      ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "pojustice", "items": [{"id": 31599, "name": "The Mark of Justice"}], "detail": "Hold The Mark of Justice on your cursor and click one of the trial portal doors (door ids 1-6)."},
+        {"type": "say", "npc": "The_Seventh_Hammer", "zone": "pojustice", "say": "ready to face", "items": [], "detail": "Optionally say ready to face to the Seventh Hammer to start the fight."},
+        {"type": "kill", "npc": "The_Seventh_Hammer", "zone": "pojustice", "items": [], "detail": "Kill the Seventh Hammer (no flag is granted by this kill in the scripts)."}
+      ],
+      "npcs": [
+        {"name": "The_Seventh_Hammer", "zone": "pojustice", "x": 75, "y": 1228, "z": 15.8, "spawn": "static", "notes": "npc 201074, respawn 259200s; you land at 76,1310,10"}
+      ],
+      "credit": "No flag.",
+      "message": "You are moved to the Seventh Hammer room; the Hammer says 'Greetings mortal, it seems the council has deemed you worthy of the challenge, are you ready to face judgement?' on hail.",
+      "debug": [
+        "The Mark must be on the cursor, not in a bag or equipped (GetItemIDAt(0)).",
+        "If the Seventh Hammer is up and engaged, the move is cancelled (IsEngaged check) and you take the normal door destination.",
+        "Only door ids 1-6 trigger the move."
+      ],
+      "notes": "No qglobal is set or checked for this step.",
+      "source": ["pojustice/player.lua:10-29", "pojustice/The_Seventh_Hammer.lua:18-27"]
+    },
+    {
+      "id": "fuirstel-1",
+      "flag": "fuirstel", "value": "1",
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Get the Ward request from Adler Fuirstel",
+      "requires": [
+        {"flag": "fuirstel", "value": "absent", "why": "ward sets fuirstel=1 only when not qglobals.fuirstel"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Adler_Fuirstel", "zone": "potranquility", "say": "hail", "items": [], "detail": "Hail Adler Fuirstel (optional)."},
+        {"type": "say", "npc": "Adler_Fuirstel", "zone": "potranquility", "say": "plane of disease", "items": [], "detail": "Optional lore."},
+        {"type": "say", "npc": "Adler_Fuirstel", "zone": "potranquility", "say": "ward", "items": [], "detail": "Say ward to receive the flag."}
+      ],
+      "npcs": [
+        {"name": "Adler_Fuirstel", "zone": "potranquility", "x": -1467, "y": 1786, "z": -770.5, "spawn": "static", "notes": "npc 203394"}
+      ],
+      "credit": "Only the speaker.",
+      "message": "Adler Fuirstel tells you, 'The ward is carried by the one that Bertoxxulous has created to protect the entrance into his den.  If you dare travel into this pungent plane and find the ward bring it back.  If we can halt the advancing toxins in Milyk's system maybe we can save him.' then 'You have received a character flag!'",
+      "debug": [
+        "The flag line prints even when you already have any fuirstel value; only an absent flag is changed to 1.",
+        "If you got cl_grummus from the Grummus projection before this step, get fuirstel=1 here and then unlock memories at the Seer to convert it to fuirstel=2."
+      ],
+      "notes": "Adler is not with his brother: he stands at -1467,1786 while Elder Fuirstel is in the elders' building. #popflags stage 1: 'Obtain the Ward for Milyk'.",
+      "source": ["potranquility/Adler_Fuirstel.lua:1-29"]
+    },
+    {
+      "id": "fuirstel-2",
+      "flag": "fuirstel", "value": "2",
+      "tier": 1,
+      "zone": "podisease",
+      "title": "Kill Grummus and hail the planar projection",
+      "requires": [
+        {"flag": "fuirstel", "value": "1", "why": "projection sets fuirstel=2 only when qglobals.fuirstel == '1'"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "#Grummus", "zone": "podisease", "items": [], "detail": "Kill Grummus; A_Planar_Projection spawns at his corpse."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "podisease", "say": "hail", "items": [], "detail": "Hail the projection within 20 minutes."}
+      ],
+      "npcs": [
+        {"name": "#Grummus", "zone": "podisease", "x": 2041, "y": -275, "z": 333.5, "spawn": "static", "notes": "npc 205091, respawn 259200s (3 days)"},
+        {"name": "A_Planar_Projection", "zone": "podisease", "x": 2041, "y": -275, "z": 333.5, "spawn": "event", "notes": "npc 205156, eq.spawn2 at Grummus' death location; depops after 20 minutes"}
+      ],
+      "credit": "Clients in the same raid (by raid id) as the player with kill rights; if that player is not in a raid, their group; if ungrouped, only that player. Code: rid/gid/cid captured from eq.signal(PLANAR_PROJECTION_TYPE, e.killer:GetID()).",
+      "message": "You recognize the sound of the voice echoing in your mind to be Milyk Fuirstel's.  He tells you before fading, 'I beg of you, return to me with the ward that now envelops your body.  This etheric energy is the only thing that can stop this plague that has been placed upon me.' then 'You have received a character flag!'",
+      "debug": [
+        "No reply at all means you are not in the credited raid/group (ClientCanFlag) or the projection has hit its counter limit (flags <= 144).",
+        "Credit is tied to the killer's raid/group ID at death; leaving and rejoining a raid can change the raid ID and lose credit.",
+        "The projection depops 20 minutes after spawning.",
+        "This also deletes any cl_grummus you held, and sets grummus=1 if you did not have it (same hail)."
+      ],
+      "notes": "e.killer on death_complete is someone with kill rights, not necessarily the last hit. Each hail can add up to 2 to the counter (fuirstel + grummus). #popflags labels stage 2 'The Ward was recovered'. Seer: 'Grummus has been destroyed, about his corpse you found a small ward to protect from disease.'",
+      "source": ["podisease/#Grummus.lua:1-6", "podisease/A_Planar_Projection.lua:5-92"]
+    },
+    {
+      "id": "grummus-1",
+      "flag": "grummus", "value": "1",
+      "tier": 1,
+      "zone": "podisease",
+      "title": "Grummus kill: Crypt of Decay access flag",
+      "requires": [],
+      "actions": [
+        {"type": "kill", "npc": "#Grummus", "zone": "podisease", "items": [], "detail": "Kill Grummus."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "podisease", "say": "hail", "items": [], "detail": "Hail the projection; any credited player without grummus gets it, whatever their fuirstel value."}
+      ],
+      "npcs": [
+        {"name": "A_Planar_Projection", "zone": "podisease", "x": 2041, "y": -275, "z": 333.5, "spawn": "event", "notes": "spawns where Grummus died; 20 minute life"}
+      ],
+      "credit": "Same raid/group/solo of the kill-rights player as fuirstel-2.",
+      "message": "No separate message for grummus itself; you see whatever fuirstel / cl_grummus text applies.",
+      "debug": [
+        "grummus is set silently on hail; check with #popflags ('Crypt of Decay access: Unlocked') or Seer guided meditation ('Now that Grummus has been destroyed, the entrance to the Crypt of Bertoxxulous should open before your might.').",
+        "A player with fuirstel 2-5 hailing gets no text at all but still receives grummus if missing.",
+        "Zoning into codecay (zone 200) with grummus set adds zone flag 200 (podisease/player.lua event_zone)."
+      ],
+      "notes": "The Seer cannot grant grummus (no cl_ conversion sets it; only the GM 'time' path does). In the local DB codecay has an empty flag_needed, and the potranquility CoD door (12) only grants zone flag 200 via alternate keyring access; whether CoD entry is enforced server-side here is unclear.",
+      "source": ["podisease/A_Planar_Projection.lua:86-89", "podisease/player.lua:1-5", "potranquility/player.lua:25-42"]
+    },
+    {
+      "id": "cl_grummus-1",
+      "flag": "cl_grummus", "value": "1",
+      "tier": 1,
+      "zone": "podisease",
+      "title": "Grummus kill before talking to Adler (checklist)",
+      "requires": [
+        {"flag": "fuirstel", "value": "absent", "why": "cl_grummus is only given in the else branch when qglobals.fuirstel is nil"},
+        {"flag": "cl_grummus", "value": "absent", "why": "not qglobals.cl_grummus"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "#Grummus", "zone": "podisease", "items": [], "detail": "Kill Grummus with no fuirstel flag."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "podisease", "say": "hail", "items": [], "detail": "Hail the projection for the checklist flag."}
+      ],
+      "npcs": [
+        {"name": "A_Planar_Projection", "zone": "podisease", "x": 2041, "y": -275, "z": 333.5, "spawn": "event", "notes": ""}
+      ],
+      "credit": "Same raid/group/solo of the kill-rights player.",
+      "message": "The Planar Projection tells you, 'Now that Grummus has fallen, you must pass into the plane of Bertoxxulous. Deep inside of this castle you will find a room with a large decaying pipe. Push it out of the way and jump into the very plague that is Bertoxxulous' home. Be wary in your travels, for his pestilence shall consume you.' then 'You have received a new checklist flag!'",
+      "debug": [
+        "Then get fuirstel=1 from Adler (say ward) and unlock memories at the Seer to turn this into fuirstel=2.",
+        "#popflags lists it as 'Pending memory: Grummus'."
+      ],
+      "notes": "",
+      "source": ["podisease/A_Planar_Projection.lua:77-84"]
+    },
+    {
+      "id": "seer-cl_grummus",
+      "flag": "fuirstel", "value": "2",
+      "tier": 1,
+      "zone": "poknowledge",
+      "title": "Unlock the Grummus memory at the Seer",
+      "requires": [
+        {"flag": "cl_grummus", "value": "1", "why": "UnlockMemories only processes checklist flags you hold"},
+        {"flag": "fuirstel", "value": "1", "why": "checklistFlags entry: required fuirstel == '1'"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock memories", "items": [], "detail": "Sit down near the Seer and say a line containing both 'unlock' and 'memories'."}
+      ],
+      "npcs": [
+        {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": "npc 202006"}
+      ],
+      "credit": "Only the speaker.",
+      "message": "For a moment you pause, sticking a hand in your pocket.  Inside you find the small ward that was lying near Grummus' body, perhaps you should bring this to Milyk. then 'You have received a character flag!' (cl_grummus is deleted)",
+      "debug": [
+        "Standing: 'You will never be able to focus unless you are relaxed.  Please, sit down...' (IsSitting check).",
+        "Without fuirstel=1: 'You remember seeing a small trinket by Grummus' body and wondering what it was for. Perhaps speaking to someone near the Plane of Disease will shed some light on the situation.' - go say ward to Adler Fuirstel.",
+        "No checklist flags at all: 'You manage to recover some images from your childhood, but no recent events spark a memory.'"
+      ],
+      "notes": "Requires exactly fuirstel '1'; with fuirstel absent or 2+ it stays locked.",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:46-53", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371", "poknowledge/Seer_Mal_Nae-Shi.lua:384-389"]
+    },
+    {
+      "id": "fuirstel-3",
+      "flag": "fuirstel", "value": "3",
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Bring the ward to Elder (Milyk) Fuirstel",
+      "requires": [
+        {"flag": "fuirstel", "value": "2", "why": "Elder Fuirstel sets 3 only when fuirstel == '2'"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Elder_Fuirstel", "zone": "potranquility", "say": "hail", "items": [], "detail": "Hail Elder Fuirstel in the elders' building."}
+      ],
+      "npcs": [
+        {"name": "Elder_Fuirstel", "zone": "potranquility", "x": -1417, "y": -291, "z": -905.9, "spawn": "static", "notes": "npc 203375"}
+      ],
+      "credit": "Only the hailing player.",
+      "message": "Elder Fuirstel slowly turns towards you. ... 'Thank you friend.  I no longer feel the touch of death on my soul. ... please fell this god so that I may continue and learn from my mistakes.' then 'You have received a character flag!'",
+      "debug": [
+        "fuirstel absent or 1: only 'Elder Fuirstel groans in agony.  His tainted breath surrounds your face.' - you have not got the ward yet.",
+        "No item hand-in: the ward is the flag, just hail."
+      ],
+      "notes": "#popflags labels fuirstel=3 'Grummus was defeated' (label differs from the script meaning). Seer: 'Milyk has been saved from certain death, but is not recovering. Only by destroying the ruler of all things pestilent will his curse be lifted.' Next value (4) comes from Bertoxxulous in codecay (codecay/A_Planar_Projection.lua:70, tier 2).",
+      "source": ["potranquility/Elder_Fuirstel.lua:1-15"]
+    },
+    {
+      "id": "fuirstel-5",
+      "flag": "fuirstel", "value": "5",
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Report Bertoxxulous' defeat to Elder Fuirstel",
+      "requires": [
+        {"flag": "fuirstel", "value": "4", "why": "Elder Fuirstel sets 5 only when fuirstel == '4' (granted by the Bertoxxulous projection in codecay)"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Elder_Fuirstel", "zone": "potranquility", "say": "hail", "items": [], "detail": "Hail Elder Fuirstel after the Bertoxxulous flag."}
+      ],
+      "npcs": [
+        {"name": "Elder_Fuirstel", "zone": "potranquility", "x": -1417, "y": -291, "z": -905.9, "spawn": "static", "notes": ""}
+      ],
+      "credit": "Only the hailing player.",
+      "message": "Elder Fuirstel tells you, 'Welcome back friend.  I must tell you that my brother and I shall never forget what you have done for us. ...' then 'You have received a character flag!'",
+      "debug": [
+        "fuirstel=3 still gets the 'warding' text again; that means Bertoxxulous credit (fuirstel 4) is missing.",
+        "#popflags tier 1 completion needs fuirstel >= 5."
+      ],
+      "notes": "fuirstel=5 plus thelin=4 opens the Plane of Torment portal (potranquility door 93) and unlocks Fahlia Shadyglade's Tylis dialogue. Adler says the same 'Your service...' text at 4 or 5.",
+      "source": ["potranquility/Elder_Fuirstel.lua:16-22", "potranquility/player.lua:44-57", "potranquility/Fahlia_Shadyglade.lua:15-17"]
+    },
+    {
+      "id": "thelin-1",
+      "flag": "thelin", "value": "1",
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Learn of Thelin's coma from Adroha Jezith",
+      "requires": [
+        {"flag": "thelin", "value": "absent", "why": "sets thelin=1 only when thelinFlag == 0; dialogue only runs while thelin <= 2"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Adroha_Jezith", "zone": "potranquility", "say": "hail", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Adroha_Jezith", "zone": "potranquility", "say": "coma", "items": [], "detail": "Optional lore chain."},
+        {"type": "say", "npc": "Adroha_Jezith", "zone": "potranquility", "say": "tortured by nightmares", "items": [], "detail": "This keyword grants the flag; the intermediate keywords (poverty and ruin, jeweled dagger, Plane of Tranquility) are optional."}
+      ],
+      "npcs": [
+        {"name": "Adroha_Jezith", "zone": "potranquility", "x": -1428, "y": -258, "z": -904.3, "spawn": "static", "notes": "npc 203366, next to Elder_Poxbourne (Thelin)"}
+      ],
+      "credit": "Only the speaker.",
+      "message": "Adroha Jezith tells you, 'It is our belief that Terris-Thule is punishing him for allowing entrance into her plane. ... Go through the portal that he has helped to create. Try to find his planar projection in Terris' plane. Help him wake from this torment. ...' then 'You have received a character flag!'",
+      "debug": [
+        "With thelin 3 or 4 she only answers hail ('This is wonderful! Thelin is starting to recover slowly...').",
+        "Hailing Elder_Poxbourne before thelin 3 only gives Adroha's sigh about the [coma]."
+      ],
+      "notes": "#popflags stage 1: 'Help Thelin escape the hedge maze'.",
+      "source": ["potranquility/Adroha_Jezith.lua:1-31", "potranquility/Elder_Poxbourne.lua:12-15"]
+    },
+    {
+      "id": "maze-enter",
+      "flag": null, "value": null,
+      "tier": 1,
+      "zone": "ponightmare",
+      "title": "Enter Thelin's hedge maze",
+      "requires": [
+        {"flag": "thelin", "value": "any (1+) for the speaker", "why": "ThelinOutsideSayEvent returns early when not qglobals.thelin"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "hail", "items": [], "detail": "Hail the sleeping Thelin outside the maze."},
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "dagger", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "help", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "ready", "items": [], "detail": "Each group leader says ready to port their group into one of three dream mazes."}
+      ],
+      "npcs": [
+        {"name": "Thelin_Poxbourne", "zone": "ponightmare", "x": -1519, "y": 1104, "z": 124.4, "spawn": "static", "notes": "outside Thelin, npc 204070"}
+      ],
+      "credit": "Ports the speaker's group members within 150 units; in a raid, the speaker's raid group within 150 units (ungrouped raid members port alone).",
+      "message": "Thelin Poxbourne closes his eyes and falls asleep immediately.  He looks peaceful for a moment and then screams in agony!",
+      "debug": [
+        "No thelin flag on the speaker: only 'Thelin Poxbourne screams loudly, and then falls asleep once again.' on hail and no port; but members ported by a flagged leader can be unflagged.",
+        "'groans in agony. I suddenly feel the grasp of Terris upon my heart.  I must.. rest...' = all three mazes busy, or your raid's room is full (24 players max per maze).",
+        "A raid fills its own assigned room first; non-raid groups can share an unassigned room that has not started.",
+        "Inside, you have 5 minutes (30 checks x 10 s) to tell the inside Thelin ready, or Terris ejects you: 'Fools! Did Thelin think to cheat our contract by bringing you here? ...'",
+        "More than 24 players in a maze are moved out by the governor check."
+      ],
+      "notes": "Inside Thelin: hail, then say ready to start (state 1 -> 2); he walks the maze picking up dagger pieces and spawns adds; if he dies the maze fails and everyone is removed.",
+      "source": ["ponightmare/encounters/Maze.lua:160-207", "ponightmare/encounters/Maze.lua:209-260", "ponightmare/encounters/Maze.lua:353-479"]
+    },
+    {
+      "id": "thelin-2",
+      "flag": "thelin", "value": "2",
+      "tier": 1,
+      "zone": "ponightmare",
+      "title": "Complete the hedge maze and hail Thelin",
+      "requires": [
+        {"flag": "thelin", "value": "1", "why": "inside Thelin sets 2 only when qglobals.thelin == '1'"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "ready", "items": [], "detail": "Inside the maze, tell Thelin ready to start his walk."},
+        {"type": "kill", "npc": "a_construct_of_nightmares", "zone": "ponightmare", "items": [], "detail": "Protect Thelin through the waves; at the end a construct of nightmares spawns."},
+        {"type": "loot", "npc": "a_construct_of_nightmares", "zone": "ponightmare", "items": [{"id": 9258, "name": "Dagger Blade Shard"}], "detail": "Loot the Dagger Blade Shard (100% drop)."},
+        {"type": "give", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "items": [{"id": 9258, "name": "Dagger Blade Shard"}], "detail": "Give the shard to Thelin; you get Thelin's Dagger, Terris appears and the dialogue plays out."},
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "hail", "items": [], "detail": "After Terris vanishes and Thelin finishes speaking, every player hails Thelin for the flag."}
+      ],
+      "npcs": [
+        {"name": "Thelin_Poxbourne", "zone": "ponightmare", "x": -4417, "y": 5604, "z": 3.7, "spawn": "static", "notes": "inside Thelin npc 204486, maze 1 (spawn2 346002); maze 2 at -4417,4604; maze 3 at -4417,3604"},
+        {"name": "a_construct_of_nightmares", "zone": "ponightmare", "x": -4550, "y": 6118, "z": 5, "spawn": "event", "notes": "spawned at Thelin waypoint 106; y offset -1000 for maze 2, -2000 for maze 3"},
+        {"name": "Terris_Thule", "zone": "ponightmare", "x": -4532, "y": 5950, "z": 8, "spawn": "event", "notes": "npc 204483, dialogue only; y offset per maze"}
+      ],
+      "credit": "Each player who hails the inside Thelin while the maze is in state 4 (no group/raid check).",
+      "message": "Thelin Poxbourne tells you, 'Please destroy her for all that have had to endure her hideous visions.'  Thelin closes his eyes and is swept away from his nightmare.  The land of pure thought begins to vanish from around you. then 'You have received a character flag!' (Thelin casts Waking Moment on you)",
+      "debug": [
+        "The shard is only accepted in state 3 (after Thelin reaches waypoint 106); otherwise it is returned.",
+        "Hail only works in state 4, which starts ~21 s after Thelin reaches his last waypoint (talk1 5 s, talk2 8 s, talk3 8 s) and lasts 10 minutes before everyone is removed ('The nightmare fades from around you.').",
+        "thelin 2+ players see the text but get no flag line; no flag at all gives cl_maze instead.",
+        "Getting thelin=2 deletes any cl_maze you held.",
+        "If Thelin dies the maze fails; corpses are moved to the graveyard and players removed."
+      ],
+      "notes": "The 2 hour 'depop' safety timer is set at waypoint 106 in case nobody turns in the shard. thelin >= 2 lets you click door 59 in ponightmare to Terris Thule's lair (nightmareb, zone flag 221). #popflags stage 2: 'Defeat Terris Thule'.",
+      "source": ["ponightmare/encounters/Maze.lua:262-350", "ponightmare/encounters/Maze.lua:461-546", "ponightmare/player.lua:1-14"]
+    },
+    {
+      "id": "cl_maze-1",
+      "flag": "cl_maze", "value": "1",
+      "tier": 1,
+      "zone": "ponightmare",
+      "title": "Complete the maze with no Thelin flag (checklist)",
+      "requires": [
+        {"flag": "thelin", "value": "absent", "why": "inside Thelin gives cl_maze when not qglobals.thelin"}
+      ],
+      "actions": [
+        {"type": "zone", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "items": [], "detail": "Be ported into the maze by a flagged group/raid-group leader."},
+        {"type": "say", "npc": "Thelin_Poxbourne", "zone": "ponightmare", "say": "hail", "items": [], "detail": "Hail inside Thelin after the maze is complete (state 4)."}
+      ],
+      "npcs": [
+        {"name": "Thelin_Poxbourne", "zone": "ponightmare", "x": -4417, "y": 5604, "z": 3.7, "spawn": "static", "notes": "inside Thelin"}
+      ],
+      "credit": "Each hailing player in state 4.",
+      "message": "Thelin Poxbourne tells you, 'I do not recognize your face. Are you a vision sent by Terris?!  Begone from my thoughts and begone from my dreams!' then 'You have received a new checklist flag!'",
+      "debug": [
+        "Then say tortured by nightmares to Adroha Jezith (thelin=1) and unlock memories at the Seer.",
+        "#popflags shows 'Pending memory: Thelin's hedge maze'."
+      ],
+      "notes": "No 'not already held' check; re-hailing just re-sets cl_maze.",
+      "source": ["ponightmare/encounters/Maze.lua:485-491"]
+    },
+    {
+      "id": "seer-cl_maze",
+      "flag": "thelin", "value": "2",
+      "tier": 1,
+      "zone": "poknowledge",
+      "title": "Unlock the hedge maze memory at the Seer",
+      "requires": [
+        {"flag": "cl_maze", "value": "1", "why": "checklist flag held"},
+        {"flag": "thelin", "value": "1", "why": "checklistFlags entry: required thelin == '1'"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock memories", "items": [], "detail": "Sit and say unlock memories."}
+      ],
+      "npcs": [
+        {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""}
+      ],
+      "credit": "Only the speaker.",
+      "message": "Thelin speaks in your mind, 'It was an act of kindness to help me in the maze before you knew I was in need of help.  Please finish your task and free me from Terris' grasp.' then 'You have received a character flag!'",
+      "debug": [
+        "Locked text for cl_maze is empty, so without thelin=1 you see a blank line and nothing changes.",
+        "Must be sitting (IsSitting).",
+        "cl_maze is processed before cl_terris, and the in-memory flags are updated, so holding both with thelin=1 converts maze then Terris in one request (thelin 1 -> 2 -> 3)."
+      ],
+      "notes": "",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:54-59", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "thelin-3",
+      "flag": "thelin", "value": "3",
+      "tier": 1,
+      "zone": "nightmareb",
+      "title": "Kill Terris Thule and hail the planar projection",
+      "requires": [
+        {"flag": "thelin", "value": "2", "why": "projection sets 3 only when qglobals.thelin == '2'; door 59 into nightmareb needs thelin > 1"}
+      ],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "ponightmare", "items": [], "detail": "Click door 59 in ponightmare to enter the Lair of Terris Thule."},
+        {"type": "kill", "npc": "Terris_Thule", "zone": "nightmareb", "items": [], "detail": "Kill Terris Thule."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "nightmareb", "say": "hail", "items": [], "detail": "Hail the projection within 20 minutes."}
+      ],
+      "npcs": [
+        {"name": "Terris_Thule", "zone": "nightmareb", "x": -1803, "y": -13, "z": 148.7, "spawn": "static", "notes": "npc 221041, respawn 259200s"},
+        {"name": "A_Planar_Projection", "zone": "nightmareb", "x": -1803, "y": -13, "z": 148.7, "spawn": "event", "notes": "npc 221042, eq.spawn2 at Terris' death location; 20 minute life"}
+      ],
+      "credit": "Raid (by raid id) of the kill-rights player; else their group; else only them. From eq.signal(PLANAR_PROJECTION_TYPE, e.killer:GetID()).",
+      "message": "You recognize the voice in your mind to be Thelin Poxbourne's.  The words echo, 'The cruel hand of Terris no longer shall torment my dreams.  Thank you friends, you are my savior.  Please return to me in the Plane of Tranquility.  I would like to express to you my gratitude.' then 'You have received a character flag!'",
+      "debug": [
+        "Door 59 without thelin >= 2: 'You lack the will to pass through this portal safely.'",
+        "No reply: not in the credited raid/group, or the counter reached 72 (flags < 72).",
+        "thelin 3 or 4 hailing gets nothing; thelin absent or 1 gets cl_terris instead.",
+        "Getting thelin=3 deletes any cl_terris."
+      ],
+      "notes": "#popflags stage 3: 'Terris Thule was defeated'.",
+      "source": ["nightmareb/Terris_Thule.lua:24-28", "nightmareb/A_Planar_Projection.lua:1-83", "ponightmare/player.lua:1-14"]
+    },
+    {
+      "id": "cl_terris-1",
+      "flag": "cl_terris", "value": "1",
+      "tier": 1,
+      "zone": "nightmareb",
+      "title": "Terris kill before the maze flag (checklist)",
+      "requires": [
+        {"flag": "thelin", "value": "absent or 1", "why": "elseif not qglobals.thelin or qglobals.thelin == '1'"},
+        {"flag": "cl_terris", "value": "absent", "why": "not qglobals.cl_terris"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "Terris_Thule", "zone": "nightmareb", "items": [], "detail": "Be on the credited raid/group for the Terris kill."},
+        {"type": "say", "npc": "A_Planar_Projection", "zone": "nightmareb", "say": "hail", "items": [], "detail": "Hail the projection."}
+      ],
+      "npcs": [
+        {"name": "A_Planar_Projection", "zone": "nightmareb", "x": -1803, "y": -13, "z": 148.7, "spawn": "event", "notes": ""}
+      ],
+      "credit": "Same raid/group/solo of the kill-rights player.",
+      "message": "You have received a new checklist flag! (no NPC text for this checklist flag)",
+      "debug": [
+        "#popflags shows 'Pending memory: Terris Thule'.",
+        "Convert at the Seer after you reach thelin=2."
+      ],
+      "notes": "Script comment: no text, probably because the zone could not be entered without the maze flag. Players need zone flag 221 (door 59 requires thelin > 1) to be here, so this mostly applies to players who already had the zone flag.",
+      "source": ["nightmareb/A_Planar_Projection.lua:73-80"]
+    },
+    {
+      "id": "seer-cl_terris",
+      "flag": "thelin", "value": "3",
+      "tier": 1,
+      "zone": "poknowledge",
+      "title": "Unlock the Terris Thule memory at the Seer",
+      "requires": [
+        {"flag": "cl_terris", "value": "1", "why": "checklist flag held"},
+        {"flag": "thelin", "value": "2", "why": "checklistFlags entry: required thelin == '2'"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock memories", "items": [], "detail": "Sit and say unlock memories."}
+      ],
+      "npcs": [
+        {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""}
+      ],
+      "credit": "Only the speaker.",
+      "message": "You black out for a moment, in your nightmare you see Terris-Thule, still alive.  There is a blur which seems like hours, finally you manage to strike Terris down with Thelin's dagger.  Terris' image flutters for a moment and you see Thelin's image, 'Finally, you have freed me from nightmare.  I thank you, my friend.' then 'You have received a character flag!'",
+      "debug": [
+        "Locked: 'Terris still haunts your nightmares whenever you attemt to recall your battle with her.' - you need thelin=2 (maze) first.",
+        "Must be sitting."
+      ],
+      "notes": "",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:72-77", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "thelin-4",
+      "flag": "thelin", "value": "4",
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Visit the recovering Thelin",
+      "requires": [
+        {"flag": "thelin", "value": "3", "why": "Elder_Poxbourne sets 4 only when thelinFlag == 3"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Elder_Poxbourne", "zone": "potranquility", "say": "hail", "items": [], "detail": "Hail Thelin (Elder_Poxbourne) in the elders' building."}
+      ],
+      "npcs": [
+        {"name": "Elder_Poxbourne", "zone": "potranquility", "x": -1426, "y": -251, "z": -906.1, "spawn": "static", "notes": "npc 203374"}
+      ],
+      "credit": "Only the hailing player.",
+      "message": "Thelin tells you, 'I apologize but I cannot stand to greet you. I am still quite weak and recovery will be a long and painful road, though it is a most welcome venture. I want you to know how much I appreciate your bravery in helping me. I am forever in your debt.' then 'You receive a character flag!'",
+      "debug": [
+        "thelin < 3: 'Adroha gives a soft sigh of woe ... deep [coma] ...' and 'Thelin tosses and turns violently on the floor, then is still.'",
+        "Note the success line here is 'You receive a character flag!' (not 'You have received')."
+      ],
+      "notes": "thelin=4 with fuirstel=5 opens the Torment portal (door 93) and Fahlia's Tylis dialogue. #popflags stage 4: 'Thelin was released from Terris Thule'.",
+      "source": ["potranquility/Elder_Poxbourne.lua:1-17", "potranquility/player.lua:44-57"]
+    },
+    {
+      "id": "zeks-1",
+      "flag": "zeks", "value": "1",
+      "tier": 1,
+      "zone": "poinnovation",
+      "title": "Agree to test the machine for Giwin Mirakon",
+      "requires": [
+        {"flag": "zeks", "value": "absent", "why": "any zeks value makes Giwin only say 'Well go on then...'"}
+      ],
+      "actions": [
+        {"type": "say", "npc": "Giwin_Mirakon", "zone": "poinnovation", "say": "hail", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Giwin_Mirakon", "zone": "poinnovation", "say": "great warrior", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Giwin_Mirakon", "zone": "poinnovation", "say": "task", "items": [], "detail": "Optional."},
+        {"type": "say", "npc": "Giwin_Mirakon", "zone": "poinnovation", "say": "test the machine", "items": [], "detail": "Grants the flag."}
+      ],
+      "npcs": [
+        {"name": "Giwin_Mirakon", "zone": "poinnovation", "x": 49, "y": -52, "z": 1.3, "spawn": "static", "notes": "preflag Giwin, npc 206038 (a different Giwin, 214014, stands in potactics)"}
+      ],
+      "credit": "Only the speaker.",
+      "message": "Giwin Mirakon tells you, 'Haha!  I knew I sensed the warring spirit within you. ... I shall come to check on you and take a full report when you have destroyed it.  Long live Rallos!' then 'You have received a character flag!'",
+      "debug": [
+        "Any zeks value: every message gets 'Well go on then, what are you cowering around for, let us see what kind of warrior you are!'"
+      ],
+      "notes": "Can be done before or after the Behemoth kill; if after, convert cl_behemoth at the Seer.",
+      "source": ["poinnovation/Giwin_Mirakon.lua:1-23"]
+    },
+    {
+      "id": "poi_door-1",
+      "flag": "poi_door", "value": "1",
+      "tier": 1,
+      "zone": "poinnovation",
+      "title": "Power Nitram's machine, kill Xanamech, hail Nitram",
+      "requires": [],
+      "actions": [
+        {"type": "say", "npc": "Nitram_Anizok", "zone": "poinnovation", "say": "collecting materials", "items": [], "detail": "Optional dialogue (hail, advanced tinkering, construction, instinct for survival, combination of batteries, collecting materials) lists the parts."},
+        {"type": "loot", "npc": null, "zone": "poinnovation", "items": [{"id": 9295, "name": "Copper Node"}, {"id": 9426, "name": "Bundle of Super Conductive Wires"}, {"id": 9434, "name": "Intact Power Cell"}], "detail": "Loot the three parts from poinnovation clockworks (2% each in the DB loot tables)."},
+        {"type": "give", "npc": "Nitram_Anizok", "zone": "poinnovation", "items": [{"id": 9295, "name": "Copper Node"}, {"id": 9426, "name": "Bundle of Super Conductive Wires"}, {"id": 9434, "name": "Intact Power Cell"}], "detail": "Hand all three in one trade; Nitram walks off."},
+        {"type": "kill", "npc": "#Xanamech_Nezmirthafen", "zone": "poinnovation", "items": [], "detail": "Follow him; Xanamech spawns at his waypoint 20 and wakes at waypoint 27. Kill it."},
+        {"type": "say", "npc": "Nitram_Anizok", "zone": "poinnovation", "say": "hail", "items": [], "detail": "Each credited player hails Nitram within 10 minutes of the kill."}
+      ],
+      "npcs": [
+        {"name": "Nitram_Anizok", "zone": "poinnovation", "x": 974, "y": 1532, "z": -35.1, "spawn": "static", "notes": "npc 206033, spawn2 345275"},
+        {"name": "#Xanamech_Nezmirthafen", "zone": "poinnovation", "x": -711, "y": 1583, "z": -45, "spawn": "event", "notes": "npc 206208, eq.spawn2 at Nitram waypoint 20; depops after 30 min out of combat"}
+      ],
+      "credit": "Raid (by raid id) of the Xanamech kill-rights player; else their group; else only them (Nitram event_signal from Xanamech death_complete).",
+      "message": "Nitram Anizok tells you, 'Whew that was a close one! ... If you go up to the main factory door and twist the very bottom rivet of the icon three times to the right, it will open. ...' then 'You have received a character flag!'",
+      "debug": [
+        "Trade must contain exactly the three parts (check_turn_in) and Nitram must not already be walking; otherwise items are returned.",
+        "If Xanamech is not up when Nitram reaches waypoint 27, Nitram depops.",
+        "After the kill Nitram answers only 'hail' and only to the credited raid/group; others get no reply.",
+        "Nitram depops 10 minutes after Xanamech dies (depop timer 600000); respawn timer is set to 1 on spawn.",
+        "Already-flagged players get the text but no flag line; counter limit 72 (flags < 72).",
+        "With poi_door, clicking door 7 force-opens the factory door (poinnovation/player.lua)."
+      ],
+      "notes": "Nitram walking timeout: depops 1 hour after the hand-in if the event stalls.",
+      "source": ["poinnovation/Nitram_Anizok.lua:1-136", "poinnovation/#Xanamech_Nezmirthafen.lua:1-41", "poinnovation/player.lua:8-15"]
+    },
+    {
+      "id": "zeks-2",
+      "flag": "zeks", "value": "2",
+      "tier": 1,
+      "zone": "poinnovation",
+      "title": "Kill the Manaetic Behemoth and report to Giwin",
+      "requires": [
+        {"flag": "zeks", "value": "1", "why": "#Giwin sets 2 only when qglobals.zeks == '1'"},
+        {"flag": "poi_door", "value": "1", "why": "Behemoth is inside the factory; door 7 opens only with poi_door (inferred from location)"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "a clockwork device", "zone": "poinnovation", "items": [], "detail": "Kill 10 clockwork devices (npc 206001) that spawn every 48 s from six points and walk to the Behemoth; this wakes the Behemoth."},
+        {"type": "kill", "npc": "Manaetic_Behemoth", "zone": "poinnovation", "items": [], "detail": "Kill the Manaetic Behemoth inside its room."},
+        {"type": "say", "npc": "#Giwin_Mirakon", "zone": "poinnovation", "say": "hail", "items": [], "detail": "Hail the Giwin that appears within 10 minutes."}
+      ],
+      "npcs": [
+        {"name": "Manaetic_Behemoth", "zone": "poinnovation", "x": 1125, "y": 0, "z": 12.5, "spawn": "static", "notes": "npc 206046, spawn2 345273, respawn 259200s"},
+        {"name": "#Giwin_Mirakon", "zone": "poinnovation", "x": 1013, "y": 0, "z": 2.1, "spawn": "event", "notes": "npc 206203, spawned on Behemoth death; depops after 10 minutes"},
+        {"name": "Weapon_Event_Master", "zone": "poinnovation", "x": 1254, "y": -96, "z": 26.4, "spawn": "static", "notes": "npc 206197, wave controller"}
+      ],
+      "credit": "Raid (by raid id) of the Behemoth kill-rights player; else their group; else only them.",
+      "message": "Giwin Mirakon gives you a look of disbelief and then concern.  'You destroyed the machine?!  You should come with me to the Plane of Tactics. ...  I anticipate our next meeting on the Battlefields of Zek!' then 'You have received a character flag!'",
+      "debug": [
+        "Devices that reach the Behemoth explode and depop; only killed devices count toward the 10.",
+        "The Behemoth is leashed: outside x 1033-1215 / y -120..120 it returns to spawn, heals and wipes hate.",
+        "If not killed within 3 hours of waking (timer pauses in combat) it depops and retries in 10 minutes.",
+        "No zeks: you get 'Hey what are you doing! ...' and cl_behemoth instead.",
+        "zeks 2+ sees the text but no flag line; counter limit 72 (flags <= 72).",
+        "Getting zeks=2 deletes cl_behemoth."
+      ],
+      "notes": "zeks >= 2 opens the Plane of Tactics portal in potranquility (door 24). Later zeks values come from potactics (tier 2/3). #popflags only shows 'Giwin and Manaetic Behemoth progression: Progress recorded' for any zeks value.",
+      "source": ["poinnovation/encounters/Behemoth.lua:75-239", "poinnovation/#Giwin_Mirakon.lua:1-85", "potranquility/player.lua:91-105"]
+    },
+    {
+      "id": "cl_behemoth-1",
+      "flag": "cl_behemoth", "value": "1",
+      "tier": 1,
+      "zone": "poinnovation",
+      "title": "Behemoth kill without Giwin's request (checklist)",
+      "requires": [
+        {"flag": "zeks", "value": "absent", "why": "if not qglobals.zeks"},
+        {"flag": "cl_behemoth", "value": "absent", "why": "not qglobals.cl_behemoth"}
+      ],
+      "actions": [
+        {"type": "kill", "npc": "Manaetic_Behemoth", "zone": "poinnovation", "items": [], "detail": "Be on the credited raid/group."},
+        {"type": "say", "npc": "#Giwin_Mirakon", "zone": "poinnovation", "say": "hail", "items": [], "detail": "Hail the event Giwin."}
+      ],
+      "npcs": [
+        {"name": "#Giwin_Mirakon", "zone": "poinnovation", "x": 1013, "y": 0, "z": 2.1, "spawn": "event", "notes": ""}
+      ],
+      "credit": "Same raid/group/solo of the kill-rights player.",
+      "message": "Giwin Mirakon tells you, 'Hey what are you doing!  Look at this mess that you have caused.  Rallos is not going to be happy about this.' then 'You have received a new checklist flag!'",
+      "debug": [
+        "Counter limit: flags < 72.",
+        "Next: say test the machine to the preflag Giwin (zeks=1), then unlock memories at the Seer."
+      ],
+      "notes": "",
+      "source": ["poinnovation/#Giwin_Mirakon.lua:61-69"]
+    },
+    {
+      "id": "seer-cl_behemoth",
+      "flag": "zeks", "value": "2",
+      "tier": 1,
+      "zone": "poknowledge",
+      "title": "Unlock the Behemoth memory at the Seer",
+      "requires": [
+        {"flag": "cl_behemoth", "value": "1", "why": "checklist flag held"},
+        {"flag": "zeks", "value": "1", "why": "checklistFlags entry: required zeks == '1'"}
+      ],
+      "actions": [
+        {"type": "seer", "npc": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "say": "unlock memories", "items": [], "detail": "Sit and say unlock memories."}
+      ],
+      "npcs": [
+        {"name": "Seer_Mal_Nae`Shi", "zone": "poknowledge", "x": -224, "y": -42, "z": -156.2, "spawn": "static", "notes": ""}
+      ],
+      "credit": "Only the speaker.",
+      "message": "Giwin Mirakon's image appears in your mind, 'Sorry for the misunderstanding, I forgot that I asked you to test the machine for me.  The Zeks will be proud of your warrior spirit, meet me in the Plane of Tactics. then 'You have received a character flag!'",
+      "debug": [
+        "Locked text for cl_behemoth is empty: without zeks=1 you see a blank line.",
+        "Must be sitting."
+      ],
+      "notes": "",
+      "source": ["poknowledge/Seer_Mal_Nae-Shi.lua:60-65", "poknowledge/Seer_Mal_Nae-Shi.lua:332-371"]
+    },
+    {
+      "id": "tier1-portals",
+      "flag": null, "value": null,
+      "tier": 1,
+      "zone": "potranquility",
+      "title": "Tier 2 portals opened by tier 1 flags",
+      "requires": [],
+      "actions": [
+        {"type": "click", "npc": null, "zone": "potranquility", "items": [], "detail": "Valor/Storms doors 16 and 21 need mavuin=3; Torment door 93 needs fuirstel=5 and thelin=4; Tactics door 24 needs zeks >= 2."}
+      ],
+      "npcs": [],
+      "credit": "Per player clicking the door.",
+      "message": "Failure: 'You lack the will to pass through this portal safely.'",
+      "debug": [
+        "#popflags tier 1 is complete when mavuin >= 3, fuirstel >= 5, thelin >= 4, poi_door set and zeks >= 2 (or time is set)."
+      ],
+      "notes": "Alternate keyring access exists only when the data bucket pop_alt_access_enabled is '1'.",
+      "source": ["potranquility/player.lua:7-105", "EQMacEmu/zone/gm_commands/popflags.cpp:218-228"]
+    }
+  ]
+}

@@ -10,7 +10,9 @@
 //! Caddy keeps the whole site behind the Discord login; this server trusts
 //! nothing about the viewer except what the page asks Perses for itself.
 
+pub mod flags;
 pub mod pages;
+pub mod popflags;
 pub mod spells;
 pub mod upload;
 

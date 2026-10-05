@@ -57,6 +57,7 @@ pub fn serve(
     assets_dir: Option<std::path::PathBuf>,
     upload: Option<crate::web::upload::UploadCtx>,
     spells: Option<std::sync::Arc<crate::web::spells::SpellsCtx>>,
+    flags: Option<std::sync::Arc<crate::web::flags::FlagsCtx>>,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind)?;
     tracing::info!(
@@ -120,6 +121,28 @@ pub fn serve(
                             head.content_length,
                         );
                         crate::web::spells::handle(ctx, &head, &body)
+                    };
+                    write_response(&mut stream, r);
+                    continue;
+                }
+                // PoP flag progression (2026-10-05): the page needs the viewer
+                // (their saved characters), so it is served here, not by respond().
+                let bare = path.split('?').next().unwrap_or("");
+                if let (Some(ctx), true) = (&flags, bare == "/flags" || bare.starts_with("/flags/")) {
+                    let r = if head.content_length > crate::web::flags::MAX_BODY {
+                        crate::web::Response {
+                            status: "413 Content Too Large",
+                            content_type: "application/json; charset=utf-8",
+                            body: br#"{"ok":false,"message":"That paste is too large."}"#.to_vec(),
+                            headers: vec!["cache-control: no-store".into()],
+                        }
+                    } else {
+                        let body = crate::web::upload::read_body(
+                            &mut stream,
+                            &buf[body_at.min(buf.len())..],
+                            head.content_length,
+                        );
+                        crate::web::flags::handle(ctx, &head, &body)
                     };
                     write_response(&mut stream, r);
                     continue;

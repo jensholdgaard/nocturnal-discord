@@ -258,6 +258,15 @@ fn main() -> anyhow::Result<()> {
             ))),
             _ => None,
         };
+        // PoP flag progression (2026-10-05): pasted #popflags output per
+        // member, stored beside the ledger.
+        let flags = (!offline).then(|| {
+            std::sync::Arc::new(web::flags::FlagsCtx::new(
+                rt.handle().clone(),
+                site_handle.clone(),
+                &cfg.data.dir,
+            ))
+        });
         health::serve(
             bind,
             readiness.clone(),
@@ -265,6 +274,7 @@ fn main() -> anyhow::Result<()> {
             cfg.roster.assets_dir.clone(),
             upload,
             spells,
+            flags,
         )?;
     }
 
