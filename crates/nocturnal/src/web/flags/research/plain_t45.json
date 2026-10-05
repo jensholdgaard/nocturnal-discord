@@ -1,0 +1,499 @@
+{
+ "steps": {
+  "pofire-access": {
+   "title": "Jump into the Lava Well to enter the Plane of Fire",
+   "why": "Your first trip into the Plane of Fire must go through the Lava Well of Ro. That trip gives you permission to enter the Plane of Fire.",
+   "actions": [
+    {
+     "text": "Go into the Tower of Solusek Ro and jump into the Lava Well of Ro.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Your first trip through the well gives you permission to enter the Plane of Fire.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "After that, the Plane of Fire portal in the Plane of Tranquility also works for you.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Plane of Fire portal",
+     "where": "The portal to the Plane of Fire in the Plane of Tranquility."
+    }
+   ],
+   "works_when": "You arrive in the Plane of Fire. There is no flag message.",
+   "credit": "Only the person who jumps into the well.",
+   "needs": [
+    "You hailed the planar projection in the Tower of Solusek Ro and learned the true path into the Plane of Fire."
+   ],
+   "if_it_failed": [
+    "Make your first trip through the Lava Well inside the Tower. The Tranquility portal cannot give you permission on its own.",
+    "If the portal says \"You lack the will to pass through this portal safely.\", you have not gone through the Lava Well yet.",
+    "If zoning says \"You do not have the flag to enter pofire.\", you lack permission for the Plane of Fire.",
+    "Check that you finished the planar projection step in the Tower of Solusek Ro first.",
+    "You must be level 46 or higher to enter the Plane of Fire."
+   ],
+   "tips": "Miak the Searedsoul tells you to simply touch the portal. That only works after your first trip through the Lava Well. On servers with raid access turned on, you may get in without permission if at least 85% of your raid already has it."
+  },
+  "elemental-access": {
+   "title": "Open the Air, Water and Earth portals",
+   "why": "This gives you permission to enter the Planes of Air, Water and Earth. You need essences from these planes to reach the Plane of Time.",
+   "actions": [
+    {
+     "text": "In the Plane of Tranquility, click the Air, Earth or Water portal.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Your first click gives you permission for all three planes at once.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Plane of Air portal",
+     "where": "In the Plane of Tranquility. It leads to the Plane of Air."
+    },
+    {
+     "name": "Plane of Earth portal",
+     "where": "In the Plane of Tranquility. It leads to the Plane of Earth."
+    },
+    {
+     "name": "Plane of Water portal",
+     "where": "In the Plane of Tranquility. It leads to the Plane of Water."
+    }
+   ],
+   "works_when": "You are teleported into the plane. There is no flag message.",
+   "credit": "Only the person who clicks the portal.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine."
+   ],
+   "if_it_failed": [
+    "If you see \"You lack the will to pass through this portal safely.\", Maelin has not told you about the essences yet.",
+    "These portals do not open the deeper part of the Plane of Earth. That needs the key from the Mystical Arbitor."
+   ],
+   "tips": "Sarhya the Dawnbreeze in Tranquility only talks about the Plane of Air once you have heard Maelin's plan. On servers with raid access turned on, you may get in without permission if at least 85% of your raid already has it."
+  },
+  "poair-xegony-key": {
+   "title": "Make the Wind Etched Key for Xegony",
+   "why": "Xegony, Queen of Air, waits beyond a rainbow in the Plane of Air. The Wind Etched Key lets you and your raid cross it.",
+   "actions": [
+    {
+     "text": "Say \"plane of air\" to Sarhya the Dawnbreeze in the Plane of Tranquility. She gives you a Pouch of Swirling Winds.",
+     "say": "plane of air",
+     "items": [
+      17888
+     ]
+    },
+    {
+     "text": "Collect the four Mystical Essences from the Air avatars in the Plane of Air.",
+     "say": null,
+     "items": [
+      28639,
+      28640,
+      28641,
+      28642
+     ]
+    },
+    {
+     "text": "Combine the four essences in the pouch to make A Wind Etched Key.",
+     "say": null,
+     "items": [
+      28638
+     ]
+    },
+    {
+     "text": "Put the key on your cursor and click the rainbow in the Plane of Air. The key goes to your keyring and you move across.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Sarhya the Dawnbreeze",
+     "where": "In the Plane of Tranquility."
+    },
+    {
+     "name": "The rainbow",
+     "where": "In the Plane of Air. It leads to Xegony."
+    }
+   ],
+   "works_when": "The key is added to your keyring and you are moved across the rainbow. There is no flag message.",
+   "credit": "The key holder. After a key holder clicks, their raid can click through for 5 minutes without a key. Without a raid, this applies to their group.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "Sarhya only hands out the pouch once Maelin has told you this."
+   ],
+   "if_it_failed": [
+    "Hold the key on your cursor when you click. A key in a bag does not work unless it is already on your keyring.",
+    "Players without a key must click within 5 minutes after a key holder in their raid or group.",
+    "A solo player without a key cannot use the rainbow.",
+    "Sarhya gives no pouch if you already have one anywhere, including your bank."
+   ],
+   "tips": "This guide does not list which Air avatar drops which essence."
+  },
+  "essence-pofire": {
+   "title": "Get the Globe of Dancing Flame from the Essence of Fire",
+   "why": "The Globe of Dancing Flame is one of the four essences you combine to power the time machine. That machine opens the Plane of Time.",
+   "actions": [
+    {
+     "text": "Kill Fennin Ro, the Tyrant of Fire, in the Plane of Fire. He appears during the Doomfire event.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Essence of Fire that appears where Fennin Ro died.",
+     "say": "hail",
+     "items": [
+      29147
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence of Fire",
+     "where": "Appears where Fennin Ro died. It leaves after 20 minutes or after 72 people get the item."
+    }
+   ],
+   "works_when": "The Globe of Dancing Flame appears on your cursor. There is no flag message.",
+   "credit": "Everyone in the killer's raid who hails the Essence. Without a raid, the killer's group. Otherwise only the killer.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You can enter the Plane of Fire, which needs your first trip through the Lava Well."
+   ],
+   "if_it_failed": [
+    "Be in the same raid or group as the player who got credit for the kill.",
+    "You get nothing if you already have the Globe of Dancing Flame or the Quintessence of Elements anywhere, including your bank.",
+    "The Essence of Fire leaves after 20 minutes or after 72 people get the item. Hail it right away."
+   ],
+   "tips": "This is an item, not a flag. You need it for the time machine step."
+  },
+  "essence-powater": {
+   "title": "Get the Sphere of Coalesced Water from the Essence of Water",
+   "why": "The Sphere of Coalesced Water is one of the four essences you combine to power the time machine. That machine opens the Plane of Time.",
+   "actions": [
+    {
+     "text": "In the Plane of Water, fight through the guardian, adds and mini-boss phases. Then kill Coirnav the Avatar of Water.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Essence of Water that appears where Coirnav died.",
+     "say": "hail",
+     "items": [
+      29163
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence of Water",
+     "where": "Appears where Coirnav died. It leaves after 20 minutes or after 72 people get the item."
+    }
+   ],
+   "works_when": "The Sphere of Coalesced Water appears on your cursor. There is no flag message.",
+   "credit": "Everyone in the killer's raid who hails the Essence. Without a raid, the killer's group. Otherwise only the killer.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You can enter the Plane of Water through the Plane of Tranquility portal."
+   ],
+   "if_it_failed": [
+    "Be in the same raid or group as the player who got credit for the kill.",
+    "You get nothing if you already have the Sphere of Coalesced Water or the Quintessence of Elements anywhere, including your bank.",
+    "The Essence of Water leaves after 20 minutes or after 72 people get the item. Hail it right away."
+   ],
+   "tips": "This is an item, not a flag. You need it for the time machine step."
+  },
+  "essence-poearthb": {
+   "title": "Get the Mound of Living Stone from the Essence of Earth",
+   "why": "The Mound of Living Stone is one of the four essences you combine to power the time machine. That machine opens the Plane of Time.",
+   "actions": [
+    {
+     "text": "In the deeper Plane of Earth, kill all twelve Rathe Councilmen. This only works in a guild instance.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "The Avatar of Earth then appears. Kill it.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Essence of Earth that appears where the Avatar of Earth died.",
+     "say": "hail",
+     "items": [
+      29146
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence of Earth",
+     "where": "Appears where the Avatar of Earth died. It leaves after 20 minutes or after 72 people get the item."
+    }
+   ],
+   "works_when": "The Mound of Living Stone appears on your cursor. There is no flag message.",
+   "credit": "Everyone in the killer's raid who hails the Essence. Without a raid, the killer's group. Otherwise only the killer.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You can enter the deeper Plane of Earth, which needs the key from the Mystical Arbitor."
+   ],
+   "if_it_failed": [
+    "Be in the same raid or group as the player who got credit for the kill.",
+    "You get nothing if you already have the Mound of Living Stone or the Quintessence of Elements anywhere, including your bank.",
+    "The Essence of Earth leaves after 20 minutes or after 72 people get the item. Hail it right away."
+   ],
+   "tips": "This is an item, not a flag. You need it for the time machine step."
+  },
+  "essence-poair": {
+   "title": "Get the Amorphous Cloud of Air from the Essence of Air",
+   "why": "The Amorphous Cloud of Air is one of the four essences you combine to power the time machine. That machine opens the Plane of Time.",
+   "actions": [
+    {
+     "text": "Cross the rainbow in the Plane of Air and kill Xegony the Queen of Air.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Essence of Air that appears where Xegony died.",
+     "say": "hail",
+     "items": [
+      29164
+     ]
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Essence of Air",
+     "where": "Appears where Xegony died. It leaves after 20 minutes or after 72 people get the item."
+    }
+   ],
+   "works_when": "The Amorphous Cloud of Air appears on your cursor. There is no flag message.",
+   "credit": "Everyone in the killer's raid who hails the Essence. Without a raid, the killer's group. Otherwise only the killer.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You can enter the Plane of Air through the Plane of Tranquility portal."
+   ],
+   "if_it_failed": [
+    "Be in the same raid or group as the player who got credit for the kill.",
+    "You get nothing if you already have the Amorphous Cloud of Air or the Quintessence of Elements anywhere, including your bank.",
+    "The Essence of Air leaves after 20 minutes or after 72 people get the item. Hail it right away."
+   ],
+   "tips": "This is an item, not a flag. You need it for the time machine step."
+  },
+  "quintessence": {
+   "title": "Combine the four essences into the Quintessence",
+   "why": "The Quintessence of Elements powers Meldrath's time machine. It is your ticket into the Plane of Time.",
+   "actions": [
+    {
+     "text": "Put the Mound of Living Stone, Globe of Dancing Flame, Sphere of Coalesced Water and Amorphous Cloud of Air in an Odylic Vial. Click combine to make the Quintessence of Elements.",
+     "say": null,
+     "items": [
+      29146,
+      29147,
+      29163,
+      29164,
+      17186,
+      29165
+     ]
+    }
+   ],
+   "npcs": [],
+   "works_when": "The Quintessence of Elements is created. This combine never fails and needs no skill.",
+   "credit": "Only the person who combines.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine."
+   ],
+   "if_it_failed": [
+    "Check that all four essences are inside the vial.",
+    "The essences cannot be traded. One person must collect all four."
+   ],
+   "tips": "The Odylic Vial is a four-slot container made with pottery. You need two High Quality Firing Sheets, an Unfired Medium Container and a Multielement Glaze. This guide could not confirm where you fire it. The essences and the Quintessence are no-trade, but they stay when you log out."
+  },
+  "time-1": {
+   "title": "Activate Meldrath's time machine",
+   "why": "The time machine in the Plane of Innovation gives you your Plane of Time flag. It also gives you permission to enter both parts of the Plane of Time.",
+   "actions": [
+    {
+     "text": "Optional: hail Grand Librarian Maelin in the Plane of Knowledge. He points you to Chronographer Muon. He does not give the flag.",
+     "say": "hail",
+     "items": []
+    },
+    {
+     "text": "Hail Chronographer Muon in the Plane of Innovation. Carry the Quintessence in your bags.",
+     "say": "hail",
+     "items": []
+    },
+    {
+     "text": "Say \"yes\" to Muon. He moves you to the time-projection chamber, and Loreseeker Maelin appears there.",
+     "say": "yes",
+     "items": []
+    },
+    {
+     "text": "Click the time machine. You get the flag and land in the Plane of Time.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Chronographer Muon",
+     "where": "In the Plane of Innovation."
+    },
+    {
+     "name": "Loreseeker Maelin",
+     "where": "Appears in the time-projection chamber when Muon sends you there. He only chats and leaves after 15 minutes."
+    },
+    {
+     "name": "The time machine",
+     "where": "In the time-projection chamber in the Plane of Innovation."
+    },
+    {
+     "name": "Grand Librarian Maelin",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "\"You have received a character flag!\" then \"The ages begin to tear through your body. You wake to find yourself in another time.\"",
+   "credit": "Only the person who clicks the machine. That person also gets permission to enter both parts of the Plane of Time.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You hold the Quintessence of Elements. Muon only notices it in your main inventory or bags, not your bank."
+   ],
+   "if_it_failed": [
+    "If Muon says \"Greeting acknowledged.  I have no use for you at this time.  Good bye.\", move the Quintessence from your bank to your bags.",
+    "That same reply also means Maelin has not told you about the essences yet.",
+    "The machine does nothing at all without Maelin's plan and the Quintessence."
+   ],
+   "tips": "The Quintessence is not used up. Seer Mal Nae`Shi's guided meditation confirms it: \"Your soul has formed a bond with the Plane of Time.\" Some in-game hints say to return to Maelin, but the flag comes from the machine."
+  },
+  "earthb_key-1": {
+   "title": "Hail the projection after the Mystical Arbitor",
+   "why": "This gives you the key to the deeper Plane of Earth. There you fight the Rathe Council and the Avatar of Earth.",
+   "actions": [
+    {
+     "text": "In the Plane of Earth, complete the four ring events: Stone, Mud, Vine and Dust. All four must be done within 24 hours of each other.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill A Mystical Arbitor of Earth when it appears. It drops its hate and switches targets at random about every 20 seconds.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Planar Projection that appears where the Arbitor died.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Ring event controller",
+     "where": "Tracks the four ring events in the Plane of Earth."
+    },
+    {
+     "name": "A Mystical Arbitor of Earth",
+     "where": "Appears after all four rings are done. It leaves after 50 minutes."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears where the Arbitor died. It stays 20 minutes. Its timer pauses during combat. It gives at most 54 keys."
+    }
+   ],
+   "works_when": "\"Your will must be strong <name>. Seek council with the council of twelve if you so wish.\" then \"You have received a character flag!\"",
+   "credit": "Everyone in the killer's raid who hails the projection. Without a raid, the killer's group. Otherwise only the killer.",
+   "needs": [
+    "Grand Librarian Maelin has told you to gather the four elemental essences to power Meldrath's time machine.",
+    "You do not already have the key to the deeper Plane of Earth."
+   ],
+   "if_it_failed": [
+    "Be in the same raid or group as the player who got credit for the Arbitor kill.",
+    "If the Arbitor never appeared, a ring was older than 24 hours when the last one finished. Redo the old ring.",
+    "The projection says nothing if you already have the key.",
+    "The projection stops after 54 keys or 20 minutes. Hail it right away."
+   ],
+   "tips": null
+  },
+  "poearthb-access": {
+   "title": "Enter the deeper Plane of Earth",
+   "why": "The Arbitor's key lets you through the doors to the deeper Plane of Earth. Its first use gives you permission to enter that zone.",
+   "actions": [
+    {
+     "text": "In the Plane of Earth, click one of the three doors to the deeper Plane of Earth. Two of them are near the Arbitor's area.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Door to the deeper Plane of Earth",
+     "where": "Near the Mystical Arbitor's area in the Plane of Earth."
+    },
+    {
+     "name": "Door to the deeper Plane of Earth",
+     "where": "Next to the other door near the Mystical Arbitor's area."
+    },
+    {
+     "name": "Door to the deeper Plane of Earth",
+     "where": "Elsewhere in the Plane of Earth."
+    }
+   ],
+   "works_when": "You are moved into the deeper Plane of Earth. There is no message.",
+   "credit": "Only the person who clicks the door.",
+   "needs": [
+    "You earned the key from the planar projection after the Mystical Arbitor."
+   ],
+   "if_it_failed": [
+    "Without the key, the door silently does nothing.",
+    "The raid access rule does not apply here. Every player needs their own key.",
+    "You must be level 46 or higher.",
+    "Seer Mal Nae`Shi's meditation does not mention this key, so it cannot confirm it for you."
+   ],
+   "tips": null
+  },
+  "potime-access": {
+   "title": "Enter the Plane of Time from Tranquility",
+   "why": "Once the time machine has flagged you, the portal in the Plane of Tranquility takes you to the Plane of Time. The dials there lead to the second part.",
+   "actions": [
+    {
+     "text": "Click the Plane of Time portal in the Plane of Tranquility.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "In the Plane of Time, click one of the five dials to enter the second part of the plane.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Plane of Time portal",
+     "where": "In the Plane of Tranquility. It leads to the Plane of Time."
+    }
+   ],
+   "works_when": "\"The ages begin to tear through your body. You wake to find yourself in another time.\"",
+   "credit": "Only the person who clicks.",
+   "needs": [
+    "You activated Meldrath's time machine in the Plane of Innovation.",
+    "Permission to enter the Plane of Time only comes from that time machine."
+   ],
+   "if_it_failed": [
+    "You must be level 64 to enter. Below level 65 the portal may say \"You lack the will to pass through this portal safely.\" even when it still lets you through.",
+    "The dials need level 65. Otherwise you see \"You lack the will to pass through this portal safely.\"",
+    "The dials need a raid of at least 7 players. Otherwise you see \"You don't have sufficient power to affect things in the Plane of Time.\"",
+    "In a guild instance outside your guild's raid window you see \"The flow of time is too stable for this portal to open.\"",
+    "\"Your fate is bound to another guild's thread of time.\" means you are saved to another guild's timeline.",
+    "\"Your fate is already bound to another thread of time.\" means you are saved to another instance that has not expired.",
+    "\"The energy has been drained from this portal.\" means the trial is full. Each dial takes 18 players, 90 in total."
+   ],
+   "tips": "On servers with raid access turned on, you may get in without permission if at least 85% of your raid already has it."
+  }
+ }
+}

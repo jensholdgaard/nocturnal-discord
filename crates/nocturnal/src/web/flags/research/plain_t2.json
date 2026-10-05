@@ -1,0 +1,566 @@
+{
+ "steps": {
+  "access-valor-storms": {
+   "title": "Unlock the Valor and Storms portals",
+   "why": "These two portals in the Plane of Tranquility lead to the Plane of Valor and the Plane of Storms. Both open once you have finished Mavuin's case.",
+   "actions": [
+    {"text": "In the Plane of Tranquility, click the Plane of Valor portal or the Plane of Storms portal.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "There is no message. The portal simply takes you into the zone.",
+   "credit": "Only the person who clicks. Clicking either portal unlocks both Valor and Storms for you.",
+   "needs": [
+    "You have finished Mavuin's case from the Plane of Justice."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the will to pass through this portal safely.' you have not finished Mavuin's case yet.",
+    "Finish Mavuin's case, then click the portal again."
+   ],
+   "tips": null
+  },
+  "aerindar-1": {
+   "title": "Kill Aerin`Dar and hail the Planar Projection",
+   "why": "Killing the dragon Aerin`Dar in the Plane of Valor is the first half of earning entry to the Halls of Honor.",
+   "actions": [
+    {"text": "Kill Aerin`Dar in her lair in the Plane of Valor. Extra monsters wake as her health drops to 85, 65, 45 and 25 percent.", "say": null, "items": []},
+    {"text": "Hail the Planar Projection that appears at her lair after she dies.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Aerin`Dar", "where": "In her lair in the Plane of Valor. She returns three days after she dies. The dragon orb teleporter in the zone only works while she is alive."},
+    {"name": "A Planar Projection", "where": "Appears at Aerin`Dar's lair when she dies. It leaves after 20 minutes."}
+   ],
+   "works_when": "'The Planar Projection's thoughts enter your own. You have done well. You will now be able to enter the Halls of Honor.' This one does not show a 'character flag' line.",
+   "credit": "The raid of the player who got the kill. If there is no raid, that player's group, or just that player. Up to 72 people per projection.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Valor portal lets you in.",
+    "You have finished Mavuin's case, which taught you the meaning of Justice. The projection only answers if you have.",
+    "You have not already earned credit for Aerin`Dar."
+   ],
+   "if_it_failed": [
+    "Make sure you were in the raid or group of the player who got the kill.",
+    "Make sure you have finished Mavuin's case.",
+    "If you already have Aerin`Dar credit, the projection stays silent.",
+    "The projection stops answering after 72 people or after 20 minutes."
+   ],
+   "tips": "Since no flag message shows, check with #popflags 2. Look for 'Aerin`Dar defeated; the meaning of Justice remains'. There is no saved memory for this kill. If you somehow kill her without Mavuin's case done, you must kill her again."
+  },
+  "aerindar-2": {
+   "title": "Step through the Halls of Honor portal",
+   "why": "Clicking this portal records your Aerin`Dar victory and gives you permission to enter the Halls of Honor.",
+   "actions": [
+    {"text": "In the Plane of Valor, click the Halls of Honor teleporter.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "'You have received a character flag!' and the portal takes you into the Halls of Honor.",
+   "credit": "Only the person who clicks.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Valor portal lets you in.",
+    "You have hailed the Planar Projection after Aerin`Dar died."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the will to pass through this portal safely.' you have no Aerin`Dar credit. Kill her and hail the projection.",
+    "If you already got this step another way, such as from the Seer, the click may not give you permission to enter the Halls of Honor."
+   ],
+   "tips": "The same click also clears any saved Aerin`Dar memory."
+  },
+  "seer-cl_aerindar": {
+   "title": "Turn your saved Aerin`Dar memory into credit",
+   "why": "A safety net: if the game saved a memory of your Aerin`Dar kill, the Seer can turn it into real credit.",
+   "actions": [
+    {"text": "Go to Seer Mal Nae`Shi in the Plane of Knowledge. Sit down next to her and say a sentence with both 'unlock' and 'memories'.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge."}
+   ],
+   "works_when": "'You have learned the meaning of both Justice and Honor. You may now pass into the Halls of Honor.' Then 'You have received a character flag!'",
+   "credit": "Only the person who speaks.",
+   "needs": [
+    "You have a saved memory of killing Aerin`Dar.",
+    "You have finished Mavuin's case."
+   ],
+   "if_it_failed": [
+    "Make sure you are sitting down. Standing gives 'You will never be able to focus unless you are relaxed...'",
+    "If the Seer says 'You have defeated Aerin`Dar but have yet to learn the true meaning of Justice.' finish Mavuin's case first."
+   ],
+   "tips": "No quest actually saves an Aerin`Dar memory, so you should never need this. The Seer does not give permission to enter the Halls of Honor. The Valor portal may not either after this."
+  },
+  "askr-bag": {
+   "title": "Show Askr a storm giant head and get his Bag of Verity",
+   "why": "Askr the Lost in the Plane of Storms starts your road to the Bastion of Thunder. Proving you killed a storm giant earns his bag.",
+   "actions": [
+    {"text": "Kill storm giants in the Plane of Storms and loot a Storm Giant Head. Any of the three kinds works.", "say": null, "items": [28749, 28781, 28782]},
+    {"text": "Hand Askr the Lost one Storm Giant Head. He gives you back a useless head.", "say": null, "items": [28749]},
+    {"text": "Say 'it was me' to Askr. Saying 'yes' also works.", "say": "it was me", "items": []},
+    {"text": "Say 'paying attention' to Askr. Saying 'yes' also works.", "say": "paying attention", "items": []},
+    {"text": "Say 'continue' to Askr.", "say": "continue", "items": []},
+    {"text": "Say 'continue' again. Askr puts his Bag of Verity on your cursor.", "say": "continue", "items": []}
+   ],
+   "npcs": [
+    {"name": "Askr the Lost", "where": "In the Plane of Storms."}
+   ],
+   "works_when": "Askr says '... When you have acquired the three of these items, seal them in this bag and return them to me...' and the bag appears on your cursor.",
+   "credit": "Only the person who trades and talks with Askr.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Storms portal lets you in.",
+    "You have not yet handed Askr the Sealed Bag of Verity."
+   ],
+   "if_it_failed": [
+    "Do not leave the zone during the talk. Askr forgets you about 15 seconds after you leave, and you must hand in a head again.",
+    "If Askr says 'You did well defeating one giant...' you already have the bag.",
+    "If you already handed in the Sealed Bag of Verity, none of this talk happens."
+   ],
+   "tips": "Heads drop from the Srerendi, Krendic and Kelek`Vor giants. If you come back later, hailing Askr may skip ahead to the 'continue' part ('I was afraid you would not return...'). The head gives a tiny bit of experience."
+  },
+  "karana-1": {
+   "title": "Hand Askr the Sealed Bag of Verity",
+   "why": "Bringing Askr proof from all three giant tribes earns your first Plane of Storms flag.",
+   "actions": [
+    {"text": "Loot a beard from Srerendi giants, a bone from Krendic giants and a sash from Kelek`Vor giants.", "say": null, "items": [28750, 28751, 28764]},
+    {"text": "Put the three items in Askr's Bag of Verity and press Combine. This makes Askr's Sealed Bag of Verity.", "say": null, "items": [17192]},
+    {"text": "Hand the sealed bag to Askr the Lost.", "say": null, "items": [11487]}
+   ],
+   "npcs": [
+    {"name": "Askr the Lost", "where": "In the Plane of Storms."}
+   ],
+   "works_when": "Askr looks over the remnants and says 'Then it's true! ...' Then 'You have received a character flag!'",
+   "credit": "Only the person who hands in the bag.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Storms portal lets you in.",
+    "You have not already handed Askr the Sealed Bag of Verity."
+   ],
+   "if_it_failed": [
+    "If you already have this flag, Askr says nothing and gives no reward.",
+    "Wrong items are handed back to you. Check that you gave the sealed bag."
+   ],
+   "tips": "You also get some experience. Beards drop from a fannsk, an her megir, a hleytis maor and a hleyta menn. Bones drop from a jotna giants. Sashes drop from an irmin giants."
+  },
+  "askr-meld": {
+   "title": "Get a new bag from Askr and make the Esoteric Meld",
+   "why": "Askr can forge a medallion that lets you into the Bastion of Thunder. He needs two medallion pieces from different giant tribes.",
+   "actions": [
+    {"text": "Say 'bastion of thunder' to Askr the Lost. He gives you another Bag of Verity.", "say": "bastion of thunder", "items": []},
+    {"text": "Loot two Esoteric Medallions from two different tribes. They come from the tribe lords, their minibosses or their event giants.", "say": null, "items": [28765, 28780, 28783]},
+    {"text": "Put the two different medallions in the bag and press Combine. This makes the Esoteric Meld.", "say": null, "items": [17192]}
+   ],
+   "npcs": [
+    {"name": "Askr the Lost", "where": "In the Plane of Storms."},
+    {"name": "Jeplak, Lord of Srerendi", "where": "Lord of the Srerendi giants. Drops the Srerendi medallion."},
+    {"name": "Gurebk, Lord of Krendic", "where": "Lord of the Krendic giants. Drops the Krendic medallion."},
+    {"name": "Neffiken, Lord of Kelek`Vor", "where": "Lord of the Kelek`Vor giants. Drops the Kelek`Vor medallion."},
+    {"name": "Paruek the Strong", "where": "Srerendi miniboss. Carries Srerendi medallions."},
+    {"name": "Faruek the Bold", "where": "Srerendi miniboss. Carries Srerendi medallions."},
+    {"name": "Pendubk the Turbulent", "where": "Krendic miniboss. Carries Krendic medallions."},
+    {"name": "Solnebk the Unruly", "where": "Krendic miniboss. Carries Krendic medallions."},
+    {"name": "Laruken the Rigid", "where": "Kelek`Vor miniboss. Carries Kelek`Vor medallions."},
+    {"name": "Zertuken the Unyielding", "where": "Kelek`Vor miniboss. Carries Kelek`Vor medallions."}
+   ],
+   "works_when": "Askr says 'To be honest, I cannot say that it is entirely possible... If you can find and seal two pieces of the medallion in this bag, I will be able to forge them into the medallion...'",
+   "credit": "The person who talks to Askr gets the bag. Medallions are normal loot.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Storms portal lets you in.",
+    "You have handed Askr the Sealed Bag of Verity."
+   ],
+   "if_it_failed": [
+    "Askr only answers 'bastion of thunder' after the sealed bag and before the Meld.",
+    "Two medallions from the same tribe will not combine. You need two different tribes."
+   ],
+   "tips": "Each miniboss carries one to three medallions of its tribe (one to two in the guild instance). Tribe event giants have a 20 percent chance to carry one (2 percent in the guild instance)."
+  },
+  "karana-2": {
+   "title": "Hand Askr the Esoteric Meld",
+   "why": "Askr forges the medallion into your soul. This is what lets you into the Bastion of Thunder.",
+   "actions": [
+    {"text": "Hand the Esoteric Meld to Askr the Lost.", "say": null, "items": [11488]}
+   ],
+   "npcs": [
+    {"name": "Askr the Lost", "where": "In the Plane of Storms."}
+   ],
+   "works_when": "'The mystical medallion given to you by Askr settles around your neck and then disappears into nothingness...' Askr says 'You have retrieved the pieces! ...' Then 'You have received a character flag!'",
+   "credit": "Only the person who hands in the Meld.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Storms portal lets you in.",
+    "You have handed Askr the Sealed Bag of Verity."
+   ],
+   "if_it_failed": [
+    "If Askr 'merely glances at you with a questioning look' you are not at this stage. The Meld comes back on your cursor.",
+    "Hand in the Sealed Bag of Verity first if you have not."
+   ],
+   "tips": "You also get a good amount of experience. Afterwards, hailing Askr says 'You already have the way to the Bastion of Thunder...'."
+  },
+  "karana-3": {
+   "title": "Use the Storms shrine to enter Bastion of Thunder",
+   "why": "The shrine reads Askr's medallion in your soul and sends you to the Bastion of Thunder. This also unlocks it for good.",
+   "actions": [
+    {"text": "Go deep into Mount Grenidor in the Plane of Storms and click the shrine.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "'An aura of soft light gleams around you as the shrine reacts to your Talisman of Thunderous Foyer and sends you forth into the mighty Bastion of Thunder.' Then 'You have received a character flag!'",
+   "credit": "Only the person who clicks.",
+   "needs": [
+    "You have finished Mavuin's case, so the Plane of Storms portal lets you in.",
+    "You have handed Askr the Esoteric Meld.",
+    "You have finished Mavuin's case. The shrine checks this too."
+   ],
+   "if_it_failed": [
+    "If the shrine 'finds none' and says 'you may not pass forth unto this planar location' you are missing the Meld hand-in or Mavuin's case.",
+    "If you already did this step, the shrine just moves you with no new flag."
+   ],
+   "tips": "The same click gives you permission to enter the Bastion of Thunder. Afterwards the Bastion of Thunder portal in the Plane of Tranquility works for you too."
+  },
+  "access-codecay": {
+   "title": "Enter the Crypt of Decay from the Plane of Disease",
+   "why": "Walking into the Crypt of Decay once from the Plane of Disease gives you permission to enter it. You need this for the Bertoxxulous steps.",
+   "actions": [
+    {"text": "After your Grummus flag, take the zone line from the Plane of Disease into the Crypt of Decay once.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "There is no message. You simply arrive in the Crypt of Decay.",
+   "credit": "Only the person who zones in.",
+   "needs": [
+    "You have earned the Grummus flag in the Plane of Disease."
+   ],
+   "if_it_failed": [
+    "The Crypt of Decay portal in the Plane of Tranquility will not take you until you do this. It says 'You lack the will to pass through this portal safely.'",
+    "Make sure you have the Grummus flag before you walk in from the Plane of Disease."
+   ],
+   "tips": "The Bangle of Disease Warding on your keyring can also open the Tranquility portal."
+  },
+  "bertox_key-1": {
+   "title": "Clear the upper crypt and hail Tarkil Adan",
+   "why": "Beating the upper Crypt of Decay event earns a rune-etched bone from Tarkil Adan. It is the key to the lower crypt where Bertoxxulous waits.",
+   "actions": [
+    {"text": "Engage Carprin Deatharn. Kill his three lieutenants, Breddan Rutyl, Fran Prisoal and Abroan Drian, to drop his shield.", "say": null, "items": []},
+    {"text": "Kill the attackable Carprin Deatharn that appears when the last lieutenant dies.", "say": null, "items": []},
+    {"text": "Kill Avhi Escron.", "say": null, "items": []},
+    {"text": "Kill Bishop Toluwon.", "say": null, "items": []},
+    {"text": "Kill both generals, Raex Pwodill and Vindor Mawnil. The High Priest can be attacked once the second one dies.", "say": null, "items": []},
+    {"text": "Kill High Priest Ultor Szanvon.", "say": null, "items": []},
+    {"text": "Hail Tarkil Adan, who appears after the High Priest dies.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Carprin Deatharn", "where": "Starts the event in the upper Crypt of Decay. Shielded until his three lieutenants die. Returns three days after the event."},
+    {"name": "Carprin Deatharn", "where": "Appears where the last lieutenant dies. This one can be killed."},
+    {"name": "Avhi Escron", "where": "Appears during the event."},
+    {"name": "Bishop Toluwon", "where": "Appears during the event."},
+    {"name": "High Priest Ultor Szanvon", "where": "Appears during the event. Can be attacked once both generals are dead."},
+    {"name": "Vindor Mawnil", "where": "A general who appears during the event and walks a set path."},
+    {"name": "Raex Pwodill", "where": "A general who appears during the event and walks a set path."},
+    {"name": "Tarkil Adan", "where": "Appears when the High Priest dies. Leaves after 10 minutes."}
+   ],
+   "works_when": "Tarkil Adan groans and passes you a small glowing bone fragment etched in runes. 'Go to the bone throne at the ruins entrance there you will find access to the depths.' Then 'You have received a character flag!'",
+   "credit": "The raid of the player who killed the High Priest. If there is no raid, that player's group, or just that player. Up to 72 people.",
+   "needs": [
+    "You have earned the Grummus flag in the Plane of Disease.",
+    "You do not already have the bone key from Tarkil Adan."
+   ],
+   "if_it_failed": [
+    "Make sure you were in the raid or group of the player who killed the High Priest.",
+    "If you already have the key, Tarkil stays silent.",
+    "Tarkil stops answering after 72 people or after 10 minutes."
+   ],
+   "tips": "Event monsters leave if nobody fights them. Lieutenants leave after about 13 minutes, generals after 165 minutes, the rest after 195 minutes. Tarkil is the only way to get the key."
+  },
+  "lower-crypt": {
+   "title": "Use the bone throne to reach the lower crypt",
+   "why": "The bone throne at the ruins entrance takes key holders down to the lower crypt, where Bertoxxulous is fought.",
+   "actions": [
+    {"text": "In the Crypt of Decay, click the bone throne at the ruins entrance.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "You are moved down into the lower crypt.",
+   "credit": "Only the person who clicks.",
+   "needs": [
+    "You have earned the Grummus flag in the Plane of Disease.",
+    "You have the bone key from Tarkil Adan."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the key required to enter the lower crypt. Seek Tarkil Adan after defeating Carprin Deatharn.' you need the key first."
+   ],
+   "tips": "Charmed pets break free when you use the throne. Monsters chasing you also forget you."
+  },
+  "fuirstel-4": {
+   "title": "Kill Bertoxxulous and hail the Planar Projection",
+   "why": "Slaying Bertoxxulous, god of disease, avenges the Fuirstel brothers. It is the main step of the Plane of Disease story.",
+   "actions": [
+    {"text": "Kill the Spectre of Corruption in the lower crypt to start the event. Monsters start coming about 5 minutes 50 seconds later.", "say": null, "items": []},
+    {"text": "Kill the Knights, Priests and Necromancers of Decay. Every few kills a King of Lxanvom appears. After 8 kings, four more kings appear: Meedo, Qezzin, Pzo and Bhaly.", "say": null, "items": []},
+    {"text": "After the 12th king dies, Bertoxxulous appears. Kill him.", "say": null, "items": []},
+    {"text": "Hail the Planar Projection that appears where Bertoxxulous died.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Spectre of Corruption", "where": "In the lower crypt. Returns about 66 hours after a win, or 5 minutes after a failed event."},
+    {"name": "Bertoxxulous", "where": "Appears after the 12th king dies. He moves around the room."},
+    {"name": "A Planar Projection", "where": "Appears where Bertoxxulous dies. Leaves after 20 minutes."}
+   ],
+   "works_when": "'Milyk Fuirstel's thoughts enter into your own. Bertoxxulous is slain, for this my brother and I are forever in your debt...' Then 'You have received a character flag!'",
+   "credit": "The raid of the player who got the kill. If there is no raid, that player's group, or just that player. Up to 72 people.",
+   "needs": [
+    "You have earned the Grummus flag in the Plane of Disease.",
+    "You have the bone key from Tarkil Adan.",
+    "You have spoken with Elder Fuirstel in the Plane of Tranquility after killing Grummus."
+   ],
+   "if_it_failed": [
+    "Make sure you have the bone key. Without it the projection stays silent.",
+    "Make sure you were in the raid or group of the player who got the kill.",
+    "The projection stops answering after 72 people or after 20 minutes.",
+    "If you had not yet spoken to Elder Fuirstel, you get a saved memory instead. If you are already past this step, it stays silent."
+   ],
+   "tips": "The event fails 123 minutes after the Spectre dies. You hear 'Harsh laughter echoes around the crypt...' and all monsters vanish. This step also clears any saved Bertoxxulous memory."
+  },
+  "cl_bertox-1": {
+   "title": "Get a saved Bertoxxulous memory",
+   "why": "A safety net: if you kill Bertoxxulous before talking to Elder Fuirstel, the game saves a memory of the kill. You turn it into credit later at the Seer.",
+   "actions": [
+    {"text": "Hail the Planar Projection after Bertoxxulous dies, the same as the main step.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "A Planar Projection", "where": "Appears where Bertoxxulous dies. Leaves after 20 minutes."}
+   ],
+   "works_when": "'The Planar Projection seems to flicker in and out of existence. It seems joyous that Bertoxxulous has been slain.' Then 'You have received a new checklist flag!'",
+   "credit": "Same as the main Bertoxxulous step. The killer's raid, group or the killer alone.",
+   "needs": [
+    "You have earned the Grummus flag in the Plane of Disease.",
+    "You have the bone key from Tarkil Adan.",
+    "You have not yet spoken with Elder Fuirstel after killing Grummus.",
+    "You do not already have a saved Bertoxxulous memory."
+   ],
+   "if_it_failed": [
+    "The same raid or group, 72-person and 20-minute limits apply as in the main step."
+   ],
+   "tips": "Later, talk to Elder Fuirstel in the Plane of Tranquility. Then sit by the Seer in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_bertox": {
+   "title": "Turn your saved Bertoxxulous memory into credit",
+   "why": "If the game saved your Bertoxxulous kill, the Seer turns it into real credit once you have spoken with Elder Fuirstel.",
+   "actions": [
+    {"text": "Go to Seer Mal Nae`Shi in the Plane of Knowledge. Sit down next to her and say a sentence with both 'unlock' and 'memories'.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge."}
+   ],
+   "works_when": "'You focus back to your battle with the Plaguebringer... You now have the knowledge to help Milyk.' Then 'You have received a character flag!'",
+   "credit": "Only the person who speaks.",
+   "needs": [
+    "You have a saved memory of killing Bertoxxulous.",
+    "You have spoken with Elder Fuirstel in the Plane of Tranquility after killing Grummus."
+   ],
+   "if_it_failed": [
+    "Make sure you are sitting down.",
+    "If you see 'an image of the Fuirstel brothers flashes through your mind' you are not at the right stage. Speak to Elder Fuirstel first. Your memory is kept."
+   ],
+   "tips": "The Seer uses up the saved memory when it works."
+  },
+  "access-potorment": {
+   "title": "Unlock the Plane of Torment portal",
+   "why": "The Torment portal in the Plane of Tranquility opens once you have finished both the Disease and the Nightmare stories.",
+   "actions": [
+    {"text": "In the Plane of Tranquility, click the Plane of Torment portal.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "There is no message. The portal takes you to the Plane of Torment.",
+   "credit": "Only the person who clicks. This gives you permission to enter Torment.",
+   "needs": [
+    "You have finished the Plane of Disease story with the Fuirstel brothers.",
+    "You have freed Thelin from his nightmare."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the will to pass through this portal safely.' one of the two stories is not finished."
+   ],
+   "tips": "On some servers, holding the Symbol of Torment also opens the portal, but only if alternate access is turned on."
+  },
+  "tylis-1": {
+   "title": "Agree to help Fahlia Shadyglade free Tylis",
+   "why": "Fahlia asks you to free her friend Tylis, who is trapped in the Plane of Torment. Agreeing starts the Torment story.",
+   "actions": [
+    {"text": "Talk to Fahlia Shadyglade in the Plane of Tranquility. Say 'condition'.", "say": "condition", "items": []},
+    {"text": "Say 'black cube'.", "say": "black cube", "items": []},
+    {"text": "Say 'plane of torment'.", "say": "plane of torment", "items": []},
+    {"text": "Say 'will go', for example 'I will go'.", "say": "will go", "items": []}
+   ],
+   "npcs": [
+    {"name": "Fahlia Shadyglade", "where": "In the Plane of Tranquility."}
+   ],
+   "works_when": "Fahlia tells you 'Wonderful. ... You must find Maareq and do what you must to release Tylis from this torture.' Then 'You have received a character flag!'",
+   "credit": "Only the person who speaks.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have freed Thelin from his nightmare. Fahlia checks this.",
+    "You have finished the Plane of Disease story. Fahlia checks this too.",
+    "You have not already agreed to help Fahlia."
+   ],
+   "if_it_failed": [
+    "If she sends you to Adler Fuirstel, finish the Plane of Disease story first.",
+    "If she says 'I can see that you may be passionate to help others...' you are missing both stories."
+   ],
+   "tips": "Only 'will go' counts. The other phrases are just story. If you already agreed, she still shows the flag message but nothing changes."
+  },
+  "keeper-access": {
+   "title": "Kill Maareq and have Tylis send you to the Keeper",
+   "why": "With Maareq dead, the caged Tylis can send you into the hidden part of Torment where the Keeper of Sorrows waits.",
+   "actions": [
+    {"text": "Kill Maareq the Prophet in the Plane of Torment. Tylis, in the cage, can then be targeted.", "say": null, "items": []},
+    {"text": "Optional: say 'will assist you' to Tylis Newleaf.", "say": "will assist you", "items": []},
+    {"text": "Say 'we are ready' or 'i am ready' to Tylis. Tylis casts Insanity of Tylis on you and moves you elsewhere in Torment.", "say": "we are ready", "items": []}
+   ],
+   "npcs": [
+    {"name": "Maareq the Prophet", "where": "In the Plane of Torment. Returns three days after he dies."},
+    {"name": "Tylis Newleaf", "where": "In a cage near Maareq. Can only be targeted after Maareq dies."}
+   ],
+   "works_when": "Tylis says 'Please tell me when you are ready...' and you are teleported.",
+   "credit": "Each player must say the phrase themselves. Only the speaker is teleported.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have agreed to help Fahlia Shadyglade free Tylis."
+   ],
+   "if_it_failed": [
+    "Someone must carry A Screaming Sphere in inventory or on the keyring: you or a raid or group member. Otherwise Tylis says 'The Screaming Sphere carries an echo of this place. Bring one near...'",
+    "If Tylis says 'Please seek out my companion Fahlia...' you have not agreed to help Fahlia yet."
+   ],
+   "tips": "Where A Screaming Sphere comes from is not known to this guide. The exact landing spot of the teleport is not confirmed."
+  },
+  "tylis-2": {
+   "title": "Kill the Keeper of Sorrows and hail the freed Tylis",
+   "why": "Killing the Keeper of Sorrows frees Tylis. Thanking Tylis records it and opens more of Saryrn's prison to you.",
+   "actions": [
+    {"text": "Kill the Keeper of Sorrows.", "say": null, "items": []},
+    {"text": "Hail the freed Tylis Newleaf that appears near the Keeper.", "say": "hail", "items": []},
+    {"text": "Optional: say 'ready to return' and Tylis casts Torment's Beckon to send you back out.", "say": "ready to return", "items": []}
+   ],
+   "npcs": [
+    {"name": "The Keeper of Sorrows", "where": "In the hidden part of Torment that Tylis sends you to. Returns 60 hours after it dies."},
+    {"name": "Tylis Newleaf (freed)", "where": "Appears near the Keeper when it dies. Leaves after 10 minutes."}
+   ],
+   "works_when": "Tylis tells you 'I must thank you for your kind efforts friends. This place has laid claim to me for far too long...' Then 'You have received a character flag!'",
+   "credit": "Anyone who hails the freed Tylis while it is there. No raid or group needed. Up to about 73 people.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have agreed to help Fahlia Shadyglade free Tylis."
+   ],
+   "if_it_failed": [
+    "Hail quickly. The freed Tylis leaves 10 minutes after appearing.",
+    "If you never agreed to help Fahlia, you get a saved memory instead.",
+    "If you see the thank-you text but no flag message, you already have this step."
+   ],
+   "tips": "Killing the Keeper also removes the caged Tylis until it respawns. This step clears any saved Keeper memory."
+  },
+  "cl_keeper-1": {
+   "title": "Get a saved Keeper of Sorrows memory",
+   "why": "A safety net: if you kill the Keeper before agreeing to help Fahlia, the game saves a memory of it. You turn it into credit later at the Seer.",
+   "actions": [
+    {"text": "Hail the freed Tylis Newleaf after the Keeper dies.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Tylis Newleaf (freed)", "where": "Appears near the Keeper when it dies. Leaves after 10 minutes."}
+   ],
+   "works_when": "Tylis tells you 'I don't recognize you, stranger. ... please tell me when you're ready to return and I will send you out first.' Then 'You have received a new checklist flag!'",
+   "credit": "Anyone who hails the freed Tylis while it is there. No raid or group needed.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have not yet agreed to help Fahlia Shadyglade.",
+    "You do not already have a saved Keeper memory."
+   ],
+   "if_it_failed": [
+    "Hail quickly. The freed Tylis leaves 10 minutes after appearing."
+   ],
+   "tips": "Later, say 'will go' to Fahlia in the Plane of Tranquility. Then sit by the Seer in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_keeper": {
+   "title": "Turn your saved Keeper memory into credit",
+   "why": "If the game saved your Keeper of Sorrows kill, the Seer turns it into real credit once you have agreed to help Fahlia.",
+   "actions": [
+    {"text": "Go to Seer Mal Nae`Shi in the Plane of Knowledge. Sit down next to her and say a sentence with both 'unlock' and 'memories'.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge."}
+   ],
+   "works_when": "'Tylis voice rings in your ears, Now I remember you. Thank you for saving me... Beware Sorrowsong.' Then 'You have received a character flag!'",
+   "credit": "Only the person who speaks.",
+   "needs": [
+    "You have a saved memory of killing the Keeper of Sorrows.",
+    "You have agreed to help Fahlia Shadyglade free Tylis."
+   ],
+   "if_it_failed": [
+    "Make sure you are sitting down.",
+    "If you see 'Tylis still seems to have no idea who you are' you are not at the right stage. Say 'will go' to Fahlia first."
+   ],
+   "tips": "If you also have a saved Saryrn memory, one 'unlock memories' can give you both. The Seer handles the Keeper first, then Saryrn."
+  },
+  "saryrn-1": {
+   "title": "Kill Saryrn and hail the Planar Projection",
+   "why": "Slaying Saryrn, goddess of torment, earns the knowledge she held. It is the main step of the Torment story.",
+   "actions": [
+    {"text": "Kill Saryrn at the top of her tower. Sorrowsong can be attacked once she is at 25 percent health.", "say": null, "items": []},
+    {"text": "Hail the Planar Projection that appears where Saryrn died.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Saryrn", "where": "At the top of her tower in the Plane of Torment. If pulled down off the top floor, she returns home and forgets her attackers. Returns three days after she dies."},
+    {"name": "A Planar Projection", "where": "Appears where Saryrn dies. Leaves after 20 minutes."}
+   ],
+   "works_when": "'The Planar Projection's thoughts enter your own. You have done well, now receive the knowledge that Saryrn once held!' Then 'You have received a character flag!'",
+   "credit": "The raid of the player who got the kill. If there is no raid, that player's group, or just that player. Up to 72 people.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have freed Tylis by killing the Keeper of Sorrows and hailing Tylis.",
+    "You do not already have Saryrn credit.",
+    "You have not yet received the Cipher of the Gods from Grand Librarian Maelin."
+   ],
+   "if_it_failed": [
+    "Make sure you were in the raid or group of the player who got the kill.",
+    "The projection stops answering after 72 people or after 20 minutes.",
+    "If you already have Saryrn credit or the cipher, the projection stays silent.",
+    "If you had not freed Tylis yet, you get a saved memory instead."
+   ],
+   "tips": "This step clears any saved Saryrn memory. Later, Grand Librarian Maelin replaces this flag when he gives you the cipher."
+  },
+  "cl_saryrn-1": {
+   "title": "Get a saved Saryrn memory",
+   "why": "A safety net: if you kill Saryrn before freeing Tylis, the game saves a memory of it. You turn it into credit later at the Seer.",
+   "actions": [
+    {"text": "Hail the Planar Projection after Saryrn dies, the same as the main step.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "A Planar Projection", "where": "Appears where Saryrn dies. Leaves after 20 minutes."}
+   ],
+   "works_when": "'The Planar Projection seems to flicker in and out of existence. It seems to be impressed and grateful for the death of Saryrn.' Then 'You have received a new checklist flag!'",
+   "credit": "Same as the main Saryrn step. The killer's raid, group or the killer alone.",
+   "needs": [
+    "You have finished the Plane of Disease story, so the Torment portal lets you in.",
+    "You have freed Thelin, so the Torment portal lets you in.",
+    "You have not yet freed Tylis from the Keeper of Sorrows.",
+    "You do not already have Saryrn credit.",
+    "You have not yet received the Cipher of the Gods from Grand Librarian Maelin.",
+    "You do not already have a saved Saryrn memory."
+   ],
+   "if_it_failed": [
+    "The same raid or group, 72-person and 20-minute limits apply as in the main step."
+   ],
+   "tips": "Later, free Tylis from the Keeper of Sorrows. Then sit by the Seer in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_saryrn": {
+   "title": "Turn your saved Saryrn memory into credit",
+   "why": "If the game saved your Saryrn kill, the Seer turns it into real credit once you have freed Tylis.",
+   "actions": [
+    {"text": "Go to Seer Mal Nae`Shi in the Plane of Knowledge. Sit down next to her and say a sentence with both 'unlock' and 'memories'.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge."}
+   ],
+   "works_when": "'You feel the searing pain of torment as half of the Cipher of the Gods glows on your arm.' Then 'You have received a character flag!'",
+   "credit": "Only the person who speaks.",
+   "needs": [
+    "You have a saved memory of killing Saryrn.",
+    "You have freed Tylis by killing the Keeper of Sorrows and hailing Tylis."
+   ],
+   "if_it_failed": [
+    "Make sure you are sitting down.",
+    "If you 'feel a searing pain on your arm' instead, you are not at the right stage. Free Tylis first."
+   ],
+   "tips": "The Seer does not check whether you already have the cipher. If you do, a later 'guided meditation' at the Seer removes the extra Saryrn flag."
+  }
+ }
+}

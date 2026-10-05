@@ -1,0 +1,1810 @@
+{
+ "steps": {
+  "hohtrials-bit0": {
+   "title": "Pass Trydan Faye's trial and defeat Rydda`Dar",
+   "why": "This is the first of three trials in the Halls of Honor. You need all three to enter the Temple of Marr and get credit for Mithaniel Marr.",
+   "actions": [
+    {
+     "text": "Say 'ready' to Trydan Faye in the Halls of Honor. He vanishes and a Custodian of Marr appears in his spot.",
+     "say": "ready",
+     "items": []
+    },
+    {
+     "text": "Attack the Custodian within 10 seconds or it vanishes. Kill it in Trydan's room, do not pull it away.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Rydda`Dar appears where the Custodian died. Kill it in the same room and keep fighting it.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A new Trydan Faye appears. Everyone in the raid hails him.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Trydan Faye",
+     "where": "Stands in his room in the Halls of Honor."
+    },
+    {
+     "name": "A Custodian of Marr",
+     "where": "Appears in Trydan's spot when you say 'ready'."
+    },
+    {
+     "name": "Rydda`Dar",
+     "where": "Appears where the Custodian died."
+    },
+    {
+     "name": "Trydan Faye (after the trial)",
+     "where": "Appears in Trydan's spot after Rydda`Dar dies."
+    }
+   ],
+   "works_when": "You see 'An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Trydan Faye.' There is no 'character flag' line for trials.",
+   "credit": "Everyone in the raid that killed Rydda`Dar. If there was no raid, the killer's group, or the killer alone. Each person must hail.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You have permission to enter the Halls of Honor. You get it from the Halls of Honor portal in the Plane of Valor once you have the Aerin`Dar flag. There is also an alternate way in through the Plane of Tranquility portal.",
+    "You have not already passed this trial."
+   ],
+   "if_it_failed": [
+    "Engage Rydda`Dar right away. If nobody fights it for 56 seconds it leaves, the trial fails and Trydan returns 10 minutes later.",
+    "If the Custodian vanished, nobody attacked it within 10 seconds. Trydan comes back a second later, so say 'ready' again.",
+    "Keep both mobs in the room. If pulled out they run home, forget who they were fighting and cast Balance of the Nameless.",
+    "Hail the new trial leader from inside the winning raid. If you are not in it, he ignores you with no text.",
+    "He leaves 10 minutes after he appears. Hail him straight away.",
+    "If he says 'You have already received credit for completing this trial', you already have it.",
+    "He can credit at most 72 people per run."
+   ],
+   "tips": "The game remembers the winning raid until the zone restarts, so earlier winners can still hail. After a win the room's other mobs return on an 18 hour timer. Saying 'hail' or 'trials' to Trydan before the trial only gives story text."
+  },
+  "hohtrials-bit1": {
+   "title": "Pass Rhaliq Trell's trial and save the villagers",
+   "why": "This is the second of three trials in the Halls of Honor. You need all three to enter the Temple of Marr and get credit for Mithaniel Marr.",
+   "actions": [
+    {
+     "text": "Say 'ready' to Rhaliq Trell in the Halls of Honor. He vanishes and a Custodian of Marr appears in his spot.",
+     "say": "ready",
+     "items": []
+    },
+    {
+     "text": "Attack the Custodian within 10 seconds and kill it in Rhaliq's part of the room.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Seven villagers and 12 named attackers appear. The attackers run at the villagers after 4 to 26 seconds. Kill all 12 attackers.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A new Rhaliq Trell appears. Everyone in the raid hails him.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Rhaliq Trell",
+     "where": "Stands in his room in the Halls of Honor."
+    },
+    {
+     "name": "A Custodian of Marr",
+     "where": "Appears in Rhaliq's spot when you say 'ready'."
+    },
+    {
+     "name": "Rhaliq Trell (after the trial)",
+     "where": "Appears in Rhaliq's spot after the last attacker dies."
+    },
+    {
+     "name": "The 12 attackers: Granmuck Reiga, Fligg Starp, Trann Berk, Shott Tarbs, Ruark Barr, Zullkata Reeps, Maeryn Malladry, Thullias Rhidron, Herot Terkins, Mirezvakla Ry`Ten, Yarezka Tri`Lok, Merken Lysonn",
+     "where": "Appear around the room after the Custodian dies."
+    }
+   ],
+   "works_when": "You see 'An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Rhaliq Trell.' There is no 'character flag' line for trials.",
+   "credit": "Everyone in the raid that killed the Custodian of Marr (not the last attacker). If there was no raid, that killer's group, or the killer alone. Each person must hail.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You have permission to enter the Halls of Honor, from the Halls of Honor portal in the Plane of Valor.",
+    "You have not already passed this trial."
+   ],
+   "if_it_failed": [
+    "Pick up every attacker fast. Each one leaves if nobody fights it for 72 seconds, and then the trial fails. Rhaliq returns 10 minutes later.",
+    "Kill the Custodian near Rhaliq's spot. If it dies too far away, the trial does not start.",
+    "Hail from inside the raid that killed the Custodian.",
+    "He leaves 10 minutes after he appears. Hail him straight away.",
+    "If he says 'You have already received credit for completing this trial', you already have it.",
+    "He can credit at most 72 people per run."
+   ],
+   "tips": "Villagers dying does not fail the trial. Only attackers left alone do. After a win the room's other mobs return on an 18 hour timer."
+  },
+  "hohtrials-bit2": {
+   "title": "Pass Alekson Garn's trial against the nomads",
+   "why": "This is the third of three trials in the Halls of Honor. You need all three to enter the Temple of Marr and get credit for Mithaniel Marr.",
+   "actions": [
+    {
+     "text": "Say 'ready' to Alekson Garn in the Halls of Honor. He vanishes and a Custodian of Marr appears in his spot.",
+     "say": "ready",
+     "items": []
+    },
+    {
+     "text": "Attack the Custodian within 10 seconds and kill it in Alekson's part of the hall.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Three groups of crazed Norrathians and Recuso nomads appear, one after another (6, then 5, then 5). Clearing each group brings out its boss.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill all three bosses: Advocent Joran, Halgoz Rellinic and Freegan Haun.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A new Alekson Garn appears. Everyone in the raid hails him.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Alekson Garn",
+     "where": "Stands in his part of the Halls of Honor."
+    },
+    {
+     "name": "Miranda Climmes",
+     "where": "Appears during the trial."
+    },
+    {
+     "name": "Ydira Merok",
+     "where": "Appears during the trial."
+    },
+    {
+     "name": "Advocent Joran",
+     "where": "Boss of the first room. Appears when the first group is cleared."
+    },
+    {
+     "name": "Halgoz Rellinic",
+     "where": "Boss of the second room. Appears when the second group is cleared."
+    },
+    {
+     "name": "Freegan Haun",
+     "where": "Boss of the third room. Appears when the third group is cleared."
+    },
+    {
+     "name": "Alekson Garn (after the trial)",
+     "where": "Appears in Alekson's spot after the last boss dies."
+    }
+   ],
+   "works_when": "Alekson says 'Congratulations my friends. You've passed the trial I laid before you.' When you hail, you see 'An ethereal mist descends from the air and surrounds your very being. Your body begins to emanate with the power of Alekson Garn.'",
+   "credit": "Everyone in the raid that killed the Custodian of Marr. If there was no raid, that killer's group, or the killer alone. Each person must hail.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You have permission to enter the Halls of Honor, from the Halls of Honor portal in the Plane of Valor.",
+    "You have not already passed this trial."
+   ],
+   "if_it_failed": [
+    "Engage every mob quickly. Any mob or boss left alone for 50 seconds fails the trial. You see 'A woman screams in anguish as she's forcibly taken away by a band of crazed norrathians.'",
+    "After a failure Alekson returns 10 minutes later.",
+    "Kill the Custodian near Alekson's spot. If it dies too far away, the trial does not start.",
+    "Hail from inside the raid that killed the Custodian.",
+    "He leaves 10 minutes after he appears. Hail him straight away.",
+    "If he says 'You have already received credit for completing this trial', you already have it.",
+    "He can credit at most 72 people per run."
+   ],
+   "tips": "The first group appears where the Custodian died. Some players call this the 'Nomad trial'."
+  },
+  "hohonorb-access": {
+   "title": "Step through a portal into the Temple of Marr",
+   "why": "With all three trials done, the Temple portals in the Halls of Honor give you permission to enter the Temple of Marr, where Mithaniel Marr waits.",
+   "actions": [
+    {
+     "text": "Click either of the two Temple portals in the Halls of Honor.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Temple of Marr portal",
+     "where": "One of two Temple portals in the Halls of Honor."
+    },
+    {
+     "name": "Temple of Marr portal",
+     "where": "The other Temple portal in the Halls of Honor."
+    }
+   ],
+   "works_when": "No message appears. You simply get permission to enter the Temple of Marr.",
+   "credit": "Only the player who clicks the portal.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You passed the first Halls of Honor trial, Trydan Faye's (Rydda`Dar).",
+    "You passed the second Halls of Honor trial, Rhaliq Trell's (the villagers).",
+    "You passed the third Halls of Honor trial, Alekson Garn's (the nomads)."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the will to pass through this portal safely', you are missing one of the three trials.",
+    "If zoning says 'You do not have the flag to enter hohonorb', you have not clicked a Temple portal with all three trials done."
+   ],
+   "tips": "The server may let unflagged players enter together with a qualifying raid, if that option is turned on."
+  },
+  "mmarr-1": {
+   "title": "Kill Mithaniel Marr and hail his projection",
+   "why": "This earns Mithaniel's half of the Cipher of Druzzil. Together with Saryrn's half, Maelin can then read the language of the gods.",
+   "actions": [
+    {
+     "text": "In the Temple of Marr, kill Ralthazor, Edium and Halon, the three guardians of Marr. Mithaniel can be attacked about 3 seconds after the last one dies.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Lord Mithaniel Marr. Do not pull him far from where he stands, or he resets and goes home.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears where he died. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Lord Mithaniel Marr",
+     "where": "In the Temple of Marr. He cannot be attacked until his three guardians are dead."
+    },
+    {
+     "name": "Ralthazor, Champion of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Edium, Guardian of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Halon of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears where Mithaniel died and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'You have done well, now receive the knowledge that Mithaniel Marr once held!', runes burn into your arms, you find a small tattered book, then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed Mithaniel Marr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You passed the first Halls of Honor trial, Trydan Faye's (Rydda`Dar).",
+    "You passed the second Halls of Honor trial, Rhaliq Trell's (the villagers).",
+    "You passed the third Halls of Honor trial, Alekson Garn's (the nomads).",
+    "You do not already carry Mithaniel's half of the cipher.",
+    "You do not already have the Cipher of Druzzil from Maelin."
+   ],
+   "if_it_failed": [
+    "If the projection says you are 'not ready to understand the Knowledge', you are missing a Halls of Honor trial. You get a saved memory instead.",
+    "If it says nothing, you may already have this half or the full cipher.",
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection stops after 144 grants, and one hail can use two (cipher half and book). Very large raids should hail quickly."
+   ],
+   "tips": "The same hail also gives you Mithaniel's book half (the next step). Maelin uses up this cipher half when making the cipher. Any saved memory of Mithaniel is cleared when this works."
+  },
+  "cl_mmarr-1": {
+   "title": "Save a memory of Mithaniel if your trials are not done",
+   "why": "If you kill Mithaniel before finishing all three Halls of Honor trials, the game remembers it as a saved memory. Later the Seer can turn it into the real credit.",
+   "actions": [
+    {
+     "text": "In the Temple of Marr, kill Ralthazor, Edium and Halon, the three guardians of Marr. Mithaniel can be attacked about 3 seconds after the last one dies.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Lord Mithaniel Marr. Do not pull him far from where he stands, or he resets and goes home.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears where he died. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Lord Mithaniel Marr",
+     "where": "In the Temple of Marr. He cannot be attacked until his three guardians are dead."
+    },
+    {
+     "name": "Ralthazor, Champion of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Edium, Guardian of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Halon of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears where Mithaniel died and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'You have done well, however you are not ready to understand the Knowledge gained for defeating Mithaniel Marr.' then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed Mithaniel Marr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You have NOT passed all three Halls of Honor trials.",
+    "You do not already carry Mithaniel's half of the cipher.",
+    "You do not already have the Cipher of Druzzil from Maelin."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "If it says nothing, you may already have this half or the full cipher."
+   ],
+   "tips": "This usually happens to raiders brought in without all three trials. Finish the trials, then sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "mmarr_book-1": {
+   "title": "Receive Mithaniel's tattered book from the same hail",
+   "why": "Mithaniel's book is half of the lore Maelin needs to learn what happened to Zebuxoruk. The other half comes from Karana.",
+   "actions": [
+    {
+     "text": "In the Temple of Marr, kill Ralthazor, Edium and Halon, the three guardians of Marr. Mithaniel can be attacked about 3 seconds after the last one dies.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Lord Mithaniel Marr. Do not pull him far from where he stands, or he resets and goes home.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears where he died. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Lord Mithaniel Marr",
+     "where": "In the Temple of Marr. He cannot be attacked until his three guardians are dead."
+    },
+    {
+     "name": "Ralthazor, Champion of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Edium, Guardian of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Halon of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears where Mithaniel died and stays 20 minutes."
+    }
+   ],
+   "works_when": "No separate message. The Mithaniel hail text mentions 'a small tattered book as old as the ages' that Maelin might translate.",
+   "credit": "Everyone in the raid that killed Mithaniel Marr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You passed the first Halls of Honor trial, Trydan Faye's (Rydda`Dar).",
+    "You passed the second Halls of Honor trial, Rhaliq Trell's (the villagers).",
+    "You passed the third Halls of Honor trial, Alekson Garn's (the nomads).",
+    "You do not already carry Mithaniel's tattered book.",
+    "You have not yet given Maelin the Mithaniel and Karana lore."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection stops after 144 grants, and one hail can use two (cipher half and book). Very large raids should hail quickly.",
+    "To check, ask the Seer for guided meditation. The Seer says 'The information obtained from Mithaniel is written in a language that you cannot comprehend.'"
+   ],
+   "tips": "This works even if you already have the full cipher. Maelin takes the book when you hand over the lore."
+  },
+  "cl_mmarr_book-1": {
+   "title": "Save a memory of Mithaniel's book if your trials are not done",
+   "why": "If you kill Mithaniel before finishing all three trials, the game also saves a memory of his book. The Seer can turn it into the real book later.",
+   "actions": [
+    {
+     "text": "In the Temple of Marr, kill Ralthazor, Edium and Halon, the three guardians of Marr. Mithaniel can be attacked about 3 seconds after the last one dies.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Lord Mithaniel Marr. Do not pull him far from where he stands, or he resets and goes home.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears where he died. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Lord Mithaniel Marr",
+     "where": "In the Temple of Marr. He cannot be attacked until his three guardians are dead."
+    },
+    {
+     "name": "Ralthazor, Champion of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Edium, Guardian of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "Halon of Marr",
+     "where": "Near Mithaniel in the Temple of Marr."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears where Mithaniel died and stays 20 minutes."
+    }
+   ],
+   "works_when": "No separate message. It comes silently with the Mithaniel saved memory.",
+   "credit": "Everyone in the raid that killed Mithaniel Marr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Aerin`Dar in the Plane of Valor and stepped through the Halls of Honor portal.",
+    "You have NOT passed all three Halls of Honor trials.",
+    "You do not already carry Mithaniel's tattered book.",
+    "You have not yet given Maelin the Mithaniel and Karana lore."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection stops after 144 grants, and one hail can use two (cipher half and book). Very large raids should hail quickly."
+   ],
+   "tips": null
+  },
+  "seer-cl_mmarr": {
+   "title": "Unlock your saved memory of Mithaniel's cipher half",
+   "why": "If you killed Mithaniel before finishing the trials, this turns that saved memory into his half of the cipher.",
+   "actions": [
+    {
+     "text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "You see 'An Image of Mithaniel flashes before you, 'You have finally earned a place of Honor. Wear this Cipher with pride.'' then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of killing Mithaniel Marr.",
+    "You passed the first Halls of Honor trial, Trydan Faye's (Rydda`Dar).",
+    "You passed the second Halls of Honor trial, Rhaliq Trell's (the villagers).",
+    "You passed the third Halls of Honor trial, Alekson Garn's (the nomads)."
+   ],
+   "if_it_failed": [
+    "If Mithaniel says 'You have yet to earn a place of Honor', you are missing a Halls of Honor trial.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back."
+  },
+  "seer-cl_mmarr_book": {
+   "title": "Unlock your saved memory of Mithaniel's book",
+   "why": "This turns the saved memory of Mithaniel's book into the real book, which Maelin needs for the Zebuxoruk lore.",
+   "actions": [
+    {
+     "text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'. This unlocks the cipher half and the book together.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "You see 'An Image of Mithaniel flashes before you, 'These notes should assist you on your quest for the Fallen. Justify the Honor that you have been given.'' then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of Mithaniel's book.",
+    "You passed the first Halls of Honor trial, Trydan Faye's (Rydda`Dar).",
+    "You passed the second Halls of Honor trial, Rhaliq Trell's (the villagers).",
+    "You passed the third Halls of Honor trial, Alekson Garn's (the nomads)."
+   ],
+   "if_it_failed": [
+    "If Mithaniel says 'You have not yet earned the Honor to see these words', you are missing a Halls of Honor trial.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back. If you already gave Maelin the lore, guided meditation later removes the extra book."
+  },
+  "agnarr-access": {
+   "title": "Climb the Torden tower to Agnarr the Storm Lord",
+   "why": "Agnarr sits at the top of the tower in the Bastion of Thunder. Killing him brings out Karana, who gives the next Storms flag.",
+   "actions": [
+    {
+     "text": "In the Bastion of Thunder, click the tower portal with the Symbol of Torden on your cursor. The Symbol goes onto your keyring. Your raid or group then has 5 minutes to click up too.",
+     "say": null,
+     "items": [
+      9433
+     ]
+    },
+    {
+     "text": "Kill Evynd Firestorm. Askr the Lost appears.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Each player says 'transport' to Askr to move up to the next level.",
+     "say": "transport",
+     "items": []
+    },
+    {
+     "text": "Kill Emmerik Skyfury. Askr the Lost appears again.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Say 'what storm' to Askr. A Chaotic Vortex appears.",
+     "say": "what storm",
+     "items": []
+    },
+    {
+     "text": "Right-click the Chaotic Vortex (like opening a merchant) to move up to Agnarr's level.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Agnarr the Storm Lord. Karana appears.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Torden tower portal",
+     "where": "A clickable portal at the base of the tower in the Bastion of Thunder."
+    },
+    {
+     "name": "Evynd Firestorm",
+     "where": "On the first level of the tower."
+    },
+    {
+     "name": "Askr the Lost",
+     "where": "Appears after Evynd dies and stays 55 minutes."
+    },
+    {
+     "name": "Emmerik Skyfury",
+     "where": "On the next level up."
+    },
+    {
+     "name": "Askr the Lost (second)",
+     "where": "Appears after Emmerik dies and stays 55 minutes."
+    },
+    {
+     "name": "A Chaotic Vortex",
+     "where": "Appears when you say 'what storm' and stays 55 minutes."
+    },
+    {
+     "name": "Agnarr the Storm Lord",
+     "where": "At the top of the tower."
+    }
+   ],
+   "works_when": "No flag message. You are moved up the tower level by level until you reach Agnarr.",
+   "credit": "No credit in this step. It only gets you to Agnarr.",
+   "needs": [
+    "You used the Storms shrine in the Plane of Storms to enter the Bastion of Thunder.",
+    "You carry the Symbol of Torden, or someone in your raid or group clicked the tower with it in the last 5 minutes."
+   ],
+   "if_it_failed": [
+    "Click the tower with the Symbol of Torden on your cursor, or within 5 minutes of a raid or group member doing so.",
+    "Each player must say 'transport' themselves.",
+    "Askr's text shows [Storm], but you must say 'what storm'.",
+    "Do not keep clicking the tower without access. The third click by anyone wakes the storm watchers."
+   ],
+   "tips": "Building the Symbol of Torden is outside this guide. Eindride Icestorm drops the Unadorned Symbol of Torden."
+  },
+  "karana-4": {
+   "title": "Kill Agnarr and ask Karana to follow the path of the Fallen",
+   "why": "Karana gives you a tome in the language of the gods. Maelin combines it with Mithaniel's book to learn the fate of Zebuxoruk.",
+   "actions": [
+    {
+     "text": "Kill Agnarr the Storm Lord at the top of the tower in the Bastion of Thunder.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail Karana, who appears after Agnarr dies.",
+     "say": "hail",
+     "items": []
+    },
+    {
+     "text": "Say 'follow the path of the Fallen' to Karana.",
+     "say": "follow the path of the Fallen",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Karana",
+     "where": "Appears after Agnarr dies and stays 55 minutes."
+    },
+    {
+     "name": "Agnarr the Storm Lord",
+     "where": "At the top of the tower in the Bastion of Thunder."
+    }
+   ],
+   "works_when": "Karana laughs, a bolt hits you, and 'a tome written in the language of the gods appears in your hands'. Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed Agnarr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves. Each person must say the phrase.",
+   "needs": [
+    "You used the Storms shrine in the Plane of Storms to enter the Bastion of Thunder."
+   ],
+   "if_it_failed": [
+    "Speak from inside the raid that killed Agnarr. Karana ignores everyone else, even their hails.",
+    "Your sentence must contain 'follow the path of the Fallen'.",
+    "Karana can credit at most 72 people per appearance.",
+    "If Karana gives the checklist text, you had not yet used the Storms shrine. Unlock it later at the Seer.",
+    "If he says nothing to the phrase, you may already have this flag."
+   ],
+   "tips": "Afterwards you can say 'send me' and he casts Gate on you. Any saved memory of Karana is cleared when this works."
+  },
+  "cl_karana-1": {
+   "title": "Save a memory of Karana if you skipped the Storms shrine",
+   "why": "If you kill Agnarr before using the Storms shrine yourself, the game remembers it as a saved memory. The Seer turns it into Karana's tome later.",
+   "actions": [
+    {
+     "text": "Kill Agnarr the Storm Lord at the top of the tower in the Bastion of Thunder.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail Karana, who appears after Agnarr dies.",
+     "say": "hail",
+     "items": []
+    },
+    {
+     "text": "Say 'follow the path of the Fallen' to Karana.",
+     "say": "follow the path of the Fallen",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Karana",
+     "where": "Appears after Agnarr dies and stays 55 minutes."
+    },
+    {
+     "name": "Agnarr the Storm Lord",
+     "where": "At the top of the tower in the Bastion of Thunder."
+    }
+   ],
+   "works_when": "Karana says 'Your path leads you onward mortals...' with no tome. Then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed Agnarr. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves. Each person must say the phrase.",
+   "needs": [
+    "You are in the Bastion of Thunder, which is normally reached through the Storms shrine.",
+    "You have not yet used the Storms shrine yourself.",
+    "You have not yet given Maelin the Mithaniel and Karana lore."
+   ],
+   "if_it_failed": [
+    "Speak from inside the raid that killed Agnarr. Karana ignores everyone else, even their hails.",
+    "Your sentence must contain 'follow the path of the Fallen'.",
+    "Karana can credit at most 72 people per appearance."
+   ],
+   "tips": "Repeating the phrase just repeats the checklist message. Use the Storms shrine, then sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_karana": {
+   "title": "Unlock your saved memory of Karana",
+   "why": "If you killed Agnarr before using the Storms shrine, this gives you Karana's book once the shrine is done.",
+   "actions": [
+    {
+     "text": "Use the Storms shrine first. Then sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "A light rain falls and 'a small book written in a language you can not read, rests in your hands'. Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of Karana.",
+    "You used the Storms shrine in the Plane of Storms to enter the Bastion of Thunder."
+   ],
+   "if_it_failed": [
+    "If you see 'You sense that the answer you seek may be in Storms', use the Storms shrine first.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back."
+  },
+  "drunder-giwin": {
+   "title": "Talk to Giwin Mirakon in Drunder (optional)",
+   "why": "Giwin points you toward Vallon and Tallon Zek. This is only story. No flag is set here.",
+   "actions": [
+    {
+     "text": "Hail Giwin Mirakon in Drunder, the Fortress of Zek.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Giwin Mirakon",
+     "where": "In Drunder, the Fortress of Zek."
+    }
+   ],
+   "works_when": "Giwin says 'Well then, it took you long enough to get here. The Zeks have grown tired of waiting for your arrival.'",
+   "credit": "No one. This step sets no flag.",
+   "needs": [
+    "You killed the Manaetic Behemoth in the Plane of Innovation and reported to Giwin Mirakon. That lets you into Drunder.",
+    "Giwin only gives these directions once you have reported the Behemoth."
+   ],
+   "if_it_failed": [
+    "If he asks 'Are you a Warrior of Rallos?', you have not reported the Behemoth to Giwin in the Plane of Innovation."
+   ],
+   "tips": "Do not hand him anything. He keeps the items and gives nothing back. The Seer mentions meeting Giwin in Drunder, but you can skip him."
+  },
+  "zeks-3": {
+   "title": "Kill Vallon Zek and hail his projection",
+   "why": "Vallon carries a pack of notes for Maelin. You need notes from both Vallon and Tallon Zek before Rallos Zek.",
+   "actions": [
+    {
+     "text": "In the north wing of Drunder, fight Vallon Zek. At half health he fades into five figures. Only one is real.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Each real Vallon splits again at half health. On the fourth wave, kill the real one.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at the real Vallon's body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Vallon Zek",
+     "where": "In the north wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "Vallon Zek (the real one)",
+     "where": "One of the copies that appear when Vallon splits."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at the real Vallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see Maelin's thoughts: 'The pack of notes you now possess from Vallon, bring them to me.' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed the real Vallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed the Manaetic Behemoth in the Plane of Innovation and reported to Giwin Mirakon."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection.",
+    "Only the real Vallon gives a projection. Killing a copy does nothing.",
+    "Keep every Vallon engaged. A copy left alone for 2 minutes leaves, and if the real one leaves the fight resets.",
+    "Do not pull Vallons out of his wing. They get moved back.",
+    "If the projection says nothing, you may already have Vallon's notes.",
+    "If you get the checklist text instead, you had not reported the Behemoth to Giwin yet."
+   ],
+   "tips": "The wing doors stay shut by magic while Vallon is alive. Any saved memory of Vallon is cleared when this works."
+  },
+  "zeks-4": {
+   "title": "Kill Tallon Zek and hail his projection",
+   "why": "Tallon carries a pack of notes for Maelin. You need notes from both Tallon and Vallon Zek before Rallos Zek.",
+   "actions": [
+    {
+     "text": "In the south wing of Drunder, kill Tallon Zek. He jumps around every 20 seconds and forgets who he was fighting.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at his body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Tallon Zek",
+     "where": "In the south wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at Tallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see Maelin's thoughts: 'The pack of notes you now possess from Tallon, bring them to me.' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed Tallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed the Manaetic Behemoth in the Plane of Innovation and reported to Giwin Mirakon."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection.",
+    "If the projection says nothing, you may already have Tallon's notes.",
+    "If you get the checklist text instead, you had not reported the Behemoth to Giwin yet."
+   ],
+   "tips": "The wing doors stay shut by magic while Tallon is alive. Any saved memory of Tallon is cleared when this works."
+  },
+  "zeks-5-vallon": {
+   "title": "Kill Vallon Zek after Tallon to finish both brothers",
+   "why": "If you already have Tallon's notes, this kill gives you Vallon's too. With both, Maelin can read them.",
+   "actions": [
+    {
+     "text": "In the north wing of Drunder, fight Vallon Zek. At half health he fades into five figures. Only one is real.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Each real Vallon splits again at half health. On the fourth wave, kill the real one.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at the real Vallon's body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Vallon Zek",
+     "where": "In the north wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "Vallon Zek (the real one)",
+     "where": "One of the copies that appear when Vallon splits."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at the real Vallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see Maelin's thoughts: 'The pack of notes you now possess from Vallon, bring them to me.' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed the real Vallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Tallon Zek and hailed his projection."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection.",
+    "Only the real Vallon gives a projection. Killing a copy does nothing.",
+    "Keep every Vallon engaged. A copy left alone for 2 minutes leaves, and if the real one leaves the fight resets.",
+    "Do not pull Vallons out of his wing. They get moved back."
+   ],
+   "tips": null
+  },
+  "zeks-5-tallon": {
+   "title": "Kill Tallon Zek after Vallon to finish both brothers",
+   "why": "If you already have Vallon's notes, this kill gives you Tallon's too. With both, Maelin can read them.",
+   "actions": [
+    {
+     "text": "In the south wing of Drunder, kill Tallon Zek. He jumps around every 20 seconds and forgets who he was fighting.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at his body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Tallon Zek",
+     "where": "In the south wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at Tallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see Maelin's thoughts: 'The pack of notes you now possess from Tallon, bring them to me.' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed Tallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You killed Vallon Zek and hailed his projection."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection."
+   ],
+   "tips": null
+  },
+  "cl_vallon-1": {
+   "title": "Save a memory of Vallon if you skipped the Behemoth report",
+   "why": "If you kill Vallon before reporting the Behemoth to Giwin, the game remembers it as a saved memory. The Seer turns it into Vallon's notes later.",
+   "actions": [
+    {
+     "text": "In the north wing of Drunder, fight Vallon Zek. At half health he fades into five figures. Only one is real.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Each real Vallon splits again at half health. On the fourth wave, kill the real one.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at the real Vallon's body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Vallon Zek",
+     "where": "In the north wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "Vallon Zek (the real one)",
+     "where": "One of the copies that appear when Vallon splits."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at the real Vallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'The Planar Projection seems to flicker in and out of existence. It seems to be impressed by the defeat of Vallon Zek.' Then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed the real Vallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You are in Drunder, which is normally opened by reporting the Behemoth to Giwin.",
+    "You have not yet reported the Behemoth to Giwin yourself.",
+    "You do not already have a saved memory of Vallon."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection.",
+    "Only the real Vallon gives a projection. Killing a copy does nothing.",
+    "Keep every Vallon engaged. A copy left alone for 2 minutes leaves, and if the real one leaves the fight resets.",
+    "Do not pull Vallons out of his wing. They get moved back."
+   ],
+   "tips": "Report the Behemoth to Giwin, then sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "cl_tallon-1": {
+   "title": "Save a memory of Tallon if you skipped the Behemoth report",
+   "why": "If you kill Tallon before reporting the Behemoth to Giwin, the game remembers it as a saved memory. The Seer turns it into Tallon's notes later.",
+   "actions": [
+    {
+     "text": "In the south wing of Drunder, kill Tallon Zek. He jumps around every 20 seconds and forgets who he was fighting.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at his body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Tallon Zek",
+     "where": "In the south wing of Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at Tallon's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'The Planar Projection seems to flicker in and out of existence. It seems to be impressed by the defeat of Tallon Zek.' Then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed Tallon. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You are in Drunder, which is normally opened by reporting the Behemoth to Giwin.",
+    "You have not yet reported the Behemoth to Giwin yourself.",
+    "You do not already have a saved memory of Tallon."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "Only the wing bosses count. The Tallon and Vallon that walk out in the Rallos Zek fight give no projection."
+   ],
+   "tips": "Report the Behemoth to Giwin, then sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_vallon": {
+   "title": "Unlock your saved memory of Vallon Zek",
+   "why": "If you killed Vallon before reporting the Behemoth, this gives you Vallon's notes.",
+   "actions": [
+    {
+     "text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "You see 'Giwin's invitation to Drunder reminds you of some notes you found around Vallon's body.' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of Vallon Zek.",
+    "You have reported the Behemoth to Giwin, and you have no Vallon credit yet (either no Zek yet, or only Tallon)."
+   ],
+   "if_it_failed": [
+    "If you hear about 'strange pouches around his body', report the Behemoth to Giwin first.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back. One unlock handles your saved memories in order: Behemoth, then Vallon, then Tallon. So holding all three can catch you up in one go."
+  },
+  "seer-cl_tallon": {
+   "title": "Unlock your saved memory of Tallon Zek",
+   "why": "If you killed Tallon before reporting the Behemoth, this gives you Tallon's notes.",
+   "actions": [
+    {
+     "text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "You see 'Giwin's invitation to Drunder reminds you of some notes you found around Tallon's body.' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of Tallon Zek.",
+    "You have reported the Behemoth to Giwin, and you have no Tallon credit yet (either no Zek yet, or only Vallon)."
+   ],
+   "if_it_failed": [
+    "If you hear about 'strange pouches around his body', report the Behemoth to Giwin first.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back."
+  },
+  "cipher-1": {
+   "title": "Show Maelin both halves of the cipher",
+   "why": "Maelin joins Saryrn's and Mithaniel's halves into the Cipher of Druzzil. The cipher lets you read the gods' notes and opens the Tower of Solusek Ro.",
+   "actions": [
+    {
+     "text": "Hail Grand Librarian Maelin in the Library of Myrist in the Plane of Knowledge.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Grand Librarian Maelin",
+     "where": "Maelin Starpyre, in the Library of Myrist in the Plane of Knowledge."
+    }
+   ],
+   "works_when": "Maelin says 'Astounding, this truly is the Cipher of Druzzil!' Then 'You have received a character flag!'",
+   "credit": "Only the player who hails.",
+   "needs": [
+    "You have Mithaniel's half of the cipher (from his projection in the Temple of Marr).",
+    "You have Saryrn's half of the cipher (from her projection in Torment, the Plane of Pain).",
+    "You do not already have the Cipher of Druzzil from Maelin.",
+    "You have not yet heard Maelin's story about Meldrath's machine (after that, Maelin answers differently)."
+   ],
+   "if_it_failed": [
+    "If Maelin only says 'Welcome to Myrist!', you are missing one of the two halves.",
+    "If Maelin says 'Welcome back my friends', you already have the cipher."
+   ],
+   "tips": "Maelin uses up both halves to make the cipher."
+  },
+  "zeks-6": {
+   "title": "Bring both Zek note packs to Maelin",
+   "why": "Maelin reads the Zek notes with the cipher and learns that Rallos Zek plans to attack Norrath. This sends you after Rallos and opens the Tower of Solusek Ro.",
+   "actions": [
+    {
+     "text": "Tell Maelin you have new information. Your sentence must contain the word 'information'.",
+     "say": "information",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Grand Librarian Maelin",
+     "where": "Maelin Starpyre, in the Library of Myrist in the Plane of Knowledge."
+    }
+   ],
+   "works_when": "Maelin says 'Rallos Zek seems to be planing a massive raid on Norrath. ... Go challenge Rallos, hurry!' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You killed both Vallon Zek and Tallon Zek and hailed both projections.",
+    "You have the Cipher of Druzzil from Maelin.",
+    "You have not yet heard Maelin's story about Meldrath's machine (after that, Maelin answers differently)."
+   ],
+   "if_it_failed": [
+    "If Maelin says only one with the Cipher of Druzzil could translate the notes, get the cipher first.",
+    "If Maelin says nothing at all, you have the cipher but only one Zek. Kill the other brother.",
+    "Do not put 'hail' or 'lore' in your sentence. Those words are answered first."
+   ],
+   "tips": null
+  },
+  "zeks-7": {
+   "title": "Kill Rallos Zek the Warlord and hail his projection",
+   "why": "Rallos carries a singed parchment for Maelin. This step is needed for the Plane of Fire and for Maelin's Plane of Time story.",
+   "actions": [
+    {
+     "text": "In Drunder, kill both door guards, Decorin Berik and Decorin Grunhork. About 3 seconds later Tallon and Vallon Zek walk out.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill both brothers. Rallos Zek then appears.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Fight Rallos Zek. At half health he leaps into the arena and Rallos Zek the Warlord appears.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill Rallos Zek the Warlord in the arena pit.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears at the Warlord's body. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Decorin Berik",
+     "where": "A door guard in Drunder, the Fortress of Zek."
+    },
+    {
+     "name": "Decorin Grunhork",
+     "where": "The other door guard."
+    },
+    {
+     "name": "Rallos Zek",
+     "where": "Visible above the arena but cannot be attacked. He must be there for the fight to start."
+    },
+    {
+     "name": "Tallon Zek (Rallos fight)",
+     "where": "Walks out after the door guards die."
+    },
+    {
+     "name": "Vallon Zek (Rallos fight)",
+     "where": "Walks out after the door guards die."
+    },
+    {
+     "name": "Rallos Zek the Warlord",
+     "where": "Appears in the arena pit when Rallos Zek reaches half health."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at the Warlord's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see Maelin's thoughts: 'The singed parchment of Rallos lies in his dead hand. Bring it back to me...' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed the Warlord. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people.",
+    "If you get the checklist text, you had not yet brought both note packs to Maelin.",
+    "Watch the timers. The brothers have 20 minutes, Rallos about 19 and a half minutes to be hit, and the Warlord 20 minutes out of combat. If one runs out, the door guards return 10 minutes later.",
+    "The pit teleporter only drops you on the Warlord while he is being fought. Otherwise it sends you to the Plane of Tranquility."
+   ],
+   "tips": "After a win the fight resets after 66 hours. In guild instances a failed fight resets after 2 and a half hours. Any saved memory of Rallos is cleared when this works."
+  },
+  "cl_rallos-1": {
+   "title": "Save a memory of Rallos Zek if Maelin has not read the Zek notes",
+   "why": "If you kill the Warlord before Maelin reads both Zek note packs, the game remembers it as a saved memory. The Seer converts it later.",
+   "actions": [
+    {
+     "text": "Kill Rallos Zek the Warlord in Drunder, the same fight as the main Rallos step.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Hail the Planar Projection at his body.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "A Planar Projection",
+     "where": "Appears at the Warlord's body and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'The Planar Projection seems to flicker in and out of existence. It seems to be impressed by the defeat of Rallos Zek.' Then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed the Warlord. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You are in Drunder, which is normally opened by reporting the Behemoth to Giwin.",
+    "Maelin has not yet read both Zek note packs for you.",
+    "You do not already have a saved memory of Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Hail it while you are in the raid that got the kill. If you are not, it ignores you with no text at all.",
+    "It disappears 20 minutes after it appears. Hail it right away.",
+    "The projection can credit at most 72 people."
+   ],
+   "tips": "Bring both note packs to Maelin, then sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "seer-cl_rallos": {
+   "title": "Unlock your saved memory of Rallos Zek",
+   "why": "If you killed the Warlord before Maelin read the Zek notes, this gives you the Rallos credit.",
+   "actions": [
+    {
+     "text": "Bring both Zek note packs to Maelin first. Then sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "The Cipher on your arm glows and the Warlord says 'You have finally earned the right to claim you have 'defeated' me.' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have a saved memory of Rallos Zek.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "If you recall 'the Warlord's flaming axe', Maelin has not read both Zek note packs for you yet.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "A saved memory is kept until it unlocks. If the Seer refuses, finish the missing step and come back."
+  },
+  "zebuxoruk-1": {
+   "title": "Give Maelin the lore from Mithaniel and Karana",
+   "why": "Maelin reads Mithaniel's book and Karana's tome and learns what became of Zebuxoruk. This leads toward the Plane of Time.",
+   "actions": [
+    {
+     "text": "Tell Maelin you have new lore. Your sentence must contain the word 'lore'.",
+     "say": "lore",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Grand Librarian Maelin",
+     "where": "Maelin Starpyre, in the Library of Myrist in the Plane of Knowledge."
+    }
+   ],
+   "works_when": "Maelin says 'It is a detailed document on what has become of Zebuxoruk.' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have Mithaniel's tattered book (from his projection in the Temple of Marr).",
+    "You have Karana's tome (from saying 'follow the path of the Fallen' after Agnarr).",
+    "You have not already given Maelin this lore."
+   ],
+   "if_it_failed": [
+    "If Maelin says 'there must be another piece', you only have one of the two books.",
+    "If Maelin says 'I don't see any new lore about you', you have neither book."
+   ],
+   "tips": "You do not need the cipher for this. Maelin takes both books."
+  },
+  "zebuxoruk-2": {
+   "title": "Ask Maelin for new information about Meldrath's machine",
+   "why": "After Rallos, Maelin tells you of Meldrath's time machine and the elemental essences. This opens the way to the elemental planes.",
+   "actions": [
+    {
+     "text": "Tell Maelin you have new information. Your sentence must contain the word 'information'.",
+     "say": "information",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Grand Librarian Maelin",
+     "where": "Maelin Starpyre, in the Library of Myrist in the Plane of Knowledge."
+    }
+   ],
+   "works_when": "Maelin says 'There is no way to escape from the prison that is The Plane of Time...' and goes on to tell of Meldrath. Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You gave Maelin the Mithaniel and Karana lore.",
+    "You killed Rallos Zek the Warlord and hailed his projection."
+   ],
+   "if_it_failed": [
+    "If Maelin says 'Rallos must be stopped!', kill Rallos Zek the Warlord first.",
+    "If you still had both Zek note packs unread, this say gives you the Rallos task instead. Say it again after Rallos.",
+    "If Maelin says 'you must retrieve the elemental essence', you already have this flag."
+   ],
+   "tips": null
+  },
+  "solrotower-access": {
+   "title": "Step through the Tower of Solusek Ro portal",
+   "why": "This gives you permanent permission to enter the Tower of Solusek Ro, where the five wing bosses and Solusek Ro live.",
+   "actions": [
+    {
+     "text": "Click the Solusek Ro portal in the Plane of Tranquility. It sends you into the Tower of Solusek Ro.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Solusek Ro portal",
+     "where": "A portal in the Plane of Tranquility."
+    }
+   ],
+   "works_when": "No flag message. You are teleported into the Tower of Solusek Ro.",
+   "credit": "Only the player who clicks the portal.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "If you see 'You lack the will to pass through this portal safely', you are missing the cipher or Maelin has not read both Zek note packs.",
+    "You must be at least level 46 to enter the tower."
+   ],
+   "tips": "The permission is permanent. Losing the cipher later does not take it away."
+  },
+  "pofire-1": {
+   "title": "Ask Miak about the Plane of Fire portal",
+   "why": "Miak cannot fix the Plane of Fire portal yet. Asking him lets Solusek Ro's projection give you the Plane of Fire flag directly later.",
+   "actions": [
+    {
+     "text": "Hail Miak the Searedsoul in the Plane of Tranquility.",
+     "say": "hail",
+     "items": []
+    },
+    {
+     "text": "Say 'plane of fire'.",
+     "say": "plane of fire",
+     "items": []
+    },
+    {
+     "text": "Say 'demise'.",
+     "say": "demise",
+     "items": []
+    },
+    {
+     "text": "Say 'portal's destination'. This is the line that sets the flag.",
+     "say": "portal's destination",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Miak the Searedsoul",
+     "where": "In the Plane of Tranquility, next to the Plane of Fire portal."
+    }
+   ],
+   "works_when": "Miak says 'if you have the true route for the portal in your mind I will be able to channel the portal to the correct location.' Then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek.",
+    "You have not already finished the Plane of Fire flag."
+   ],
+   "if_it_failed": [
+    "Only 'portal's destination' sets the flag. The other lines are story and can be skipped.",
+    "If Miak says 'You are the one that discovered the portal's destination', you already have the Plane of Fire flag."
+   ],
+   "tips": "Miak checks no other flag or level. The flag line prints again if you repeat it. If you skip Miak, killing Solusek Ro gives a saved memory, and the Seer can still give you the Plane of Fire flag."
+  },
+  "sol_room-bit0": {
+   "title": "Kill Xuzl and touch the burning cauldron",
+   "why": "The Tower of Solusek Ro has five wing bosses. Touching each cauldron after its boss dies is needed to reach Solusek Ro.",
+   "actions": [
+    {
+     "text": "Kill Xuzl in his wing of the Tower of Solusek Ro. Do not pull him out of his area or he resets and forgets who he was fighting.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "While the flaming cauldron is lit, click the burning cauldron in Xuzl's room.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Xuzl",
+     "where": "Wing boss in the Tower of Solusek Ro."
+    },
+    {
+     "name": "A flaming cauldron",
+     "where": "Appears in Xuzl's room when he dies and stays 30 minutes."
+    },
+    {
+     "name": "The burning cauldron",
+     "where": "The clickable cauldron in Xuzl's room."
+    }
+   ],
+   "works_when": "You see 'As you place your hand on the burning cauldron, you feel arcane wisdom pulsing in your mind.' Then 'You have received a character flag!'",
+   "credit": "Everyone who clicks the cauldron while it is lit. Raid, group and distance do not matter. Anyone in the zone can click.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Click while the burning cauldron is still lit. It disappears 30 minutes after the boss dies.",
+    "If you see 'You become disoriented as you pass through the portal of flames', the cauldron was gone. The click still teleports you."
+   ],
+   "tips": "The cauldron also teleports you. Check your progress with the Seer's guided meditation once you have spoken to Miak. The Seer then says 'Xuzl's arcane wisdom pulses in your mind.'"
+  },
+  "sol_room-bit1": {
+   "title": "Kill Arlyxir and touch the burning cauldron",
+   "why": "The Tower of Solusek Ro has five wing bosses. Touching each cauldron after its boss dies is needed to reach Solusek Ro.",
+   "actions": [
+    {
+     "text": "Kill Arlyxir in his wing of the Tower of Solusek Ro. Keep him in his area. Every 12 and a half minutes of combat he heals fully ('is immolated in flames, and is reborn!').",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "While the flaming cauldron is lit, click the burning cauldron in Arlyxir's room.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Arlyxir",
+     "where": "Wing boss in the Tower of Solusek Ro."
+    },
+    {
+     "name": "A flaming cauldron",
+     "where": "Appears in Arlyxir's room when he dies and stays 30 minutes."
+    },
+    {
+     "name": "The burning cauldron",
+     "where": "The clickable cauldron in Arlyxir's room."
+    }
+   ],
+   "works_when": "You see 'As you place your hand on the burning cauldron, you feel a wealth of knowledge enter your mind.' Then 'You have received a character flag!'",
+   "credit": "Everyone who clicks the cauldron while it is lit. Raid, group and distance do not matter. Anyone in the zone can click.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Click while the burning cauldron is still lit. It disappears 30 minutes after the boss dies.",
+    "If you see 'You become disoriented as you pass through the portal of flames', the cauldron was gone. The click still teleports you."
+   ],
+   "tips": "The cauldron also teleports you. Check your progress with the Seer's guided meditation once you have spoken to Miak. The Seer then says 'Arlyxir's wealth of knowledge flows through your mind.'"
+  },
+  "sol_room-bit2": {
+   "title": "Kill the Protector of Dresolik and touch the burning cauldron",
+   "why": "The Tower of Solusek Ro has five wing bosses. Touching each cauldron after its boss dies is needed to reach Solusek Ro.",
+   "actions": [
+    {
+     "text": "Kill all four Guardians of Dresolik in the Tower of Solusek Ro. When the last dies, the Protector of Dresolik appears.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "Kill the Protector of Dresolik. Keep the fight in the room or the mobs reset.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "While the flaming cauldron is lit, click the burning cauldron in Dresolik's room.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Guardian of Dresolik",
+     "where": "Four of them guard Dresolik's wing in the Tower of Solusek Ro."
+    },
+    {
+     "name": "The Protector of Dresolik",
+     "where": "Appears when the last Guardian dies. Leaves after 2 and a half hours out of combat."
+    },
+    {
+     "name": "A flaming cauldron",
+     "where": "Appears when the Protector dies and stays 30 minutes."
+    },
+    {
+     "name": "The burning cauldron",
+     "where": "The clickable cauldron in Dresolik's room."
+    }
+   ],
+   "works_when": "You see 'As you place your hand on the burning cauldron, you feel a bolt of energy surge through your arm.' Then 'You have received a character flag!'",
+   "credit": "Everyone who clicks the cauldron while it is lit. Raid, group and distance do not matter. Anyone in the zone can click.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Click while the burning cauldron is still lit. It disappears 30 minutes after the boss dies.",
+    "If you see 'You become disoriented as you pass through the portal of flames', the cauldron was gone. The click still teleports you."
+   ],
+   "tips": "The cauldron also teleports you. Check your progress with the Seer's guided meditation once you have spoken to Miak. The Seer then says 'The power of Dresolik surges through you.'"
+  },
+  "sol_room-bit3": {
+   "title": "Kill Rizlona and touch the burning cauldron",
+   "why": "The Tower of Solusek Ro has five wing bosses. Touching each cauldron after its boss dies is needed to reach Solusek Ro.",
+   "actions": [
+    {
+     "text": "Kill Rizlona in her wing of the Tower of Solusek Ro. A second form of Rizlona appears where she died. Kill it too. Keep both in the room or they reset.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "While the flaming cauldron is lit, click the burning cauldron in Rizlona's room.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Rizlona",
+     "where": "Wing boss in the Tower of Solusek Ro."
+    },
+    {
+     "name": "Rizlona (second form)",
+     "where": "Appears where Rizlona died. Leaves after 2 and a half hours out of combat."
+    },
+    {
+     "name": "A flaming cauldron",
+     "where": "Appears when the second form dies and stays 30 minutes."
+    },
+    {
+     "name": "The burning cauldron",
+     "where": "The clickable cauldron in Rizlona's room."
+    }
+   ],
+   "works_when": "You see 'As you place your hand on the burning cauldron, you feel relaxed as a short tune slips into your thoughts.' Then 'You have received a character flag!'",
+   "credit": "Everyone who clicks the cauldron while it is lit. Raid, group and distance do not matter. Anyone in the zone can click.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Click while the burning cauldron is still lit. It disappears 30 minutes after the boss dies.",
+    "If you see 'You become disoriented as you pass through the portal of flames', the cauldron was gone. The click still teleports you."
+   ],
+   "tips": "The cauldron also teleports you. Check your progress with the Seer's guided meditation once you have spoken to Miak. The Seer then says 'Rizlona's song slips through your thoughts.'"
+  },
+  "sol_room-bit4": {
+   "title": "Kill Jiva and touch the burning cauldron",
+   "why": "The Tower of Solusek Ro has five wing bosses. Touching each cauldron after its boss dies is needed to reach Solusek Ro.",
+   "actions": [
+    {
+     "text": "Kill Jiva in her wing of the Tower of Solusek Ro. Every 45 seconds of combat she calls in one helper, cycling through eight named ones.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "While the flaming cauldron is lit, click the burning cauldron in Jiva's room.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Jiva",
+     "where": "Wing boss in the Tower of Solusek Ro."
+    },
+    {
+     "name": "A flaming cauldron",
+     "where": "Appears in Jiva's room when she dies and stays 30 minutes."
+    },
+    {
+     "name": "The burning cauldron",
+     "where": "The clickable cauldron in Jiva's room."
+    }
+   ],
+   "works_when": "You see 'As you place your hand on the burning cauldron, you feel your body fill with strength.' Then 'You have received a character flag!'",
+   "credit": "Everyone who clicks the cauldron while it is lit. Raid, group and distance do not matter. Anyone in the zone can click.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek."
+   ],
+   "if_it_failed": [
+    "Click while the burning cauldron is still lit. It disappears 30 minutes after the boss dies.",
+    "If you see 'You become disoriented as you pass through the portal of flames', the cauldron was gone. The click still teleports you."
+   ],
+   "tips": "The cauldron also teleports you. Check your progress with the Seer's guided meditation once you have spoken to Miak. The Seer then says 'Jiva's strength fills your body.'"
+  },
+  "solusek-chamber": {
+   "title": "Pass the lava runes into Solusek Ro's chamber",
+   "why": "The lava runes move you into Solusek Ro's chamber. They only let you through once all five cauldrons and Rallos Zek are done.",
+   "actions": [
+    {
+     "text": "Click either set of lava runes in the Tower of Solusek Ro. You are moved into the chamber.",
+     "say": null,
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Lava runes",
+     "where": "One set of lava runes in the Tower of Solusek Ro."
+    },
+    {
+     "name": "Lava runes",
+     "where": "The other set of lava runes beside it."
+    }
+   ],
+   "works_when": "No flag message. You are moved into Solusek Ro's chamber.",
+   "credit": "Only the player who clicks. A pet that is not charmed follows.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek.",
+    "You touched Xuzl's burning cauldron.",
+    "You touched Arlyxir's burning cauldron.",
+    "You touched Dresolik's burning cauldron.",
+    "You touched Rizlona's burning cauldron.",
+    "You touched Jiva's burning cauldron.",
+    "You killed Rallos Zek the Warlord and hailed his projection."
+   ],
+   "if_it_failed": [
+    "If 'The lava runes scorch your skin', you are missing at least one of the five cauldrons. All five must be done on this character.",
+    "If the runes say 'a warring spirit prevents your passage', kill Rallos Zek the Warlord first."
+   ],
+   "tips": "Players can end up in the chamber other ways, such as a raid summon. The projection still needs all five cauldrons."
+  },
+  "pofire-2-projection": {
+   "title": "Kill Solusek Ro and hail his projection",
+   "why": "This gives you the Plane of Fire flag. Miak then adjusts the Plane of Tranquility portal so you can enter the Plane of Fire.",
+   "actions": [
+    {
+     "text": "Kill Solusek Ro in his chamber in the Tower of Solusek Ro. Do not drag him down out of his chamber below half health. He heals hugely and calls a Guardian of Fire.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Solusek Ro",
+     "where": "In his chamber in the Tower of Solusek Ro."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears in the chamber after Solusek Ro dies and stays 20 minutes."
+    }
+   ],
+   "works_when": "Miak's thoughts say 'The portal into the Plane of Fire lies within the Lava Well of Ro.' Then 'You have received a character flag!'",
+   "credit": "Everyone in the raid that killed Solusek Ro. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek.",
+    "You touched Xuzl's burning cauldron.",
+    "You touched Arlyxir's burning cauldron.",
+    "You touched Dresolik's burning cauldron.",
+    "You touched Rizlona's burning cauldron.",
+    "You touched Jiva's burning cauldron.",
+    "You asked Miak the Searedsoul about the portal's destination.",
+    "You killed Rallos Zek the Warlord and hailed his projection."
+   ],
+   "if_it_failed": [
+    "Hail from inside the raid that killed Solusek Ro. You can still join that raid before hailing.",
+    "The projection ignores you silently unless you touched all five cauldrons.",
+    "It disappears 20 minutes after it appears, and stops after 72 grants.",
+    "Only 'hail' works.",
+    "If you get the checklist text, you had not asked Miak or not killed Rallos. Unlock it later at the Seer."
+   ],
+   "tips": "Any saved memory of Solusek Ro is cleared when this works."
+  },
+  "cl_solusek-1": {
+   "title": "Save a memory of Solusek Ro if you are missing Miak or Rallos",
+   "why": "If you kill Solusek Ro without having asked Miak, or before Rallos Zek, the game saves a memory. The Seer turns it into the Plane of Fire flag later.",
+   "actions": [
+    {
+     "text": "Kill Solusek Ro in his chamber in the Tower of Solusek Ro. Do not drag him down out of his chamber below half health. He heals hugely and calls a Guardian of Fire.",
+     "say": null,
+     "items": []
+    },
+    {
+     "text": "A Planar Projection appears. Everyone in the raid hails it.",
+     "say": "hail",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Solusek Ro",
+     "where": "In his chamber in the Tower of Solusek Ro."
+    },
+    {
+     "name": "A Planar Projection",
+     "where": "Appears in the chamber after Solusek Ro dies and stays 20 minutes."
+    }
+   ],
+   "works_when": "You see 'The Planar Projection flickers in and out of existence. It seems to be impressed by the defeat of Solusek Ro.' Then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid that killed Solusek Ro. If there was no raid, the killer's group, or the killer alone. Each person must hail for themselves.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek.",
+    "You touched Xuzl's burning cauldron.",
+    "You touched Arlyxir's burning cauldron.",
+    "You touched Dresolik's burning cauldron.",
+    "You touched Rizlona's burning cauldron.",
+    "You touched Jiva's burning cauldron.",
+    "You do not already have the Plane of Fire flag.",
+    "You do not already have a saved memory of Solusek Ro."
+   ],
+   "if_it_failed": [
+    "Hail from inside the raid that killed Solusek Ro. You can still join that raid before hailing.",
+    "The projection ignores you silently unless you touched all five cauldrons.",
+    "It disappears 20 minutes after it appears, and stops after 72 grants.",
+    "Only 'hail' works."
+   ],
+   "tips": "You get this instead of the real flag when you have not asked Miak, or have not killed Rallos. Once Rallos is done, sit by Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'."
+  },
+  "pofire-2-seer": {
+   "title": "Unlock your saved memory of Solusek Ro",
+   "why": "If you killed Solusek Ro before Rallos Zek or without Miak, this gives you the Plane of Fire flag.",
+   "actions": [
+    {
+     "text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge and say 'unlock memories'.",
+     "say": "unlock memories",
+     "items": []
+    }
+   ],
+   "npcs": [
+    {
+     "name": "Seer Mal Nae`Shi",
+     "where": "In the Plane of Knowledge."
+    }
+   ],
+   "works_when": "You see an empty line, then 'You have received a character flag!'",
+   "credit": "Only the player who speaks.",
+   "needs": [
+    "You have the Cipher of Druzzil from Maelin.",
+    "You brought both Zek note packs to Maelin and Maelin sent you after Rallos Zek.",
+    "You have a saved memory of Solusek Ro.",
+    "You killed Rallos Zek the Warlord and hailed his projection."
+   ],
+   "if_it_failed": [
+    "If the Seer says 'you still must prove your warrior's spirit', kill Rallos Zek the Warlord first.",
+    "Sit down before you speak. If you stand, the Seer says 'You will never be able to focus unless you are relaxed.'",
+    "Your sentence must contain both words 'unlock' and 'memories'.",
+    "If the Seer says 'no recent events spark a memory', you have no saved memory to unlock."
+   ],
+   "tips": "The Seer does not check Miak or the cauldrons here. The Seer also unlocks all your other saved memories in the same say."
+  }
+ }
+}

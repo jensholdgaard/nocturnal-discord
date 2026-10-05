@@ -138,21 +138,21 @@ DONE_BY = {
 # Added to every step in the plane except the access steps themselves and the
 # Seer, who stands in the Plane of Knowledge.
 PLANE_ACCESS = {
-    "Plane of Valor": [("mavuin", ">=", "3", "Plane of Valor portal: Mavuin's case complete (mavuin 3)")],
-    "Plane of Storms": [("mavuin", ">=", "3", "Plane of Storms portal: Mavuin's case complete (mavuin 3)")],
-    "Crypt of Decay": [("grummus", "present", None, "Crypt of Decay: the Grummus flag")],
+    "Plane of Valor": [("mavuin", ">=", "3", "You finished Mavuin's case in the Plane of Justice, which opens the Plane of Valor.")],
+    "Plane of Storms": [("mavuin", ">=", "3", "You finished Mavuin's case in the Plane of Justice, which opens the Plane of Storms.")],
+    "Crypt of Decay": [("grummus", "present", None, "You killed Grummus in the Plane of Disease, which opens the Crypt of Decay.")],
     "Plane of Torment": [
-        ("fuirstel", ">=", "5", "Plane of Torment portal: Fuirstel progression complete"),
-        ("thelin", ">=", "4", "Plane of Torment portal: Thelin released"),
+        ("fuirstel", ">=", "5", "You finished the Plane of Disease story with the Fuirstel brothers."),
+        ("thelin", ">=", "4", "You freed Thelin from his nightmare."),
     ],
-    "Halls of Honor": [("aerindar", ">=", "2", "Halls of Honor: the Aerin`Dar flag (aerindar 2)")],
-    "Bastion of Thunder": [("karana", ">=", "3", "Bastion of Thunder: the Storms shrine (karana 3)")],
-    "Plane of Tactics": [("zeks", ">=", "2", "Drunder: Giwin's flag after the Manaetic Behemoth (zeks 2)")],
+    "Halls of Honor": [("aerindar", ">=", "2", "You beat Aerin`Dar in the Plane of Valor and stepped through to the Halls of Honor.")],
+    "Bastion of Thunder": [("karana", ">=", "3", "You used the shrine in the Plane of Storms that opens the Bastion of Thunder.")],
+    "Plane of Tactics": [("zeks", ">=", "2", "You beat the Manaetic Behemoth in the Plane of Innovation and talked to Giwin afterwards.")],
     "Tower of Solusek Ro": [
-        ("cipher", "present", None, "Tower of Solusek Ro portal: the Cipher of the Divine Language"),
-        ("zeks", ">=", "6", "Tower of Solusek Ro portal: zeks 6 (both Zeks reported to Maelin)"),
+        ("cipher", "present", None, "You have the Cipher of the Divine Language from Grand Librarian Maelin."),
+        ("zeks", ">=", "6", "You told Maelin about both Vallon and Tallon Zek."),
     ],
-    "Elemental Planes": [("zebuxoruk", ">=", "2", "Elemental planes: Maelin's information (zebuxoruk 2)")],
+    "Elemental Planes": [("zebuxoruk", ">=", "2", "Grand Librarian Maelin has told you to gather the four elemental essences.")],
 }
 OPEN_STEPS = {
     "access-valor-storms", "access-codecay", "access-potorment", "solrotower-access",
@@ -317,6 +317,49 @@ def main():
                 "notes": s.get("notes") or None,
                 "source": [source(x) for x in s.get("source", [])],
             })
+
+    # Plain-language text (research/plain_*.json), written from the built
+    # steps for members new to the expansion: it replaces every text field,
+    # pairing requirements and NPCs by position.
+    plain = {}
+    for fn in sorted(os.listdir(os.path.join(HERE, "research"))):
+        if fn.startswith("plain_") and fn.endswith(".json"):
+            with open(os.path.join(HERE, "research", fn)) as fh:
+                plain.update(json.load(fh)["steps"])
+    for st in out:
+        pl = plain.get(st["id"])
+        if not pl:
+            raise SystemExit(f"no plain text for {st['id']}")
+        items = {i["id"]: i for a in st["actions"] for i in a.get("items", [])}
+        st["title"] = pl["title"]
+        st["why"] = pl.get("why") or None
+        st["actions"] = [
+            {k: v for k, v in {
+                "detail": a["text"],
+                "say": a.get("say") or None,
+                "items": [items[i] for i in a.get("items", []) if i in items],
+            }.items() if v not in (None, [])}
+            for a in pl["actions"]
+        ]
+        if len(pl["npcs"]) != len(st["npcs"]) or len(pl["needs"]) != len(st["requires"]):
+            raise SystemExit(f"plain text for {st['id']} does not line up")
+        for n, pn in zip(st["npcs"], pl["npcs"]):
+            n["name"] = pn["name"]
+            n.pop("notes", None)
+            if pn.get("where"):
+                n["notes"] = pn["where"]
+            n.pop("spawn", None)
+        last = None
+        for c, need in zip(st["requires"], pl["needs"]):
+            if need == last:
+                c.pop("why", None)  # one sentence for an expanded bit string
+            else:
+                c["why"] = need
+            last = need
+        st["message"] = pl.get("works_when") or None
+        st["credit"] = pl.get("credit") or None
+        st["debug"] = pl.get("if_it_failed", [])
+        st["notes"] = pl.get("tips") or None
 
     # Tier order, then the research order within a tier.
     out.sort(key=lambda st: st["tier"])

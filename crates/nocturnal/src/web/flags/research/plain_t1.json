@@ -1,0 +1,598 @@
+{
+ "steps": {
+  "mavuin-1": {
+   "title": "Hear Mavuin's plea in his cell",
+   "why": "Mavuin is a prisoner in the Plane of Justice who says he was framed. Agreeing to help him starts the Plane of Justice story, which later opens the portals to Valor and Storms.",
+   "actions": [
+    {"text": "Find Mavuin in his prison cell in the Plane of Justice and hail him. He offers his journal and mentions information.", "say": "hail", "items": []},
+    {"text": "Say information to Mavuin to get the flag.", "say": "information", "items": []}
+   ],
+   "npcs": [
+    {"name": "Mavuin", "where": "Locked in a prison cell in the Plane of Justice. Always there."}
+   ],
+   "works_when": "Mavuin asks you to 'go before the tribunal and plead my case', then you see 'You have received a character flag!'",
+   "credit": "Only the person who says information.",
+   "needs": ["You have not spoken to Mavuin about his case before."],
+   "if_it_failed": [
+    "If hailing him gives 'Please it is the only hope that I live for...', you already have this step. Go to the Tribunal next.",
+    "If you see the flag message again, it does not mean anything changed. You already had this step.",
+    "Once the Tribunal has agreed to hear his case, Mavuin ignores the word information. You are past this step."
+   ],
+   "tips": "Any sentence that contains the word information works."
+  },
+  "poj-trial-mark": {
+   "title": "Win a Tribunal trial and loot its Mark",
+   "why": "The Tribunal will only hear Mavuin's plea from someone who has won one of its six trials. Winning a trial gives you its Mark as proof.",
+   "actions": [
+    {"text": "Optionally say prove to a Tribunal in the trial room. It asks if you are prepared.", "say": "prove", "items": []},
+    {"text": "Optionally say prepared. That Tribunal describes its trial. Each of the six Tribunals runs a different trial.", "say": "prepared", "items": []},
+    {"text": "Say the start phrase to the matching Tribunal to begin and be moved into the trial. The example here is Lashing. For the others say 'ready to begin the Trial of Execution', Stoning, Torture, Hanging or Flame.", "say": "ready to begin the Trial of Lashing", "items": []},
+    {"text": "Win the trial. A boss appears at the end: Lashman Azakal (Lashing), Prime Executioner Vathoch (Execution), Yurae Zhaleem (Stoning), Punisher Veshtaq (Torture), Gallows Master Teion (Hanging) or Punisher of Flame (Flame). Kill it.", "say": null, "items": []},
+    {"text": "Loot that trial's Mark from the boss corpse. It always drops enough for everyone, but each player must loot their own.", "say": null, "items": [31960, 31842, 31845, 31844, 31846, 31796]}
+   ],
+   "npcs": [
+    {"name": "The Tribunal (Trial of Lashing)", "where": "One of six Tribunals in the trial room of the Plane of Justice. This one runs the Trial of Lashing."},
+    {"name": "The Tribunal (Trial of Execution)", "where": "In the trial room. Runs the Trial of Execution."},
+    {"name": "The Tribunal (Trial of Stoning)", "where": "In the trial room. Runs the Trial of Stoning."},
+    {"name": "The Tribunal (Trial of Torture)", "where": "In the trial room. Runs the Trial of Torture."},
+    {"name": "The Tribunal (Trial of Hanging)", "where": "In the trial room. Runs the Trial of Hanging."},
+    {"name": "The Tribunal (Trial of Flame)", "where": "In the trial room. Runs the Trial of Flame."}
+   ],
+   "works_when": "The Tribunal says 'Then begin.' and you are moved into the trial. After the win, the Mark is in your inventory.",
+   "credit": "No flag here. Each player who loots a Mark from the boss corpse has one. The Mark is what counts.",
+   "needs": [],
+   "if_it_failed": [
+    "Say the phrase with that Tribunal's own trial name. Naming another trial does nothing.",
+    "'That trial is already underway.  You must wait.' means another team is in it, or someone is still inside. Wait and try again.",
+    "Stand close to the Tribunal when the leader speaks. Only your group nearby is moved in. In a raid, only the speaker's raid group nearby goes in.",
+    "If the trial fails you see that it 'has failed' and are sent back 10 seconds later. Corpses inside are moved to the graveyard. You can retry after 1 minute.",
+    "The boss corpse decays after 8 minutes. You are sent out about 10 minutes after a win. Loot your Mark quickly.",
+    "Marks are lore. You cannot loot a second copy of a Mark you already have."
+   ],
+   "tips": "Each trial fails in its own way, for example if a prisoner dies. After a win the trial is locked for 10 minutes. You get a warning one minute before you are sent out. If you log in inside a trial area, you are moved out of it."
+  },
+  "mavuin-2": {
+   "title": "Plead Mavuin's case to the Tribunal",
+   "why": "With a trial won, you can ask the Tribunal to hear Mavuin's plea. This is the middle step of the Plane of Justice story.",
+   "actions": [
+    {"text": "Carry at least one trial Mark. Say mavuin to any of the six Tribunals in the trial room.", "say": "mavuin", "items": []}
+   ],
+   "npcs": [
+    {"name": "The Tribunal", "where": "Any of the six Tribunals in the Plane of Justice trial room."}
+   ],
+   "works_when": "The Tribunal says 'You have completed a trial - impressive for mortals.  You can tell Mavuin that we will hear his plea.' then 'You have received a character flag!'",
+   "credit": "Only the person who says mavuin.",
+   "needs": [
+    "You have heard Mavuin's plea in his cell.",
+    "You have at least one trial Mark in your inventory, bags, bank or shared bank."
+   ],
+   "if_it_failed": [
+    "If the Tribunal says you 'must prove yourself in one of our trials', it cannot find a Mark. Win a trial and loot your Mark.",
+    "Marks left on your corpse do not count. Get your corpse back first.",
+    "If the Tribunal says nothing at all, you have not talked to Mavuin yet. Do that first.",
+    "Hailing only gives 'What do you want, mortal?'. You must say mavuin.",
+    "'Do not worry about Mavuin...' means you already finished his story."
+   ],
+   "tips": null
+  },
+  "mavuin-3": {
+   "title": "Tell Mavuin the Tribunal will hear him",
+   "why": "This finishes the Plane of Justice story. It opens the Plane of Valor and Plane of Storms portals in the Plane of Tranquility.",
+   "actions": [
+    {"text": "Go back to Mavuin's cell in the Plane of Justice and hail him.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Mavuin", "where": "In his prison cell in the Plane of Justice."}
+   ],
+   "works_when": "Mavuin thanks you and asks you to 'seek an audience with Karana and Mithaniel Marr', then 'You have received a character flag!'",
+   "credit": "Only the person who hails him.",
+   "needs": ["The Tribunal has agreed to hear Mavuin's case."],
+   "if_it_failed": [
+    "'Please it is the only hope that I live for...' means you still need to plead his case to the Tribunal.",
+    "The flag message shows on every hail after this point. Seeing it again does not mean a new flag."
+   ],
+   "tips": "Mavuin also asks you to seek from Marr a way to translate the divine language. A later step needs this one finished."
+  },
+  "seventh-1": {
+   "title": "Show all six Marks to the Tribunal",
+   "why": "An optional step. Winning all six trials earns The Mark of Justice, which lets you challenge the Seventh Hammer.",
+   "actions": [
+    {"text": "Carry all six trial Marks. Say knowledge to one of the Tribunals in the trial room. You get the flag and The Mark of Justice.", "say": "knowledge", "items": [31599]}
+   ],
+   "npcs": [
+    {"name": "The Tribunal", "where": "Any of the Tribunals in the Plane of Justice trial room."}
+   ],
+   "works_when": "The Tribunal says 'Most impressive.' and 'A gleaming metal disc appears in your hand.' then 'You have received a character flag!'",
+   "credit": "Only the person who says knowledge.",
+   "needs": ["You hold all six trial Marks, or you already did this step before."],
+   "if_it_failed": [
+    "'there are more trials yet for you to complete' means you have some Marks but not all six.",
+    "'The knowledge of the gods is not so easily given to an unproven mortal.' means it found no Marks at all.",
+    "Marks count from your inventory, bags, bank and shared bank."
+   ],
+   "tips": "Some guides say to use the word information. The word that works is knowledge. If you lose The Mark of Justice later, say knowledge again to get a new one. This step is not needed to finish the first tier."
+  },
+  "seventh-hammer": {
+   "title": "Enter the Seventh Hammer's room (optional)",
+   "why": "An optional fight. The Mark of Justice takes you to the Seventh Hammer. Killing it gives no flag.",
+   "actions": [
+    {"text": "Pick up The Mark of Justice so it sits on your mouse cursor. Then click one of the six trial portal doors in the Plane of Justice.", "say": null, "items": [31599]},
+    {"text": "Optionally say ready to face to the Seventh Hammer to start the fight.", "say": "ready to face", "items": []},
+    {"text": "Kill the Seventh Hammer. This kill gives no flag.", "say": null, "items": []}
+   ],
+   "npcs": [
+    {"name": "The Seventh Hammer", "where": "Alone in his own room, reached through a trial portal while holding The Mark of Justice. Respawns every 3 days."}
+   ],
+   "works_when": "You arrive in the Seventh Hammer's room. Hailing him gives 'are you ready to face judgement?'",
+   "credit": "No flag for anyone.",
+   "needs": ["You hold The Mark of Justice on your cursor when you click the portal."],
+   "if_it_failed": [
+    "The Mark must be on your cursor. It does not work from a bag or while worn.",
+    "Only the six trial portal doors take you there.",
+    "If the Seventh Hammer is already fighting someone, you go to the normal destination instead."
+   ],
+   "tips": null
+  },
+  "fuirstel-1": {
+   "title": "Get the ward request from Adler Fuirstel",
+   "why": "Adler's brother Milyk is dying of a plague. Agreeing to fetch the ward starts the Plane of Disease story.",
+   "actions": [
+    {"text": "Optionally hail Adler Fuirstel in the Plane of Tranquility.", "say": "hail", "items": []},
+    {"text": "Optionally say plane of disease for the story.", "say": "plane of disease", "items": []},
+    {"text": "Say ward to get the flag.", "say": "ward", "items": []}
+   ],
+   "npcs": [
+    {"name": "Adler Fuirstel", "where": "Standing outside in the Plane of Tranquility, not with his brother in the elders' building."}
+   ],
+   "works_when": "Adler says 'If you dare travel into this pungent plane and find the ward bring it back.' then 'You have received a character flag!'",
+   "credit": "Only the person who says ward.",
+   "needs": ["You have not started the Plane of Disease story yet."],
+   "if_it_failed": [
+    "The flag message shows even if you already started this story. It only changes something the first time.",
+    "If you killed Grummus before talking to Adler, do this step now. Then use your saved memory at the Seer."
+   ],
+   "tips": null
+  },
+  "fuirstel-2": {
+   "title": "Kill Grummus and hail the planar projection",
+   "why": "Grummus guards the way into Bertoxxulous's home. His death gives you the ward that Milyk Fuirstel needs.",
+   "actions": [
+    {"text": "Kill Grummus in the Plane of Disease. A planar projection appears at his corpse.", "say": null, "items": []},
+    {"text": "Hail the projection within 20 minutes.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Grummus", "where": "In the Plane of Disease. Respawns every 3 days."},
+    {"name": "A Planar Projection", "where": "Appears where Grummus died. Stays for 20 minutes."}
+   ],
+   "works_when": "You hear Milyk Fuirstel's voice: 'return to me with the ward that now envelops your body.' then 'You have received a character flag!'",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": ["Adler Fuirstel has asked you to bring back the ward."],
+   "if_it_failed": [
+    "No reply at all means you are not in the raid or group that earned the kill.",
+    "Do not leave and rejoin the raid. A rejoin can change the raid and lose your credit.",
+    "The projection gives credit only a limited number of times. Hail early.",
+    "The projection leaves 20 minutes after it appears."
+   ],
+   "tips": "The same hail also gives you Crypt of Decay access if you lack it. It clears any saved Grummus memory you held."
+  },
+  "grummus-1": {
+   "title": "Earn Crypt of Decay access from the Grummus kill",
+   "why": "Hailing the projection after Grummus dies records that Grummus is dead. That is your access to the Crypt of Decay, home of Bertoxxulous.",
+   "actions": [
+    {"text": "Kill Grummus in the Plane of Disease.", "say": null, "items": []},
+    {"text": "Hail the planar projection. Every credited player without Crypt of Decay access gets it, wherever they are in the Fuirstel story.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "A Planar Projection", "where": "Appears where Grummus died. Stays for 20 minutes."}
+   ],
+   "works_when": "There is no message of its own. You see whatever else the projection says to you.",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [],
+   "if_it_failed": [
+    "This is given silently. If you are midway through the Fuirstel story, the projection may say nothing at all and still give it.",
+    "Ask the Seer for guided meditation. She says the entrance to the Crypt of Bertoxxulous 'should open before your might' once you have it.",
+    "There is no saved memory for this one. You must be credited for a Grummus kill and hail the projection."
+   ],
+   "tips": "Entering the Crypt of Decay with this step done adds the zone to your access list. It is unclear whether the server enforces Crypt of Decay entry."
+  },
+  "cl_grummus-1": {
+   "title": "Save a memory of Grummus before meeting Adler",
+   "why": "If you kill Grummus before Adler Fuirstel asks for the ward, the game saves a memory of it. You turn it into real credit later at the Seer.",
+   "actions": [
+    {"text": "Be credited for a Grummus kill before you have talked to Adler Fuirstel.", "say": null, "items": []},
+    {"text": "Hail the planar projection to save the memory.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "A Planar Projection", "where": "Appears where Grummus died."}
+   ],
+   "works_when": "The projection tells you to 'push it out of the way and jump into the very plague that is Bertoxxulous' home', then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [
+    "You have not started the Plane of Disease story with Adler Fuirstel.",
+    "You do not already have a saved Grummus memory."
+   ],
+   "if_it_failed": [
+    "If you already talked to Adler, you get the real credit instead. Nothing to save."
+   ],
+   "tips": "Next, say ward to Adler Fuirstel. Then sit next to Seer Mal Nae`Shi in the Plane of Knowledge and say unlock memories."
+  },
+  "seer-cl_grummus": {
+   "title": "Unlock the Grummus memory at the Seer",
+   "why": "Turns your saved memory of the Grummus kill into real credit, as if you had the ward all along.",
+   "actions": [
+    {"text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge. Say unlock memories.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge. Always there."}
+   ],
+   "works_when": "'Inside you find the small ward that was lying near Grummus' body, perhaps you should bring this to Milyk.' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": [
+    "You have a saved memory of the Grummus kill.",
+    "Adler Fuirstel has asked you for the ward, and you have not gone further."
+   ],
+   "if_it_failed": [
+    "Sit down. Standing gives 'You will never be able to focus unless you are relaxed.'",
+    "If you 'remember seeing a small trinket by Grummus' body', go say ward to Adler Fuirstel first.",
+    "'no recent events spark a memory' means you have no saved memories."
+   ],
+   "tips": "Any line with both words unlock and memories works."
+  },
+  "fuirstel-3": {
+   "title": "Bring the ward to Elder Fuirstel",
+   "why": "The ward you carry saves Milyk Fuirstel from death. He then asks you to kill Bertoxxulous.",
+   "actions": [
+    {"text": "Hail Elder Fuirstel (Milyk) in the elders' building in the Plane of Tranquility. No item is needed.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Elder Fuirstel", "where": "In the elders' building in the Plane of Tranquility."}
+   ],
+   "works_when": "Elder Fuirstel says 'I no longer feel the touch of death on my soul.' then 'You have received a character flag!'",
+   "credit": "Only the person who hails him.",
+   "needs": ["You got the ward from the Grummus kill, or from your saved memory at the Seer."],
+   "if_it_failed": [
+    "If he only 'groans in agony', you do not have the ward yet. Kill Grummus and hail the projection."
+   ],
+   "tips": "The ward is not an item. Just hail him. The next step is killing Bertoxxulous in the Crypt of Decay, which is in the second tier."
+  },
+  "fuirstel-5": {
+   "title": "Report Bertoxxulous' defeat to Elder Fuirstel",
+   "why": "This finishes the Plane of Disease story. Together with Thelin's story, it opens the portal to Torment, the Plane of Pain.",
+   "actions": [
+    {"text": "After you have credit for killing Bertoxxulous, hail Elder Fuirstel in the Plane of Tranquility.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Elder Fuirstel", "where": "In the elders' building in the Plane of Tranquility."}
+   ],
+   "works_when": "Elder Fuirstel says 'Welcome back friend.  I must tell you that my brother and I shall never forget what you have done for us.' then 'You have received a character flag!'",
+   "credit": "Only the person who hails him.",
+   "needs": ["You got credit for killing Bertoxxulous in the Crypt of Decay."],
+   "if_it_failed": [
+    "If he repeats his text about the ward, you are missing credit for Bertoxxulous."
+   ],
+   "tips": "This and visiting the recovered Thelin together open the Torment portal and new talk with Fahlia Shadyglade about Tylis. It is needed to finish the first tier."
+  },
+  "thelin-1": {
+   "title": "Learn of Thelin's coma from Adroha Jezith",
+   "why": "Thelin Poxbourne is trapped in a nightmare by Terris Thule. Listening to Adroha starts the Plane of Nightmare story.",
+   "actions": [
+    {"text": "Optionally hail Adroha Jezith in the elders' building in the Plane of Tranquility.", "say": "hail", "items": []},
+    {"text": "Optionally say coma to hear the story.", "say": "coma", "items": []},
+    {"text": "Say tortured by nightmares to get the flag.", "say": "tortured by nightmares", "items": []}
+   ],
+   "npcs": [
+    {"name": "Adroha Jezith", "where": "In the elders' building in the Plane of Tranquility, next to the sleeping Thelin."}
+   ],
+   "works_when": "Adroha says 'Try to find his planar projection in Terris' plane. Help him wake from this torment.' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": ["You have not started Thelin's story yet."],
+   "if_it_failed": [
+    "If she only answers hail with 'This is wonderful! Thelin is starting to recover slowly...', you are already far past this step.",
+    "Hailing Thelin himself only makes Adroha sigh about his coma. Talk to Adroha."
+   ],
+   "tips": "The middle words (poverty and ruin, jeweled dagger, Plane of Tranquility) are optional."
+  },
+  "maze-enter": {
+   "title": "Enter Thelin's hedge maze",
+   "why": "Thelin's dream is a hedge maze in the Plane of Nightmare. Your group must go in and protect him to free him.",
+   "actions": [
+    {"text": "Hail the sleeping Thelin Poxbourne outside the maze in the Plane of Nightmare.", "say": "hail", "items": []},
+    {"text": "Optionally say dagger.", "say": "dagger", "items": []},
+    {"text": "Optionally say help.", "say": "help", "items": []},
+    {"text": "Each group leader says ready. Thelin takes the group into one of three dream mazes.", "say": "ready", "items": []}
+   ],
+   "npcs": [
+    {"name": "Thelin Poxbourne", "where": "Asleep outside the hedge maze in the Plane of Nightmare."}
+   ],
+   "works_when": "'Thelin Poxbourne closes his eyes and falls asleep immediately.' and your group is moved into the maze.",
+   "credit": "The speaker's group members nearby go in. In a raid, the speaker's raid group nearby. Raid members not in a group go alone.",
+   "needs": ["The person saying ready has heard Adroha Jezith's story. People taken in with them do not need it."],
+   "if_it_failed": [
+    "If he 'screams loudly, and then falls asleep once again', the speaker has not talked to Adroha Jezith.",
+    "'I suddenly feel the grasp of Terris upon my heart' means all three mazes are busy, or your raid's maze is full. A maze holds 24 players.",
+    "Stand close to the leader when they say ready.",
+    "Inside, someone must tell Thelin ready within 5 minutes. Otherwise Terris throws you out."
+   ],
+   "tips": "A raid fills its own maze first. Groups not in a raid can share a free maze that has not started. Players beyond 24 are moved out. Inside, hail Thelin and say ready. He walks the maze, picking up pieces of a dagger, while monsters attack. If he dies, the maze fails and everyone is removed."
+  },
+  "thelin-2": {
+   "title": "Complete the hedge maze and hail Thelin",
+   "why": "Guiding Thelin through his dream breaks Terris Thule's hold. It lets you enter the Lair of Terris Thule.",
+   "actions": [
+    {"text": "Inside the maze, tell Thelin ready to start his walk.", "say": "ready", "items": []},
+    {"text": "Protect Thelin through the waves of monsters. At the end a construct of nightmares appears. Kill it.", "say": null, "items": []},
+    {"text": "Loot the Dagger Blade Shard from the construct. It always drops.", "say": null, "items": [9258]},
+    {"text": "Hand the shard to Thelin. You get Thelin's Dagger, Terris Thule appears and they talk.", "say": null, "items": [9258]},
+    {"text": "When Terris vanishes and Thelin finishes speaking, every player hails Thelin.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Thelin Poxbourne", "where": "Inside the dream maze. Each of the three mazes has its own Thelin."},
+    {"name": "A construct of nightmares", "where": "Appears where Thelin's walk ends."},
+    {"name": "Terris Thule", "where": "Appears after the shard is handed in. Only talks."}
+   ],
+   "works_when": "Thelin says 'Please destroy her for all that have had to endure her hideous visions.' and casts Waking Moment on you, then 'You have received a character flag!'",
+   "credit": "Each player who hails Thelin at the end. There is no group or raid check.",
+   "needs": ["You have heard Adroha Jezith's story about Thelin's coma."],
+   "if_it_failed": [
+    "Thelin only takes the shard after he has finished his walk. Otherwise he gives it back.",
+    "Hail only after the talking ends, about 20 seconds after his walk. You then have 10 minutes before 'The nightmare fades from around you.'",
+    "If you never talked to Adroha, you get a saved memory instead. See the maze memory step.",
+    "If Thelin dies, the maze fails. Corpses go to the graveyard and everyone is removed.",
+    "If you already had this step, you see the text but no flag message."
+   ],
+   "tips": "This clears any saved maze memory you held. If nobody hands in the shard, the maze clears itself after 2 hours."
+  },
+  "cl_maze-1": {
+   "title": "Save a memory of the maze before meeting Adroha",
+   "why": "If you finish the maze before Adroha Jezith tells you about Thelin, the game saves a memory of it. You turn it into real credit later at the Seer.",
+   "actions": [
+    {"text": "Be taken into the maze by a group or raid-group leader who has talked to Adroha.", "say": null, "items": []},
+    {"text": "When the maze is complete, hail Thelin inside the maze.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Thelin Poxbourne", "where": "Inside the dream maze."}
+   ],
+   "works_when": "Thelin says 'I do not recognize your face. Are you a vision sent by Terris?!' then 'You have received a new checklist flag!'",
+   "credit": "Each player who hails Thelin at the end.",
+   "needs": ["You have not talked to Adroha Jezith about Thelin yet."],
+   "if_it_failed": [
+    "Hail only after the talking ends, during the 10 minutes before the dream fades."
+   ],
+   "tips": "Next, say tortured by nightmares to Adroha Jezith. Then sit next to Seer Mal Nae`Shi in the Plane of Knowledge and say unlock memories. Hailing again just saves the same memory."
+  },
+  "seer-cl_maze": {
+   "title": "Unlock the hedge maze memory at the Seer",
+   "why": "Turns your saved memory of the maze into real credit. You can then enter the Lair of Terris Thule.",
+   "actions": [
+    {"text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge. Say unlock memories.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge. Always there."}
+   ],
+   "works_when": "Thelin speaks in your mind: 'It was an act of kindness to help me in the maze before you knew I was in need of help.' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": [
+    "You have a saved memory of the hedge maze.",
+    "Adroha Jezith has told you about Thelin, and you have not gone further."
+   ],
+   "if_it_failed": [
+    "A blank line and no change means you have not talked to Adroha Jezith yet.",
+    "Sit down before you speak."
+   ],
+   "tips": "If you also have a saved Terris Thule memory, one request unlocks both, maze first."
+  },
+  "thelin-3": {
+   "title": "Kill Terris Thule and hail the planar projection",
+   "why": "Killing Terris Thule frees Thelin from his nightmare for good.",
+   "actions": [
+    {"text": "Click the portal in the Plane of Nightmare to enter the Lair of Terris Thule.", "say": null, "items": []},
+    {"text": "Kill Terris Thule.", "say": null, "items": []},
+    {"text": "Hail the planar projection within 20 minutes.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Terris Thule", "where": "In the Lair of Terris Thule. Respawns every 3 days."},
+    {"name": "A Planar Projection", "where": "Appears where Terris Thule died. Stays for 20 minutes."}
+   ],
+   "works_when": "Thelin's voice says 'The cruel hand of Terris no longer shall torment my dreams.' and asks you to return to the Plane of Tranquility, then 'You have received a character flag!'",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": ["You have completed Thelin's hedge maze."],
+   "if_it_failed": [
+    "'You lack the will to pass through this portal safely.' at the portal means you have not completed the maze.",
+    "No reply means you are not in the raid or group that earned the kill, or the projection has used up its credit. It gives credit to about 72 players.",
+    "If you never talked to Adroha, you get a saved memory instead.",
+    "If you already have this step, the projection says nothing."
+   ],
+   "tips": "This clears any saved Terris Thule memory."
+  },
+  "cl_terris-1": {
+   "title": "Save a memory of Terris Thule before the maze",
+   "why": "If you are credited for Terris Thule before you finished the maze, the game saves a memory of it. You turn it into real credit later at the Seer.",
+   "actions": [
+    {"text": "Be in the raid or group that earned the Terris Thule kill.", "say": null, "items": []},
+    {"text": "Hail the planar projection.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "A Planar Projection", "where": "Appears where Terris Thule died."}
+   ],
+   "works_when": "No words from the projection. You only see 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [
+    "You have not completed the hedge maze. You may or may not have talked to Adroha Jezith.",
+    "You do not already have a saved Terris Thule memory."
+   ],
+   "if_it_failed": [
+    "You normally need the maze done to enter the lair at all. This mostly helps players who could already get in."
+   ],
+   "tips": "Unlock it at the Seer after you have completed the maze."
+  },
+  "seer-cl_terris": {
+   "title": "Unlock the Terris Thule memory at the Seer",
+   "why": "Turns your saved memory of the Terris Thule kill into real credit.",
+   "actions": [
+    {"text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge. Say unlock memories.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge. Always there."}
+   ],
+   "works_when": "You 'strike Terris down with Thelin's dagger' in a vision, and Thelin says 'Finally, you have freed me from nightmare.' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": [
+    "You have a saved memory of the Terris Thule kill.",
+    "You have completed the hedge maze, and you have not gone further."
+   ],
+   "if_it_failed": [
+    "'Terris still haunts your nightmares whenever you attemt to recall your battle with her.' means you must complete the maze first.",
+    "Sit down before you speak."
+   ],
+   "tips": null
+  },
+  "thelin-4": {
+   "title": "Visit the recovering Thelin",
+   "why": "This finishes the Plane of Nightmare story. Together with the Fuirstel story, it opens the portal to Torment, the Plane of Pain.",
+   "actions": [
+    {"text": "Hail Thelin (Elder Poxbourne) in the elders' building in the Plane of Tranquility.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Elder Poxbourne (Thelin)", "where": "Lying in the elders' building in the Plane of Tranquility."}
+   ],
+   "works_when": "Thelin says 'I want you to know how much I appreciate your bravery in helping me.' then 'You receive a character flag!'",
+   "credit": "Only the person who hails him.",
+   "needs": ["You have killed Terris Thule and hailed her projection, or unlocked that memory at the Seer."],
+   "if_it_failed": [
+    "If Adroha sighs about his coma and 'Thelin tosses and turns violently on the floor', you do not have the Terris Thule credit yet."
+   ],
+   "tips": "The success line here reads 'You receive a character flag!', not 'You have received'. Needed to finish the first tier."
+  },
+  "zeks-1": {
+   "title": "Agree to test the machine for Giwin Mirakon",
+   "why": "Giwin, a follower of Rallos Zek, wants you to destroy the Manaetic Behemoth. This starts the Plane of Innovation story that leads to the Plane of Tactics.",
+   "actions": [
+    {"text": "Optionally hail Giwin Mirakon in the Plane of Innovation.", "say": "hail", "items": []},
+    {"text": "Optionally say great warrior.", "say": "great warrior", "items": []},
+    {"text": "Optionally say task.", "say": "task", "items": []},
+    {"text": "Say test the machine to get the flag.", "say": "test the machine", "items": []}
+   ],
+   "npcs": [
+    {"name": "Giwin Mirakon", "where": "In the Plane of Innovation. A different Giwin stands in the Plane of Tactics."}
+   ],
+   "works_when": "Giwin says 'Haha!  I knew I sensed the warring spirit within you.' and 'Long live Rallos!' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": ["You have not talked to Giwin about the machine before."],
+   "if_it_failed": [
+    "If every answer is 'Well go on then, what are you cowering around for...', you already have this step."
+   ],
+   "tips": "You can do this before or after the Behemoth kill. If after, use your saved memory at the Seer."
+  },
+  "poi_door-1": {
+   "title": "Power Nitram's machine, kill Xanamech, hail Nitram",
+   "why": "Saving Nitram from Xanamech earns the trick to open the main factory door. The Manaetic Behemoth is behind it.",
+   "actions": [
+    {"text": "Optionally talk to Nitram Anizok to learn which parts he needs. Say hail, then advanced tinkering, construction, instinct for survival, combination of batteries and collecting materials.", "say": "collecting materials", "items": []},
+    {"text": "Loot a Copper Node, a Bundle of Super Conductive Wires and an Intact Power Cell from clockworks in the Plane of Innovation. Each is a rare drop.", "say": null, "items": [9295, 9426, 9434]},
+    {"text": "Hand all three to Nitram in one trade. He walks off.", "say": null, "items": [9295, 9426, 9434]},
+    {"text": "Follow him. Xanamech Nezmirthafen appears along his walk and wakes as Nitram goes on. Kill it.", "say": null, "items": []},
+    {"text": "Each credited player hails Nitram within 10 minutes of the kill.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Nitram Anizok", "where": "In the Plane of Innovation."},
+    {"name": "Xanamech Nezmirthafen", "where": "Appears along Nitram's walk after the hand-in. Leaves after 30 minutes out of combat."}
+   ],
+   "works_when": "Nitram says 'Whew that was a close one!' and tells you to 'twist the very bottom rivet of the icon three times to the right', then 'You have received a character flag!'",
+   "credit": "Everyone in the raid of the player who earned the Xanamech kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [],
+   "if_it_failed": [
+    "Hand in exactly the three parts in one trade. Anything else is given back. He also refuses while already walking.",
+    "If Xanamech is not up when Nitram reaches it, Nitram disappears.",
+    "After the kill, Nitram only answers hail, and only to the raid or group that earned the kill.",
+    "Nitram leaves 10 minutes after Xanamech dies. Hail quickly.",
+    "Nitram gives credit to about 72 players. If you already had it, you see the text but no flag message."
+   ],
+   "tips": "With this step done, clicking the main factory door opens it. If the event stalls, Nitram leaves 1 hour after the hand-in."
+  },
+  "zeks-2": {
+   "title": "Kill the Manaetic Behemoth and report to Giwin",
+   "why": "Destroying the Behemoth finishes the Plane of Innovation story. It opens the Plane of Tactics portal in the Plane of Tranquility.",
+   "actions": [
+    {"text": "Inside the factory, clockwork devices appear every 48 seconds from six spots and walk to the Behemoth. Kill 10 of them to wake it.", "say": null, "items": []},
+    {"text": "Kill the Manaetic Behemoth inside its room.", "say": null, "items": []},
+    {"text": "Hail the Giwin Mirakon who appears, within 10 minutes.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Manaetic Behemoth", "where": "In its room inside the Plane of Innovation factory. Respawns every 3 days."},
+    {"name": "Giwin Mirakon", "where": "Appears near the Behemoth's room when it dies. Leaves after 10 minutes."},
+    {"name": "Weapon Event Master", "where": "An unseen helper in the Behemoth's area that runs the waves of devices."}
+   ],
+   "works_when": "Giwin says 'You destroyed the machine?!' and 'I anticipate our next meeting on the Battlefields of Zek!' then 'You have received a character flag!'",
+   "credit": "Everyone in the raid of the player who earned the Behemoth kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [
+    "Giwin Mirakon has asked you to test the machine.",
+    "You have saved Nitram from Xanamech, so the factory door opens for you. This is inferred from where the Behemoth stands."
+   ],
+   "if_it_failed": [
+    "Only devices you kill count. Devices that reach the Behemoth explode and do not count.",
+    "Do not pull the Behemoth out of its room. It runs back, heals fully and forgets the fight.",
+    "If it is not killed within 3 hours of waking, not counting time in combat, it leaves and tries again 10 minutes later.",
+    "If Giwin says 'Hey what are you doing!', you had not talked to the first Giwin. You get a saved memory instead.",
+    "Giwin gives credit to about 72 players. If you already had it, you see the text but no flag message."
+   ],
+   "tips": "This clears any saved Behemoth memory. Later steps of this story happen in the Plane of Tactics."
+  },
+  "cl_behemoth-1": {
+   "title": "Save a memory of the Behemoth before meeting Giwin",
+   "why": "If you kill the Behemoth before Giwin asks you to test the machine, the game saves a memory of it. You turn it into real credit later at the Seer.",
+   "actions": [
+    {"text": "Be in the raid or group that earned the Manaetic Behemoth kill.", "say": null, "items": []},
+    {"text": "Hail the Giwin Mirakon who appears.", "say": "hail", "items": []}
+   ],
+   "npcs": [
+    {"name": "Giwin Mirakon", "where": "Appears near the Behemoth's room when it dies."}
+   ],
+   "works_when": "Giwin says 'Hey what are you doing!  Look at this mess that you have caused.' then 'You have received a new checklist flag!'",
+   "credit": "Everyone in the raid of the player who earned the kill. If that player was not in a raid, their group. If they were alone, only them.",
+   "needs": [
+    "You have not talked to Giwin about testing the machine.",
+    "You do not already have a saved Behemoth memory."
+   ],
+   "if_it_failed": [
+    "Giwin gives credit to about 72 players. Hail early."
+   ],
+   "tips": "Next, say test the machine to the Giwin in the Plane of Innovation. Then sit next to Seer Mal Nae`Shi in the Plane of Knowledge and say unlock memories."
+  },
+  "seer-cl_behemoth": {
+   "title": "Unlock the Behemoth memory at the Seer",
+   "why": "Turns your saved memory of the Behemoth kill into real credit. This opens the way to the Plane of Tactics.",
+   "actions": [
+    {"text": "Sit down next to Seer Mal Nae`Shi in the Plane of Knowledge. Say unlock memories.", "say": "unlock memories", "items": []}
+   ],
+   "npcs": [
+    {"name": "Seer Mal Nae`Shi", "where": "In the Plane of Knowledge. Always there."}
+   ],
+   "works_when": "Giwin's image says 'Sorry for the misunderstanding, I forgot that I asked you to test the machine for me.' then 'You have received a character flag!'",
+   "credit": "Only the person who says it.",
+   "needs": [
+    "You have a saved memory of the Behemoth kill.",
+    "Giwin Mirakon has asked you to test the machine, and you have not gone further."
+   ],
+   "if_it_failed": [
+    "A blank line and no change means you have not told Giwin you will test the machine.",
+    "Sit down before you speak."
+   ],
+   "tips": null
+  },
+  "tier1-portals": {
+   "title": "Use the tier 2 portals in the Plane of Tranquility",
+   "why": "Finishing the first tier stories opens new portals in the Plane of Tranquility. This shows which story opens which portal.",
+   "actions": [
+    {"text": "Click a portal in the Plane of Tranquility. Valor and Storms need Mavuin's story finished. Torment needs both the Fuirstel and Thelin stories finished. Tactics needs the Behemoth step done.", "say": null, "items": []}
+   ],
+   "npcs": [],
+   "works_when": "You travel to the new zone. If not, you see 'You lack the will to pass through this portal safely.'",
+   "credit": "Each player clicking the portal, based on their own flags.",
+   "needs": [],
+   "if_it_failed": [
+    "Check which story the portal needs and finish its last step."
+   ],
+   "tips": "The first tier counts as complete when you have finished Mavuin's, the Fuirstel and Thelin stories, saved Nitram, and killed the Behemoth. Alternate key-ring access exists only if the server has turned it on."
+  }
+ }
+}

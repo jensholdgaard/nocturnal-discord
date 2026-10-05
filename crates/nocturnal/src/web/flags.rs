@@ -68,11 +68,6 @@ pub struct Item {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Action {
-    pub kind: String,
-    #[serde(default)]
-    pub npc: Option<String>,
-    #[serde(default)]
-    pub zone: Option<String>,
     #[serde(default)]
     pub say: Option<String>,
     #[serde(default)]
@@ -88,8 +83,6 @@ pub struct Npc {
     #[serde(default)]
     pub loc: Option<String>,
     #[serde(default)]
-    pub spawn: Option<String>,
-    #[serde(default)]
     pub notes: Option<String>,
 }
 
@@ -99,6 +92,9 @@ pub struct Step {
     pub tier: u8,
     pub plane: String,
     pub title: String,
+    /// One or two plain sentences: what the step is for.
+    #[serde(default)]
+    pub why: Option<String>,
     /// A side route or an extra no tier needs: shown, never "do next".
     #[serde(default)]
     pub optional: bool,
@@ -121,15 +117,15 @@ pub struct Step {
     pub debug: Vec<String>,
     #[serde(default)]
     pub notes: Option<String>,
+    /// The script lines the step was read from: for whoever maintains the
+    /// guide (and the tests), never shown to members.
     #[serde(default)]
+    #[allow(dead_code)]
     pub source: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Guide {
-    /// The quests and server commits the steps were read from.
-    pub quests_commit: String,
-    pub server_commit: String,
     /// Zone short name → the name players know.
     pub zones: BTreeMap<String, String>,
     pub steps: Vec<Step>,
@@ -138,25 +134,6 @@ pub struct Guide {
 static GUIDE: LazyLock<Guide> = LazyLock::new(|| {
     serde_json::from_str(include_str!("flags/guide.json")).expect("flags/guide.json is valid")
 });
-
-/// Where a cited source line lives on GitHub.
-fn source_url(src: &str, guide: &Guide) -> String {
-    let (file, line) = src.split_once(':').unwrap_or((src, ""));
-    let (repo, commit, path) = match file.strip_prefix("EQMacEmu/") {
-        Some(p) => ("EQMacEmu", guide.server_commit.as_str(), p),
-        None => (
-            "quests",
-            guide.quests_commit.as_str(),
-            file.strip_prefix("quests/").unwrap_or(file),
-        ),
-    };
-    let anchor = if line.is_empty() {
-        String::new()
-    } else {
-        format!("#L{}", line.split('-').next().unwrap_or(line))
-    };
-    format!("https://github.com/SecretsOTheP/{repo}/blob/{commit}/{path}{anchor}")
-}
 
 // --- evaluating a character ----------------------------------------------------------------------
 
@@ -495,33 +472,41 @@ pub fn handle(ctx: &FlagsCtx, head: &Head, body: &[u8]) -> Response {
 }
 
 // --- the page --------------------------------------------------------------------------------------
+//
+// Written for a member who has never flagged before: plain words, the next
+// thing to do first, and nothing that only makes sense to someone who has
+// read the scripts. The script references stay in guide.json for whoever
+// maintains it; the page never shows them.
 
-const TIERS: &[(u8, &str)] = &[
-    (1, "Tier 1"),
-    (2, "Tier 2"),
-    (3, "Tier 3"),
-    (4, "Tier 4: the Elemental Planes"),
-    (5, "Plane of Time"),
+const TIERS: &[(u8, &str, &str)] = &[
+    (
+        1,
+        "Tier 1",
+        "The first four planes. Most guilds start here.",
+    ),
+    (2, "Tier 2", "Opens once tier 1 stories are finished."),
+    (
+        3,
+        "Tier 3",
+        "Honor, Thunder, the Zeks and the Tower of Solusek Ro.",
+    ),
+    (4, "Tier 4", "The four elemental planes."),
+    (5, "Plane of Time", "The last door."),
 ];
 
-fn pill(s: Status) -> Markup {
-    let (class, text) = match s {
+/// The words a status is shown with, and its colour class.
+fn status_words(s: Status) -> (&'static str, &'static str) {
+    match s {
         Status::Done => ("good", "Done"),
-        Status::Next => ("next", "Do next"),
+        Status::Next => ("next", "Do this next"),
         Status::Optional => ("muted", "Optional"),
-        Status::Locked => ("low", "Locked"),
-        Status::Unknown => ("muted", "Not pasted"),
-    };
-    html! { span class={ "pill " (class) } { (text) } }
+        Status::Locked => ("low", "Not yet"),
+        Status::Unknown => ("muted", "Unknown"),
+    }
 }
 
-fn tier_pill(t: Option<bool>, started: bool) -> Markup {
-    let (class, text) = match (t, started) {
-        (Some(true), _) => ("good", "Complete"),
-        (_, true) => ("next", "In progress"),
-        (Some(false), false) => ("muted", "Not started"),
-        (None, false) => ("muted", "Not pasted"),
-    };
+fn pill(s: Status) -> Markup {
+    let (class, text) = status_words(s);
     html! { span class={ "pill " (class) } { (text) } }
 }
 
@@ -529,30 +514,85 @@ fn zone_name<'a>(g: &'a Guide, short: &'a str) -> &'a str {
     g.zones.get(short).map(String::as_str).unwrap_or(short)
 }
 
-fn step_card(g: &Guide, step: &Step, st: Option<Status>) -> Markup {
-    let open = matches!(st, Some(Status::Next));
+/// The first requirement that fails, as the reason a step is "not yet".
+fn blocker<'a>(step: &'a Step, flags: &Flags) -> Option<&'a str> {
+    let f = effective(flags);
+    step.requires
+        .iter()
+        .find(|c| holds(c, &f) == Some(false))
+        .and_then(|c| c.why.as_deref())
+}
+
+fn check_mark(c: &Cond, flags: Option<&Flags>) -> Markup {
+    if c.op == "note" {
+        return html! { span class="mark info" aria-hidden="true" { "•" } };
+    }
+    let Some(f) = flags else {
+        return html! { span class="mark info" aria-hidden="true" { "•" } };
+    };
+    match holds(c, &effective(f)) {
+        Some(true) => html! { span class="mark yes" title="You have this" { "✓" } },
+        Some(false) => html! { span class="mark no" title="You don't have this yet" { "✗" } },
+        None => html! { span class="mark info" title="Paste this tier to check" { "?" } },
+    }
+}
+
+fn step_card(g: &Guide, step: &Step, flags: Option<&Flags>, open: bool) -> Markup {
+    let st = flags.map(|f| status(step, f));
+    let state_class = match st {
+        Some(Status::Done) => "is-done",
+        Some(Status::Next) => "is-next",
+        Some(Status::Locked) => "is-locked",
+        Some(Status::Optional) => "is-optional",
+        _ => "",
+    };
     html! {
-        details class={ "step " (match st { Some(Status::Done) => "is-done", Some(Status::Next) => "is-next", Some(Status::Locked) => "is-locked", Some(Status::Optional) => "is-optional", _ => "" }) } open[open] id=(step.id) {
+        details class={ "step " (state_class) } open[open] id=(step.id) {
             summary {
-                @if let Some(s) = st { (pill(s)) " " }
+                @if let Some(s) = st { (pill(s)) }
                 span class="title" { (step.title) }
+                @if let (Some(Status::Locked), Some(f)) = (st, flags) {
+                    @if let Some(why) = blocker(step, f) {
+                        span class="sub" { "First: " (why) }
+                    }
+                } @else if let Some(why) = &step.why {
+                    span class="sub" { (why) }
+                }
             }
             div class="body" {
-                @if !step.actions.is_empty() {
-                    ol class="actions" {
-                        @for a in &step.actions {
-                            li {
-                                span class="kind" { (a.kind) }
-                                " " (a.detail)
-                                @if let Some(npc) = &a.npc {
-                                    " " span class="muted" { "(" (npc.replace('_', " ").trim_start_matches('#')) @if let Some(z) = &a.zone { ", " (zone_name(g, z)) } ")" }
+                @if !step.npcs.is_empty() {
+                    section {
+                        h4 { "Where to go" }
+                        ul class="npcs" {
+                            @for n in &step.npcs {
+                                li {
+                                    b { (n.name) }
+                                    " in " (zone_name(g, &n.zone))
+                                    @if let Some(w) = &n.notes { span class="muted" { " — " (w) } }
+                                    @if let Some(l) = &n.loc {
+                                        " " span class="loc" title="Type /loc in game and walk until your numbers are close to these" { "/loc " (l) }
+                                    }
                                 }
-                                @if let Some(say) = &a.say { " " span class="say" { "Say: " code { (say) } } }
-                                @if !a.items.is_empty() {
-                                    " " span class="items" { "Items: "
-                                        @for (i, it) in a.items.iter().enumerate() {
-                                            @if i > 0 { ", " }
-                                            a href={ "https://www.pqdi.cc/item/" (it.id) } target="_blank" rel="noopener" { (it.name) }
+                            }
+                        }
+                    }
+                }
+                @if !step.actions.is_empty() {
+                    section {
+                        h4 { "What to do" }
+                        ol class="actions" {
+                            @for a in &step.actions {
+                                li {
+                                    (a.detail)
+                                    @if let Some(say) = &a.say {
+                                        " " span class="say" { "Say " button type="button" class="copy" data-copy=(say) title="Copy" { (say) } }
+                                    }
+                                    @if !a.items.is_empty() {
+                                        " " span class="items" {
+                                            @for (i, it) in a.items.iter().enumerate() {
+                                                @if i > 0 { ", " }
+                                                a href={ "https://www.pqdi.cc/item/" (it.id) } target="_blank" rel="noopener" { (it.name) }
+                                            }
                                         }
                                     }
                                 }
@@ -560,43 +600,242 @@ fn step_card(g: &Guide, step: &Step, st: Option<Status>) -> Markup {
                         }
                     }
                 }
-                @if !step.npcs.is_empty() {
-                    table class="npcs" {
-                        thead { tr { th { "NPC" } th { "Zone" } th { "/loc" } th { "Spawn" } } }
-                        tbody {
-                            @for n in &step.npcs {
-                                tr {
-                                    td { (n.name.replace('_', " ").trim_start_matches('#')) }
-                                    td { (zone_name(g, &n.zone)) }
-                                    td class="num" { (n.loc.as_deref().unwrap_or("-")) }
-                                    td { (n.spawn.as_deref().unwrap_or("")) @if let Some(note) = &n.notes { " " span class="muted" { (note) } } }
+                @if let Some(m) = &step.message {
+                    section { h4 { "You'll know it worked when" } p { (m) } }
+                }
+                @if !step.requires.is_empty() {
+                    section {
+                        h4 { "Before you start" }
+                        ul class="needs" {
+                            @for c in &step.requires {
+                                @if let Some(text) = &c.why {
+                                    li { (check_mark(c, flags)) " " (text) }
                                 }
                             }
                         }
                     }
                 }
-                @if !step.requires.is_empty() {
-                    p class="req" { b { "Needs first: " }
-                        @for (i, c) in step.requires.iter().enumerate() {
-                            @if i > 0 { "; " }
-                            (c.why.clone().unwrap_or_else(|| format!("{} {} {}", c.flag, c.op, c.value.clone().unwrap_or_default())))
-                        }
-                    }
+                @if let Some(c) = &step.credit {
+                    section { h4 { "Who gets credit" } p { (c) } }
                 }
-                @if let Some(c) = &step.credit { p { b { "Who gets it: " } (c) } }
-                @if let Some(m) = &step.message { p { b { "When it works you see: " } q { (m) } } }
                 @if !step.debug.is_empty() {
-                    div class="debug" {
-                        b { "If it didn't work" }
+                    details class="debug" {
+                        summary { "Didn't work? Check these" }
                         ul { @for d in &step.debug { li { (d) } } }
                     }
                 }
-                @if let Some(n) = &step.notes { p class="muted" { (n) } }
-                @if !step.source.is_empty() {
-                    p class="src" { "Source: "
-                        @for (i, s) in step.source.iter().enumerate() {
-                            @if i > 0 { ", " }
-                            a href=(source_url(s, g)) target="_blank" rel="noopener" { (s) }
+                @if let Some(n) = &step.notes { p class="tip" { b { "Tip: " } (n) } }
+            }
+        }
+    }
+}
+
+const FLAGS_CSS: &str = r#"
+.flags{max-width:980px;margin:0 auto}
+.flags h1{font:600 40px/1.05 "Cormorant Garamond",Georgia,serif;margin:6px 0 6px;text-wrap:balance}
+.flags .lede{font-size:18px;color:var(--muted);margin:0 0 22px;max-width:62ch}
+.flags h2{font:600 28px/1.1 "Cormorant Garamond",Georgia,serif;margin:0}
+.flags h4{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.flags .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.flags .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:14px}
+.flags .how .n{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;margin-right:8px}
+.flags .how h3{margin:0 0 8px;font-size:16px;display:flex;align-items:center}
+.flags .how p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.flags .cmds{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.flags button.copy{font:13px/1.2 ui-monospace,Consolas,monospace;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:6px;padding:4px 8px;cursor:pointer}
+.flags button.copy:hover{border-color:var(--accent)}
+.flags button.copy.done{border-color:var(--good);color:var(--good)}
+.flags form.paste{display:grid;gap:10px}
+.flags .drop{border:2px dashed var(--line-strong);border-radius:10px;padding:18px;text-align:center;color:var(--muted);cursor:pointer}
+.flags .drop.over{border-color:var(--accent);color:var(--text)}
+.flags .drop b{color:var(--text)}
+.flags form.paste textarea{width:100%;min-height:110px;font:13px/1.4 ui-monospace,Consolas,monospace;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;padding:8px}
+.flags form.paste input{font:inherit;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:6px;padding:7px 9px;width:200px}
+.flags .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.flags button.primary{font:inherit;font-weight:700;cursor:pointer;border-radius:8px;padding:8px 18px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}
+.flags button.ghost{font:inherit;cursor:pointer;border-radius:8px;padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--line-strong)}
+.flags #msg{min-height:1.4em;color:var(--muted)}
+.flags #msg.err{color:var(--low)}
+.flags details.paste-more summary{cursor:pointer;color:var(--muted);font-size:14px}
+.flags .chars{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px}
+.flags .chars a{padding:6px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--text);background:var(--surface)}
+.flags .chars a[aria-current="page"]{border-color:var(--accent);font-weight:700}
+.flags .nextup{border:2px solid var(--accent);border-radius:12px;padding:16px 18px;margin:14px 0 8px;background:var(--surface)}
+.flags .nextup .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.flags .nextup h2{margin:4px 0 6px}
+.flags .nextup p{margin:0 0 10px;color:var(--muted)}
+.flags .nextup ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
+.flags .journey{display:grid;gap:10px;margin:18px 0 28px}
+.flags .journey .tierrow{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:start}
+.flags .journey .tl{font-weight:700;padding-top:6px}
+.flags .journey .zones{display:flex;flex-wrap:wrap;gap:6px}
+.flags .zchip{display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);text-decoration:none;color:var(--text);font-size:14px}
+.flags .zchip .bar{width:46px;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.flags .zchip .bar i{display:block;height:100%;background:var(--good)}
+.flags .zchip.done{border-color:var(--good)}
+.flags .zchip.now{border-color:var(--accent)}
+.flags .zchip.later{color:var(--muted)}
+.flags .tier{margin:34px 0 4px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.flags .tier .blurb{color:var(--muted)}
+.flags h3.plane{margin:22px 0 8px;font-size:17px}
+.flags .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.flags .pill.good{color:var(--good);border-color:var(--good)}
+.flags .pill.next{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.flags .pill.low{color:var(--low);border-color:var(--low)}
+.flags details.step{border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:8px 0}
+.flags details.step.is-next{border:2px solid var(--accent)}
+.flags details.step.is-done{opacity:.8}
+.flags details.step > summary{cursor:pointer;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:2px;align-items:center;list-style:none}
+.flags details.step > summary::-webkit-details-marker{display:none}
+.flags details.step > summary .title{font-weight:700}
+.flags details.step.is-done > summary .title{font-weight:400;color:var(--muted)}
+.flags details.step > summary .sub{grid-column:2;color:var(--muted);font-size:14px}
+.flags details.step .body{padding:2px 16px 16px;display:grid;gap:14px;border-top:1px solid var(--line)}
+.flags details.step .body section:first-child{margin-top:12px}
+.flags details.step .body p{margin:0}
+.flags ol.actions{margin:0;padding-left:22px;display:grid;gap:6px}
+.flags ul.npcs,.flags ul.needs{margin:0;padding:0;list-style:none;display:grid;gap:5px}
+.flags .loc{font:12px/1.2 ui-monospace,Consolas,monospace;color:var(--muted);white-space:nowrap;border:1px dotted var(--line-strong);border-radius:4px;padding:1px 5px}
+.flags .say{white-space:nowrap}
+.flags .mark{display:inline-block;width:1.2em;text-align:center;font-weight:700}
+.flags .mark.yes{color:var(--good)}
+.flags .mark.no{color:var(--low)}
+.flags .mark.info{color:var(--muted)}
+.flags details.debug{background:var(--surface-2);border-radius:8px;padding:8px 12px}
+.flags details.debug summary{cursor:pointer;font-weight:700}
+.flags details.debug ul{margin:8px 0 2px;padding-left:20px;display:grid;gap:4px}
+.flags .tip{color:var(--muted)}
+.flags .muted{color:var(--muted)}
+.flags .glossary{margin:10px 0 0}
+.flags .glossary summary{cursor:pointer;color:var(--muted)}
+.flags .glossary dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:10px 0 0}
+.flags .glossary dt{font-weight:700}
+.flags .glossary dd{margin:0;color:var(--muted)}
+.flags table.guild{border-collapse:collapse;margin-top:8px}
+.flags table.guild th,.flags table.guild td{padding:6px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.flags .wrap{overflow-x:auto}
+.flags .foot{color:var(--muted);font-size:13px;margin-top:30px}
+@media (max-width:600px){.flags .journey .tierrow{grid-template-columns:1fr}.flags h1{font-size:32px}}
+"#;
+
+const FLAGS_JS: &str = r#"
+(function(){
+  // Copy buttons: commands and the exact words to say.
+  document.addEventListener('click', async e=>{
+    const b=e.target.closest('button.copy'); if(!b) return;
+    e.preventDefault();
+    try{ await navigator.clipboard.writeText(b.dataset.copy); b.classList.add('done'); setTimeout(()=>b.classList.remove('done'),1200); }catch(_){}
+  });
+  const f=document.getElementById('paste'); if(!f) return;
+  const msg=document.getElementById('msg'), text=f.text, drop=document.getElementById('drop'), file=document.getElementById('file');
+  const say=(t,err)=>{ msg.textContent=t; msg.classList.toggle('err',!!err); };
+  // Only the #popflags lines leave the browser: never chat, tells or anything else.
+  const keep=/^(=== .+ ===|--- .+ ---|Pending memory: .+|[A-Z][A-Za-z'`, ]{2,60}: .+)$/;
+  const chat=/ (tells|says|shouts|auctions|told)\b|, '|^You /;
+  function flagLines(raw){
+    const out=[];
+    for(const line of raw.split(/\r?\n/)){
+      const t=line.replace(/^\[[^\]]*\]\s*/,'').trim();
+      if(keep.test(t) && !chat.test(t)) out.push(t);
+    }
+    return out.join('\n');
+  }
+  async function readLog(fl){
+    const m=fl.name.match(/^eqlog_([A-Za-z]+)_/);
+    if(m && !f.character.value) f.character.value=m[1];
+    const tail=fl.size>8e6 ? fl.slice(fl.size-8e6) : fl;  // the last part of a long log is enough
+    const lines=flagLines(await tail.text());
+    if(!lines){ say('No #popflags lines in that file. Type #popflags 1 to 5 in game first, then drop the log again.',true); return; }
+    text.value=lines;
+    say('Found your flag lines'+(m?' for '+m[1]:'')+'. Press Save.');
+  }
+  drop.addEventListener('click',()=>file.click());
+  drop.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); file.click(); } });
+  file.addEventListener('change',()=>{ if(file.files[0]) readLog(file.files[0]); });
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{ const fl=e.dataTransfer.files[0]; if(fl) readLog(fl); });
+  async function send(path,payload){
+    const r=await fetch(path,{method:'POST',credentials:'include',headers:{'content-type':'application/json','x-nocturnal':'1'},body:JSON.stringify(payload)});
+    let j={}; try{ j=await r.json(); }catch(_){}
+    return [r.ok&&j.ok,j];
+  }
+  f.addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(!f.character.value.trim()){ say('Type your character name first.',true); f.character.focus(); return; }
+    const body=flagLines(text.value) || text.value;
+    say('Saving…');
+    const [ok,j]=await send('/flags/save',{character:f.character.value,text:body});
+    if(!ok){ say(j.message||'That did not save. Try again in a moment.',true); return; }
+    const n=(j.unrecognised||[]).length;
+    say('Saved '+j.character+'.'+(n?' A few lines looked new to us; an officer will check them.':''));
+    setTimeout(()=>{ location.href='/flags?c='+encodeURIComponent(j.character)+'#next'; }, 700);
+  });
+  const del=document.getElementById('delete');
+  if(del) del.addEventListener('click',async ()=>{
+    if(!confirm('Remove '+del.dataset.c+' from this page? You can paste again any time.')) return;
+    const [ok,j]=await send('/flags/delete',{character:del.dataset.c});
+    if(ok) location.href='/flags'; else say(j.message||'That did not work.',true);
+  });
+})();
+"#;
+
+/// Steps grouped by tier, then plane, in the guide's order.
+type Grouped<'a> = Vec<(
+    u8,
+    &'static str,
+    &'static str,
+    Vec<(&'a str, Vec<&'a Step>)>,
+)>;
+
+fn group(g: &Guide) -> Grouped<'_> {
+    TIERS
+        .iter()
+        .filter_map(|(t, label, blurb)| {
+            let mut planes: Vec<(&str, Vec<&Step>)> = Vec::new();
+            for s in g.steps.iter().filter(|s| s.tier == *t) {
+                match planes.iter_mut().find(|(p, _)| *p == s.plane) {
+                    Some((_, v)) => v.push(s),
+                    None => planes.push((s.plane.as_str(), vec![s])),
+                }
+            }
+            (!planes.is_empty()).then_some((*t, *label, *blurb, planes))
+        })
+        .collect()
+}
+
+fn anchor(plane: &str) -> String {
+    plane
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+/// One chip per plane: how many of its required steps are done.
+fn journey(grouped: &Grouped<'_>, flags: &Flags) -> Markup {
+    html! {
+        div class="journey" {
+            @for (_, label, _, planes) in grouped {
+                div class="tierrow" {
+                    div class="tl" { (label) }
+                    div class="zones" {
+                        @for (plane, steps) in planes.iter().filter(|(_, v)| v.iter().any(|s| !s.optional)) {
+                            @let required: Vec<&&Step> = steps.iter().filter(|s| !s.optional).collect();
+                            @let done = required.iter().filter(|s| status(s, flags) == Status::Done).count();
+                            @let next = required.iter().any(|s| status(s, flags) == Status::Next);
+                            @let total = required.len().max(1);
+                            @let class = if done == required.len() && !required.is_empty() { "done" } else if next { "now" } else { "later" };
+                            a class={ "zchip " (class) } href={ "#" (anchor(plane)) } {
+                                span { (plane) }
+                                span class="bar" aria-hidden="true" { i style={ "width:" (done * 100 / total) "%" } {} }
+                                span class="muted" { (done) "/" (required.len()) }
+                            }
                         }
                     }
                 }
@@ -605,74 +844,23 @@ fn step_card(g: &Guide, step: &Step, st: Option<Status>) -> Markup {
     }
 }
 
-const FLAGS_CSS: &str = r#"
-.flags .intro{max-width:72ch}
-.flags form.paste{display:grid;gap:10px;max-width:760px;margin:14px 0 22px}
-.flags form.paste textarea{width:100%;min-height:150px;font:13px/1.4 ui-monospace,Consolas,monospace;background:var(--surface);color:var(--text);border:1px solid var(--line-strong);border-radius:6px;padding:8px}
-.flags form.paste input{font:inherit;background:var(--surface);color:var(--text);border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;max-width:240px}
-.flags .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.flags button{font:inherit;cursor:pointer;border-radius:6px;padding:7px 14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}
-.flags button.ghost{background:transparent;color:var(--muted);border-color:var(--line-strong)}
-.flags #msg{min-height:1.4em;color:var(--muted)}
-.flags .chars{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
-.flags .chars a{padding:5px 10px;border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--text)}
-.flags .chars a[aria-current="page"]{border-color:var(--accent);font-weight:700}
-.flags .tier{margin:22px 0 8px;display:flex;gap:10px;align-items:baseline}
-.flags .tier h2{margin:0;font:600 26px/1.1 "Cormorant Garamond",Georgia,serif}
-.flags h3{margin:16px 0 6px;font-size:15px;color:var(--muted);font-weight:700;letter-spacing:.02em}
-.flags .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
-.flags .pill.good{color:var(--good);border-color:var(--good)}
-.flags .pill.next{color:var(--accent);border-color:var(--accent)}
-.flags .pill.low{color:var(--low);border-color:var(--low)}
-.flags details.step{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:6px 0}
-.flags details.step.is-next{border-color:var(--accent)}
-.flags details.step.is-done summary .title{color:var(--muted)}
-.flags details.step summary{cursor:pointer;padding:9px 12px;list-style-position:inside}
-.flags details.step .body{padding:0 14px 12px;display:grid;gap:8px}
-.flags details.step .body p{margin:0}
-.flags ol.actions{margin:0;padding-left:20px;display:grid;gap:4px}
-.flags .kind{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--brass);font-weight:700}
-.flags code{background:var(--surface-2);padding:1px 5px;border-radius:4px}
-.flags table.npcs{border-collapse:collapse;font-size:14px;width:auto}
-.flags table.npcs th,.flags table.npcs td{padding:4px 10px;border-bottom:1px solid var(--line);text-align:left}
-.flags .num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.flags .debug{background:var(--surface-2);border-radius:6px;padding:8px 12px}
-.flags .debug ul{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}
-.flags .muted,.flags .src{color:var(--muted);font-size:13px}
-.flags table.guild{border-collapse:collapse;margin-top:8px}
-.flags table.guild th,.flags table.guild td{padding:5px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-.flags .wrap{overflow-x:auto}
-.flags .todo{border:1px solid var(--accent);border-radius:8px;padding:10px 14px;max-width:760px;background:var(--surface)}
-.flags .todo ul{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}
-"#;
-
-const FLAGS_JS: &str = r#"
-(function(){
-  const f=document.getElementById('paste'); if(!f) return;
-  const msg=document.getElementById('msg');
-  async function send(path, payload){
-    const r=await fetch(path,{method:'POST',credentials:'include',headers:{'content-type':'application/json','x-nocturnal':'1'},body:JSON.stringify(payload)});
-    let j={}; try{ j=await r.json(); }catch(e){}
-    return [r.ok&&j.ok, j];
-  }
-  f.addEventListener('submit', async e=>{
-    e.preventDefault();
-    msg.textContent='Saving…';
-    const [ok,j]=await send('/flags/save',{character:f.character.value,text:f.text.value});
-    if(!ok){ msg.textContent=j.message||'That did not save.'; return; }
-    let t='Saved '+j.character+' (sections '+(j.sections||[]).join(', ')+').';
-    if((j.unrecognised||[]).length) t+=' '+j.unrecognised.length+' line(s) were not recognised; tell an officer: '+j.unrecognised.slice(0,3).join(' | ');
-    msg.textContent=t;
-    setTimeout(()=>{ location.href='/flags?c='+encodeURIComponent(j.character); }, j.unrecognised&&j.unrecognised.length?4000:600);
-  });
-  const del=document.getElementById('delete');
-  if(del) del.addEventListener('click', async ()=>{
-    if(!confirm('Forget '+del.dataset.c+' on this page?')) return;
-    const [ok,j]=await send('/flags/delete',{character:del.dataset.c});
-    if(ok) location.href='/flags'; else msg.textContent=j.message||'That did not delete.';
-  });
-})();
-"#;
+fn glossary() -> Markup {
+    html! {
+        details class="glossary" {
+            summary { "New to flagging? What the words mean" }
+            dl {
+                dt { "Flag" } dd { "The game's record that you did a step. Flags open the doors and portals to the next planes. They belong to one character." }
+                dt { "Tier" } dd { "A group of planes that open together. You finish tier 1 to reach tier 2, and so on." }
+                dt { "Hail" } dd { "Target the NPC and press H, or type /say Hail." }
+                dt { "Say" } dd { "Type the words in /say while the NPC is targeted. Use the copy buttons so the spelling is exact." }
+                dt { "Hand in" } dd { "Open a trade with the NPC by dragging the item onto them, then press Give." }
+                dt { "/loc" } dd { "Type /loc in game to see where you stand. Walk until your numbers are close to the ones shown here." }
+                dt { "The Seer" } dd { "Seer Mal Nae`Shi in the Plane of Knowledge. Sit near her and say what the step tells you." }
+                dt { "Saved memory" } dd { "If you kill a boss before you had the earlier step, the game remembers it. Visit the Seer later and say \"unlock memories\" to turn it into the flag." }
+            }
+        }
+    }
+}
 
 /// The whole page for `viewer` (their login key), with `wanted` selected.
 pub fn page(store: &Store, viewer: Option<&str>, wanted: Option<&str>) -> String {
@@ -687,94 +875,137 @@ pub fn page(store: &Store, viewer: Option<&str>, wanted: Option<&str>) -> String
     });
     let flags = selected.map(|(_, c)| &c.flags);
     let grouped = group(g);
+    let next: Vec<&Step> = flags
+        .map(|f| {
+            g.steps
+                .iter()
+                .filter(|s| status(s, f) == Status::Next)
+                .collect()
+        })
+        .unwrap_or_default();
+    let missing_tiers: Vec<u8> = selected
+        .map(|(_, c)| (1..=5).filter(|t| !c.sections.contains(t)).collect())
+        .unwrap_or_default();
     let body = html! {
         style { (PreEscaped(FLAGS_CSS)) }
         div class="flags" {
             h1 { "Planes of Power flags" }
-            p class="intro" {
-                "In game, type " code { "#popflags 1" } ", then " code { "#popflags 2" } ", " code { "3" } ", " code { "4" } " and " code { "5" }
-                ". Copy what it prints, from the chat window or your log file, and paste it below. "
-                "The page then marks every step for that character and opens the ones to do next. "
-                "Paste again after a kill or a hand-in; tiers you leave out are kept."
+            p class="lede" { "See what your character has done, and exactly what to do next: who to talk to, where they stand and what to say." }
+
+            div class="how" {
+                div class="card" {
+                    h3 { span class="n" { "1" } "Ask the game" }
+                    p { "Log in to the character and type each of these. Click one to copy it." }
+                    div class="cmds" {
+                        @for t in 1..=5 { button type="button" class="copy" data-copy={ "#popflags " (t) } { "#popflags " (t) } }
+                    }
+                }
+                div class="card" {
+                    h3 { span class="n" { "2" } "Bring the answer here" }
+                    p { "The game writes everything to your log file. Turn logging on once with " button type="button" class="copy" data-copy="/log on" { "/log on" } " before step 1." }
+                    p { "The log is in your EverQuest folder, in Logs, named like eqlog_YourName_….txt." }
+                }
+                div class="card" {
+                    h3 { span class="n" { "3" } "Follow the next step" }
+                    p { "The page marks what you've done and opens the next thing to do. Come back and update after every kill or hand-in." }
+                }
             }
-            form id="paste" class="paste" {
+
+            form id="paste" class="paste card" {
+                div id="drop" class="drop" tabindex="0" role="button" aria-label="Choose your log file" {
+                    b { "Drop your log file here" } " or click to choose it"
+                    br;
+                    span class="muted" { "Only the flag lines are sent. Your chat stays on your computer." }
+                }
+                input type="file" id="file" accept=".txt,text/plain" hidden;
+                details class="paste-more" {
+                    summary { "Or paste the lines yourself" }
+                    textarea name="text" placeholder="=== Tier 1 Progression ===\nMavuin's case: Not started\n…" {}
+                }
                 div class="row" {
                     label for="character" { "Character" }
-                    input id="character" name="character" required placeholder="Bubblie" value=(selected.map(|(n, _)| n).unwrap_or("")) list="mychars";
+                    input id="character" name="character" placeholder="Your character's name" autocomplete="off"
+                        value=(selected.map(|(n, _)| n).unwrap_or("")) list="mychars";
                     @if let Some(m) = mine { datalist id="mychars" { @for n in m.characters.keys() { option value=(n) {} } } }
-                }
-                textarea name="text" required placeholder="=== Tier 1 Progression ===\n--- Plane of Justice ---\nMavuin's case: Not started\n…" {}
-                div class="row" {
-                    button type="submit" { "Save" }
-                    @if let Some((n, _)) = selected { button type="button" class="ghost" id="delete" data-c=(n) { "Forget " (n) } }
+                    button type="submit" class="primary" { "Save" }
+                    @if let Some((n, _)) = selected { button type="button" class="ghost" id="delete" data-c=(n) { "Remove " (n) } }
                 }
                 div id="msg" aria-live="polite" {}
             }
+            (glossary())
+
             @if let Some(m) = mine {
                 @if m.characters.len() > 1 {
-                    div class="chars" {
+                    div class="chars" role="navigation" aria-label="Your characters" {
                         @for n in m.characters.keys() {
                             a href={ "/flags?c=" (n) } aria-current=[(selected.map(|(s, _)| s) == Some(n.as_str())).then_some("page")] { (n) }
                         }
                     }
                 }
             }
-            @if let Some((n, c)) = selected {
-                p class="muted" { (n) ", last pasted " (c.updated_at.get(..10).unwrap_or(&c.updated_at)) ". Sections on file: "
-                    (c.sections.iter().map(u8::to_string).collect::<Vec<_>>().join(", ")) "." }
-                @let next: Vec<&Step> = GUIDE.steps.iter().filter(|s| status(s, &c.flags) == Status::Next).collect();
-                @if !next.is_empty() {
-                    div class="todo" {
-                        b { "Do next" }
-                        ul { @for s in next { li { a href={ "#" (s.id) } { (s.title) } span class="muted" { " · " (s.plane) } } } }
+
+            @if let (Some((name, c)), Some(f)) = (selected, flags) {
+                div class="nextup" id="next" {
+                    @if let Some(first) = next.first() {
+                        div class="eyebrow" { "Next for " (name) }
+                        h2 { a href={ "#" (first.id) } { (first.title) } }
+                        @if let Some(w) = &first.why { p { (w) } }
+                        @if next.len() > 1 {
+                            b { "You can also work on" }
+                            ul { @for s in next.iter().skip(1) { li { a href={ "#" (s.id) } { (s.title) } span class="muted" { " · " (s.plane) } } } }
+                        }
+                    } @else if tier_complete(5, f) == Some(true) {
+                        div class="eyebrow" { (name) }
+                        h2 { "Every flag is done. The Plane of Time is open." }
+                    } @else {
+                        div class="eyebrow" { (name) }
+                        h2 { "Paste the rest of your tiers" }
+                        p { "Nothing is open yet in the tiers you pasted. Type the other #popflags numbers and add them." }
                     }
+                    @if !missing_tiers.is_empty() {
+                        p class="muted" {
+                            "Not pasted yet: " (missing_tiers.iter().map(|t| format!("#popflags {t}")).collect::<Vec<_>>().join(", "))
+                            ". Steps there show as Unknown."
+                        }
+                    }
+                    p class="muted" { "Updated " (c.updated_at.get(..10).unwrap_or(&c.updated_at)) "." }
                 }
+                (journey(&grouped, f))
             } @else {
-                p class="muted" { "No character pasted yet, so this is the whole guide without your progress." }
+                p class="muted" { "No character saved yet, so below is the whole guide without your progress. Save a character to see your next step." }
             }
-            @for (t, label, planes) in &grouped {
+
+            @for (t, label, blurb, planes) in &grouped {
                 @let all: Vec<&Step> = planes.iter().flat_map(|(_, v)| v.iter().copied()).collect();
                 @let started = flags.is_some_and(|f| all.iter().any(|s| status(s, f) == Status::Done));
                 div class="tier" {
                     h2 { (label) }
-                    @if let Some(f) = flags { (tier_pill(tier_complete(*t, f), started)) }
+                    @if let Some(f) = flags {
+                        @match (tier_complete(*t, f), started) {
+                            (Some(true), _) => { span class="pill good" { "Complete" } }
+                            (_, true) => { span class="pill" { "In progress" } }
+                            _ => { span class="pill" { "Not started" } }
+                        }
+                    }
+                    span class="blurb" { (blurb) }
                 }
                 @for (plane, steps) in planes {
-                    h3 { (plane) }
+                    h3 class="plane" id=(anchor(plane)) { (plane) }
                     @for s in steps {
-                        (step_card(g, s, flags.map(|f| status(s, f))))
+                        @let st = flags.map(|f| status(s, f));
+                        (step_card(g, s, flags, st == Some(Status::Next) && next.first().is_some_and(|n| n.id == s.id)))
                     }
                 }
             }
+
             (guild_table(store))
-            p class="src" {
-                "Steps read from Quarm's quest scripts (quests " (g.quests_commit.get(..7).unwrap_or(&g.quests_commit))
-                ") and server (EQMacEmu " (g.server_commit.get(..7).unwrap_or(&g.server_commit)) "), NPC positions from the Quarm database. "
-                "/loc shows Y, X, Z, the way the game's /loc prints it."
+            p class="foot" {
+                "Built from Project Quarm's own quests, checked October 2026. Positions are where the NPC stands when the zone starts; some walk around or only appear during an event."
             }
         }
         script { (PreEscaped(FLAGS_JS)) }
     };
     super::pages::layout("Flags", "flags", body, false)
-}
-
-/// Tiers in order, each with its planes in first-seen order.
-type Grouped<'a> = Vec<(u8, &'static str, Vec<(&'a str, Vec<&'a Step>)>)>;
-
-fn group(g: &Guide) -> Grouped<'_> {
-    TIERS
-        .iter()
-        .filter_map(|(t, label)| {
-            let mut planes: Vec<(&str, Vec<&Step>)> = Vec::new();
-            for s in g.steps.iter().filter(|s| s.tier == *t) {
-                match planes.iter_mut().find(|(p, _)| *p == s.plane) {
-                    Some((_, v)) => v.push(s),
-                    None => planes.push((s.plane.as_str(), vec![s])),
-                }
-            }
-            (!planes.is_empty()).then_some((*t, *label, planes))
-        })
-        .collect()
 }
 
 fn guild_table(store: &Store) -> Markup {
@@ -788,21 +1019,26 @@ fn guild_table(store: &Store) -> Markup {
         })
         .collect();
     rows.sort_by(|a, b| a.0.cmp(b.0));
+    let cell = |t: u8, c: &Character| -> Markup {
+        match (tier_complete(t, &c.flags), c.sections.contains(&t)) {
+            (Some(true), _) => html! { span class="pill good" { "Done" } },
+            (_, true) => html! { span class="pill" { "Working" } },
+            _ => html! { span class="muted" { "–" } },
+        }
+    };
     html! {
         @if !rows.is_empty() {
-            div class="tier" { h2 { "The guild" } }
+            div class="tier" { h2 { "The guild" } span class="blurb" { "Everyone who has saved a character here." } }
             div class="wrap" {
                 table class="guild" {
-                    thead { tr { th { "Character" } th { "Member" } th { "Tier 1" } th { "Tier 2" } th { "Tier 3" } th { "Time" } th { "Pasted" } } }
+                    thead { tr { th { "Character" } th { "Member" } th { "Tier 1" } th { "Tier 2" } th { "Tier 3" } th { "Time" } th { "Updated" } } }
                     tbody {
                         @for (n, m, c) in rows {
                             tr {
-                                td { a href={ "/flags?c=" (n) } { (n) } }
+                                td { (n) }
                                 td { (m) }
-                                @for t in [1u8, 2, 3, 5] {
-                                    td { (tier_pill(tier_complete(t, &c.flags), c.sections.contains(&t))) }
-                                }
-                                td class="num" { (c.updated_at.get(..10).unwrap_or(&c.updated_at)) }
+                                @for t in [1u8, 2, 3, 5] { td { (cell(t, c)) } }
+                                td class="muted" { (c.updated_at.get(..10).unwrap_or(&c.updated_at)) }
                             }
                         }
                     }
@@ -832,6 +1068,7 @@ mod tests {
             tier: 1,
             plane: "P".into(),
             title: "t".into(),
+            why: None,
             optional: false,
             done_when: done,
             alt_done: vec![],
@@ -940,6 +1177,10 @@ mod tests {
         store.members.insert("bubblie".into(), m);
         let html = page(&store, Some("bubblie"), None);
         assert!(html.contains("Planes of Power flags"));
+        assert!(
+            !html.contains("github.com"),
+            "no script references on the page"
+        );
         assert!(html.contains(r#"href="/flags" aria-current="page""#));
         assert!(html.contains("The guild"));
         let anon = page(&Store::default(), None, None);
