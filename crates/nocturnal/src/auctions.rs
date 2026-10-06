@@ -600,6 +600,24 @@ pub struct AuctionUi {
     /// The item mirror, for the officer's warning at close (a winner whose
     /// character cannot use the item). `None` in tests: no warnings.
     mirror: Option<std::sync::Arc<crate::items::ItemMirror>>,
+    /// One edit slot per auction post (raid night 2026-10-06). Discord
+    /// rate-limits message edits per channel; in a burst of bids and rolls
+    /// the edits queued for minutes, and because each was rendered *before*
+    /// it waited, an edit rendered from an older ledger could land after a
+    /// newer one: a finalized auction's post went back to showing live bid
+    /// buttons. Edits to one post now take turns, each renders only once it
+    /// holds the turn, and while one is waiting further changes fold into it.
+    edits: Mutex<HashMap<String, std::sync::Arc<EditSlot>>>,
+}
+
+/// See [`AuctionUi::edits`].
+#[derive(Default)]
+struct EditSlot {
+    turn: tokio::sync::Mutex<()>,
+    /// A [`refresh_soon`] is waiting for the turn and will render whatever
+    /// the ledger holds when it gets it: later changes need no edit of their
+    /// own.
+    queued: std::sync::atomic::AtomicBool,
 }
 
 impl AuctionUi {
@@ -607,6 +625,7 @@ impl AuctionUi {
         AuctionUi {
             messages: Mutex::default(),
             mirror: Some(mirror),
+            edits: Mutex::default(),
         }
     }
 
@@ -630,6 +649,17 @@ impl AuctionUi {
     pub fn forget(&self, auction_id: &str) {
         if let Ok(mut m) = self.messages.lock() {
             m.remove(auction_id);
+        }
+        if let Ok(mut e) = self.edits.lock() {
+            // A holder keeps its own Arc; the next edit would start a new slot.
+            e.remove(auction_id);
+        }
+    }
+
+    fn edit_slot(&self, auction_id: &str) -> std::sync::Arc<EditSlot> {
+        match self.edits.lock() {
+            Ok(mut e) => e.entry(auction_id.to_owned()).or_default().clone(),
+            Err(_) => std::sync::Arc::default(),
         }
     }
 }
@@ -702,8 +732,74 @@ pub async fn refresh(
     ledger_guild: GuildId,
     auction_id: &str,
 ) -> bool {
+    let slot = ui.edit_slot(auction_id);
+    let _turn = slot.turn.lock().await;
+    for _ in 0..EDIT_ATTEMPTS {
+        match refresh_now(http, ui, driver, ledger_guild, auction_id).await {
+            Shown::Yes => return true,
+            Shown::No => return false,
+            Shown::TimedOut => {}
+        }
+    }
+    false
+}
+
+/// A timed-out edit is retried, re-rendered, this many times in all.
+const EDIT_ATTEMPTS: usize = 3;
+
+/// Re-render in the background, folding into an edit that is already
+/// waiting for its turn. For the paths that fire in bursts (bids, rolls, the
+/// scheduler's closings): the clicker has had their private answer, and the
+/// scheduler must never wait on Discord's rate limit to close the next
+/// auction on time.
+pub fn refresh_soon(
+    http: std::sync::Arc<serenity::Http>,
+    ui: std::sync::Arc<AuctionUi>,
+    driver: DriverHandle,
+    ledger_guild: GuildId,
+    auction_id: String,
+) {
+    use std::sync::atomic::Ordering;
+    let slot = ui.edit_slot(&auction_id);
+    if slot.queued.swap(true, Ordering::AcqRel) {
+        return; // the waiting edit will render this change too
+    }
+    tokio::spawn(async move {
+        let _turn = slot.turn.lock().await;
+        // From here on a change needs a new edit: this one renders now.
+        slot.queued.store(false, Ordering::Release);
+        for _ in 0..EDIT_ATTEMPTS {
+            if refresh_now(&http, &ui, &driver, ledger_guild, &auction_id).await != Shown::TimedOut
+            {
+                break;
+            }
+        }
+    });
+}
+
+/// How long one edit may take before it is abandoned (2026-10-06: edits
+/// hung for up to seven minutes with no rate-limit reply from Discord, then
+/// all completed at once). Dropping the request cancels it; the retry
+/// renders the ledger as it is by then.
+const EDIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shown {
+    Yes,
+    No,
+    TimedOut,
+}
+
+/// The render and the edit, for a caller that holds the post's turn.
+async fn refresh_now(
+    http: &serenity::Http,
+    ui: &AuctionUi,
+    driver: &DriverHandle,
+    ledger_guild: GuildId,
+    auction_id: &str,
+) -> Shown {
     let Some((channel, message)) = ui.locate(auction_id) else {
-        return false;
+        return Shown::No;
     };
     let aid = auction_id.to_owned();
     let Some(auction) = driver
@@ -714,7 +810,7 @@ pub async fn refresh(
         })
         .await
     else {
-        return false;
+        return Shown::No;
     };
     // Every ledger change collapses the history field: the re-render is a
     // pure function of ledger state, and the toggle is one click away.
@@ -725,25 +821,44 @@ pub async fn refresh(
     ) {
         ui.forget(auction_id);
     }
-    let result = discord_call("edit auction embed", async {
-        serenity::ChannelId::new(channel)
-            .edit_message(
-                http,
-                serenity::MessageId::new(message),
-                serenity::EditMessage::new().embed(embed).components(rows),
-            )
-            .await
-    })
+    let started = std::time::Instant::now();
+    let result = tokio::time::timeout(
+        EDIT_TIMEOUT,
+        discord_call("edit auction embed", async {
+            serenity::ChannelId::new(channel)
+                .edit_message(
+                    http,
+                    serenity::MessageId::new(message),
+                    serenity::EditMessage::new().embed(embed).components(rows),
+                )
+                .await
+        }),
+    )
     .await;
+    let took = started.elapsed();
+    if took > std::time::Duration::from_secs(10) {
+        tracing::warn!(
+            { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+            elapsed_s = took.as_secs_f64(),
+            "auction embed edit was slow"
+        );
+    }
+    let Ok(result) = result else {
+        tracing::warn!(
+            { attr::NOCTURNAL_AUCTION_ID } = auction_id,
+            "auction embed edit timed out; it will be re-rendered and retried"
+        );
+        return Shown::TimedOut;
+    };
     if let Err(e) = result {
         tracing::warn!(
             { attr::NOCTURNAL_AUCTION_ID } = auction_id,
             { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
             "auction embed refresh failed"
         );
-        return false;
+        return Shown::No;
     }
-    true
+    Shown::Yes
 }
 
 /// Post an auction's embed to its channel and remember where it went. A fresh
@@ -2262,14 +2377,13 @@ pub async fn handle_modal(
     .await;
     modal_reply(ctx, modal, text).await?;
     if let Some(auction_id) = refresh_id {
-        refresh(
-            ctx.http.as_ref(),
-            &data.auctions,
-            &data.driver,
+        refresh_soon(
+            ctx.http.clone(),
+            data.auctions.clone(),
+            data.driver.clone(),
             ledger_guild,
-            &auction_id,
-        )
-        .await;
+            auction_id,
+        );
     }
     Ok(())
 }
@@ -2598,14 +2712,13 @@ pub async fn handle_component(
             // on the embed for everyone even if that answer failed.
             let replied = reply(ctx, interaction, text).await;
             if outcome.is_ok() {
-                refresh(
-                    ctx.http.as_ref(),
-                    &data.auctions,
-                    &data.driver,
+                refresh_soon(
+                    ctx.http.clone(),
+                    data.auctions.clone(),
+                    data.driver.clone(),
                     ledger_guild,
-                    auction_id,
-                )
-                .await;
+                    auction_id.to_owned(),
+                );
             }
             replied
         }

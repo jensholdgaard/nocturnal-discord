@@ -240,14 +240,16 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
         if !changed {
             continue;
         }
-        crate::auctions::refresh(
-            s.ctx.http.as_ref(),
-            &s.auctions,
-            &s.driver,
+        // In the background (2026-10-06): an edit can wait minutes on
+        // Discord's per-channel rate limit, and awaiting it here stalled every
+        // cycle behind it, closing the next auctions minutes late.
+        crate::auctions::refresh_soon(
+            s.ctx.http.clone(),
+            s.auctions.clone(),
+            s.driver.clone(),
             ledger_guild,
-            &auction_id,
-        )
-        .await;
+            auction_id,
+        );
     }
     Ok(())
 }
