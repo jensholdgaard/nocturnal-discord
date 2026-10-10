@@ -900,8 +900,17 @@ fn auction_channel_for(live: bool, short: Option<u64>, long: Option<u64>) -> Opt
     }
 }
 
-/// Boot recovery (hazard B11): every auction still open in the ledger gets a
-/// fresh embed, so its buttons work again after a restart.
+/// Boot recovery (hazard B11): every auction still open in the ledger gets
+/// its post back under the bot's control after a restart.
+///
+/// 2026-10-10: this used to post a fresh embed for every open auction, so
+/// each restart or deploy left a second copy of every long (guild bank)
+/// auction in the channel, which read as the item being auctioned again.
+/// The buttons never needed it: their custom ids carry the auction, and a
+/// click is handled from the ledger. What a restart loses is only which
+/// message `refresh` edits, so the post is found by its buttons, adopted and
+/// re-rendered from the ledger. A fresh embed goes up only when no post is
+/// found (deleted, or older than the scan reaches) or it can't be edited.
 pub async fn repost_open_auctions(
     http: &serenity::Http,
     ui: &AuctionUi,
@@ -930,9 +939,26 @@ pub async fn repost_open_auctions(
     }
     tracing::info!(
         { attr::NOCTURNAL_AUCTION_OPEN_COUNT } = open.len(),
-        "re-posting auctions that survived the restart"
+        "recovering auctions that survived the restart"
     );
+    let mut found: HashMap<String, u64> = HashMap::new();
+    let channels: std::collections::BTreeSet<u64> = open.iter().map(|(_, _, c)| *c).collect();
+    for channel in channels {
+        let wanted: std::collections::HashSet<&str> = open
+            .iter()
+            .filter(|(_, _, c)| *c == channel)
+            .map(|(id, _, _)| id.as_str())
+            .collect();
+        find_posts(http, channel, &wanted, &mut found).await;
+    }
     for (id, auction, channel) in open {
+        if let Some(&message) = found.get(&id) {
+            ui.remember(&id, channel, message);
+            if refresh(http, ui, driver, ledger_guild, &id).await {
+                continue;
+            }
+            ui.forget(&id);
+        }
         if let Err(e) = post(http, ui, channel, &id, &auction).await {
             tracing::warn!(
                 { attr::NOCTURNAL_AUCTION_ID } = %id,
@@ -941,6 +967,74 @@ pub async fn repost_open_auctions(
             );
         }
     }
+}
+
+/// How far back boot recovery looks for an auction's post: pages of 100
+/// messages per auction channel. Auction channels are quiet between raids,
+/// so ten pages reach every post a long auction could still have.
+const BOOT_SCAN_PAGES: usize = 10;
+
+/// Fill `found` with the newest post in `channel` for each `wanted` auction,
+/// newest first, stopping once every one is found. A failed read just ends
+/// the scan: what it missed gets a fresh embed, as before.
+async fn find_posts(
+    http: &serenity::Http,
+    channel: u64,
+    wanted: &std::collections::HashSet<&str>,
+    found: &mut HashMap<String, u64>,
+) {
+    let mut before: Option<serenity::MessageId> = None;
+    for _ in 0..BOOT_SCAN_PAGES {
+        let mut page = serenity::GetMessages::new().limit(100);
+        if let Some(b) = before {
+            page = page.before(b);
+        }
+        let msgs = match discord_call(
+            "read auction channel",
+            serenity::ChannelId::new(channel).messages(http, page),
+        )
+        .await
+        {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!(
+                    { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
+                    "could not read the auction channel; open auctions there get fresh posts"
+                );
+                return;
+            }
+        };
+        let Some(last) = msgs.last() else { return };
+        before = Some(last.id);
+        for m in &msgs {
+            if !m.author.bot {
+                continue;
+            }
+            if let Some(id) = auction_of(&m.components) {
+                if wanted.contains(id) && !found.contains_key(id) {
+                    found.insert(id.to_owned(), m.id.get());
+                }
+            }
+        }
+        if wanted.iter().all(|id| found.contains_key(*id)) || msgs.len() < 100 {
+            return;
+        }
+    }
+}
+
+/// The auction a posted message belongs to, from its components' custom ids.
+fn auction_of(rows: &[serenity::ActionRow]) -> Option<&str> {
+    rows.iter().flat_map(|r| r.components.iter()).find_map(|c| {
+        let custom_id = match c {
+            serenity::ActionRowComponent::Button(b) => match &b.data {
+                serenity::ButtonKind::NonLink { custom_id, .. } => custom_id.as_str(),
+                _ => return None,
+            },
+            serenity::ActionRowComponent::SelectMenu(m) => m.custom_id.as_deref()?,
+            _ => return None,
+        };
+        parse_custom_id(custom_id).map(|(_, id, _)| id)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -2728,8 +2822,9 @@ pub async fn handle_component(
 #[cfg(test)]
 mod tests {
     use super::{
-        auction_channel_for, closed_message, custom_id, details_readable, item_history_lines,
-        live_message, parse_custom_id, settled_message, Action, Auction, AuctionStatus, Flavor,
+        auction_channel_for, auction_of, closed_message, custom_id, details_readable,
+        item_history_lines, live_message, parse_custom_id, serenity, settled_message, Action,
+        Auction, AuctionStatus, Flavor,
     };
 
     /// The one status that must stay sealed, and the three that must not.
@@ -2744,6 +2839,32 @@ mod tests {
         ] {
             assert!(details_readable(status), "{status:?} is settled");
         }
+    }
+
+    #[test]
+    fn a_post_is_recognised_by_its_buttons() {
+        // A Discord payload as boot recovery reads it: a link button first,
+        // then the auction's own, so the scan has to look past the link.
+        let rows: Vec<serenity::ActionRow> = serde_json::from_value(serde_json::json!([{
+            "type": 1,
+            "components": [
+                {"type": 2, "style": 5, "label": "Item", "url": "https://example.invalid/"},
+                {"type": 2, "style": 1, "label": "Bid", "custom_id": "nb:bid:au-1a112cd011d"},
+            ],
+        }]))
+        .expect("a Discord component payload");
+        assert_eq!(auction_of(&rows), Some("au-1a112cd011d"));
+        let other: Vec<serenity::ActionRow> = serde_json::from_value(serde_json::json!([{
+            "type": 1,
+            "components": [{"type": 2, "style": 1, "label": "x", "custom_id": "raidbell:join"}],
+        }]))
+        .expect("a Discord component payload");
+        assert_eq!(
+            auction_of(&other),
+            None,
+            "another feature's buttons are not an auction"
+        );
+        assert_eq!(auction_of(&[]), None);
     }
 
     #[test]

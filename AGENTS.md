@@ -27,7 +27,8 @@ store, telemetry, provisioning, migration tooling, and the Discord bot itself
 
 - Buttons are stateless: custom ids are `nb:<action>:<auction id>`, and
   handling is a pure function of (custom id, ledger state). No in-memory
-  collector must survive for an auction to work; open auctions re-post on boot.
+  collector must survive for an auction to work. On boot, open auctions adopt
+  their existing post (found by its buttons) and only re-post when none is found.
 - Every auction embed (live short/long, closed recap, settled recap) ends with
   an "Item history" toggle. The button's custom id encodes the current
   presentation state (`histon` expands, `histoff` collapses), and a click
