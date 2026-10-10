@@ -134,13 +134,63 @@ pub fn merge_uploads(
 /// An Ourios record, only the parts we read. The body arrives either as the
 /// original text (`line`) or, for rows the miner kept verbatim, as a string.
 #[derive(Deserialize)]
-struct Record {
+pub(crate) struct Record {
     #[serde(default)]
     time_unix_nano: serde_json::Value,
     #[serde(default)]
     body: serde_json::Value,
     #[serde(default)]
     attributes: serde_json::Value,
+}
+
+/// An Ourios record without its body, for readers that only look at the
+/// attributes: serde skips the body without allocating it, which matters
+/// when the body is a whole character profile.
+#[derive(Deserialize)]
+pub(crate) struct RecordMeta {
+    #[serde(default)]
+    pub(crate) time_unix_nano: serde_json::Value,
+    #[serde(default)]
+    pub(crate) attributes: serde_json::Value,
+    #[serde(default)]
+    pub(crate) resource_attributes: serde_json::Value,
+}
+
+/// The `records` of an Ourios `/v1/query` response, read from the bytes
+/// straight into `R`; a page that does not parse is empty, as before.
+///
+/// 2026-10-10: this went through a whole-page `serde_json::Value`, then
+/// `.cloned()` the array, then cloned each record again to type it. The
+/// first seven-day profile page after Ourios came back (2026-10-07 00:06
+/// UTC) took the bot from ~390 MB to ~1 GB, and glibc kept the peak. Typed
+/// straight from the bytes, a page costs its bytes plus the rows we keep.
+pub(crate) async fn read_records<R: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+) -> Vec<R> {
+    match resp.bytes().await {
+        Ok(bytes) => parse_page(&bytes),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The pure half of [`read_records`].
+pub(crate) fn parse_page<R: serde::de::DeserializeOwned>(bytes: &[u8]) -> Vec<R> {
+    #[derive(Deserialize)]
+    struct Page<T> {
+        #[serde(default = "Vec::new")]
+        records: Vec<T>,
+    }
+    serde_json::from_slice::<Page<R>>(bytes)
+        .map(|p| p.records)
+        .unwrap_or_default()
+}
+
+/// Typed records from JSON fixtures, for the parsers' tests.
+#[cfg(test)]
+pub(crate) fn rows<R: serde::de::DeserializeOwned>(v: Vec<serde_json::Value>) -> Vec<R> {
+    v.into_iter()
+        .map(|r| serde_json::from_value(r).unwrap_or_else(|e| panic!("fixture: {e}")))
+        .collect()
 }
 
 /// One string attribute out of Ourios' `[{key, value: {stringValue}}]` list.
@@ -177,12 +227,9 @@ pub(crate) fn nanos(v: &serde_json::Value) -> i64 {
 }
 
 /// Newest profile per character from a page of Ourios records. Pure.
-pub fn latest_per_character(records: &[serde_json::Value]) -> HashMap<String, Profile> {
+pub fn latest_per_character(records: &[Record]) -> HashMap<String, Profile> {
     let mut out: HashMap<String, Profile> = HashMap::new();
-    for r in records {
-        let Ok(rec) = serde_json::from_value::<Record>(r.clone()) else {
-            continue;
-        };
+    for rec in records {
         let Some(text) = body_text(&rec.body) else {
             continue;
         };
@@ -548,8 +595,8 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> Option<HashMap<Str
         .json(&serde_json::json!({ "query": query }))
         .send()
         .await;
-    let body: serde_json::Value = match resp {
-        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+    let records: Vec<Record> = match resp {
+        Ok(r) if r.status().is_success() => read_records(r).await,
         Ok(r) => {
             tracing::warn!(status = %r.status(), "ourios refused the profile query; keeping the previous profiles");
             return None;
@@ -559,7 +606,6 @@ pub async fn fetch_profiles(query_url: &str, tenant: &str) -> Option<HashMap<Str
             return None;
         }
     };
-    let records = body["records"].as_array().cloned().unwrap_or_default();
     Some(latest_per_character(&records))
 }
 
@@ -592,8 +638,8 @@ pub async fn reporter_status(query_url: &str, tenant: &str) -> Vec<ReporterStatu
         .json(&serde_json::json!({ "query": query }))
         .send()
         .await;
-    let body: serde_json::Value = match resp {
-        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+    let records: Vec<RecordMeta> = match resp {
+        Ok(r) if r.status().is_success() => read_records(r).await,
         Ok(r) => {
             tracing::warn!(status = %r.status(), "ourios refused the dpsstatus query");
             return Vec::new();
@@ -603,16 +649,15 @@ pub async fn reporter_status(query_url: &str, tenant: &str) -> Vec<ReporterStatu
             return Vec::new();
         }
     };
-    let records = body["records"].as_array().cloned().unwrap_or_default();
     aggregate_reporters(&records)
 }
 
 /// The reduce half of [`reporter_status`], split out so a fixture can pin the
 /// attribute-shape handling without a live Ourios.
-pub fn aggregate_reporters(records: &[serde_json::Value]) -> Vec<ReporterStatus> {
-    fn attr(r: &serde_json::Value, key: &str) -> Option<String> {
-        for group in ["attributes", "resource_attributes"] {
-            if let Some(arr) = r[group].as_array() {
+pub fn aggregate_reporters(records: &[RecordMeta]) -> Vec<ReporterStatus> {
+    fn attr(r: &RecordMeta, key: &str) -> Option<String> {
+        for group in [&r.attributes, &r.resource_attributes] {
+            if let Some(arr) = group.as_array() {
                 for a in arr {
                     if a["key"].as_str() == Some(key) {
                         let v = &a["value"];
@@ -627,13 +672,8 @@ pub fn aggregate_reporters(records: &[serde_json::Value]) -> Vec<ReporterStatus>
         }
         None
     }
-    fn seen_ms(r: &serde_json::Value) -> i64 {
-        let t = &r["time_unix_nano"];
-        let nanos = t
-            .as_i64()
-            .or_else(|| t.as_str().and_then(|s| s.parse().ok()))
-            .unwrap_or(0);
-        nanos / 1_000_000
+    fn seen_ms(r: &RecordMeta) -> i64 {
+        nanos(&r.time_unix_nano) / 1_000_000
     }
     let mut by: std::collections::BTreeMap<String, ReporterStatus> =
         std::collections::BTreeMap::new();
@@ -778,12 +818,12 @@ mod tests {
 
     #[test]
     fn the_newest_report_per_character_wins() {
-        let m = latest_per_character(&[
+        let m = latest_per_character(&rows(vec![
             rec("Shaku", 59, 1000),
             rec("Shaku", 60, 2000),
             rec("Eklavdra", 25, 1500),
             rec("shaku", 58, 500),
-        ]);
+        ]));
         assert_eq!(m.len(), 2);
         let s = &m["shaku"];
         assert_eq!((s.level, s.reported_ms, s.equipment.len()), (60, 2000, 2));
@@ -799,7 +839,7 @@ mod tests {
             {"key": "everquest.reporter", "value": {"stringValue": "bisben_"}},
             {"key": "everquest.character.level", "value": {"stringValue": "60"}}
         ]);
-        let m = latest_per_character(&[r]);
+        let m = latest_per_character(&rows(vec![r]));
         assert_eq!(m["shaku"].reporter.as_deref(), Some("bisben_"));
     }
 
@@ -830,7 +870,7 @@ mod tests {
 
     #[test]
     fn the_roster_changes_only_when_the_game_says_something_new() {
-        let m = latest_per_character(&[rec("Shaku", 60, 10)]);
+        let m = latest_per_character(&rows(vec![rec("Shaku", 60, 10)]));
         let p = &m["shaku"];
         // New character: added, as reported.
         let (c, replace) = roster_update(p, None).unwrap();
@@ -863,13 +903,25 @@ mod tests {
         let mut r = rec("Shaku", 60, 10);
         let text = r["body"]["line"].as_str().unwrap().to_owned();
         r["body"] = serde_json::Value::String(text);
-        assert_eq!(latest_per_character(&[r]).len(), 1);
+        assert_eq!(latest_per_character(&rows(vec![r])).len(), 1);
+    }
+
+    #[test]
+    fn a_page_is_typed_from_its_bytes_and_a_bad_page_is_empty() {
+        let page = serde_json::json!({ "records": [rec("Shaku", 60, 10)], "stats": {} });
+        let bytes = serde_json::to_vec(&page).unwrap();
+        let full: Vec<Record> = parse_page(&bytes);
+        assert_eq!(latest_per_character(&full).len(), 1);
+        let meta: Vec<RecordMeta> = parse_page(&bytes);
+        assert_eq!(meta.len(), 1, "the body is skipped, the row is not");
+        assert!(parse_page::<Record>(b"not json").is_empty());
+        assert!(parse_page::<Record>(b"{}").is_empty());
     }
 }
 
 #[cfg(test)]
 mod reporter_status_tests {
-    use super::aggregate_reporters;
+    use super::{aggregate_reporters, rows};
     use serde_json::json;
 
     #[test]
@@ -881,11 +933,11 @@ mod reporter_status_tests {
                 "resource_attributes": [{"key": "service.version", "value": {"stringValue": ver}}],
             })
         };
-        let rows = aggregate_reporters(&[
+        let rows = aggregate_reporters(&rows(vec![
             rec("zig", "1.4.5+aaa", 1_000_000_000),
             rec("bisben", "1.4.5+bbb", 3_000_000_000),
             rec("zig", "1.4.5+ccc", 2_000_000_000), // newer than zig's first
-        ]);
+        ]));
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].reporter, "bisben", "most recently seen first");
         assert_eq!(rows[1].reporter, "zig");
@@ -899,11 +951,11 @@ mod reporter_status_tests {
 
     #[test]
     fn nanos_as_string_and_missing_reporter_are_handled() {
-        let rows = aggregate_reporters(&[json!({
+        let rows = aggregate_reporters(&rows(vec![json!({
             "time_unix_nano": "1500000000",
             "attributes": [{"key": "everquest.character.name", "value": {"stringValue": "Solo"}}],
             "resource_attributes": [],
-        })]);
+        })]));
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].reporter, "Solo", "falls back to character name");
         assert_eq!(rows[0].version, "?");

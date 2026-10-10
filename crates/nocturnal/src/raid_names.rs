@@ -196,8 +196,8 @@ pub async fn deaths_in_window(
         .json(&serde_json::json!({ "query": query }))
         .send()
         .await;
-    let body: serde_json::Value = match resp {
-        Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
+    let records: Vec<crate::profiles::RecordMeta> = match resp {
+        Ok(r) if r.status().is_success() => crate::profiles::read_records(r).await,
         Ok(r) => {
             tracing::warn!(status = %r.status(), "ourios refused the death query");
             return BTreeMap::new();
@@ -207,7 +207,6 @@ pub async fn deaths_in_window(
             return BTreeMap::new();
         }
     };
-    let records = body["records"].as_array().cloned().unwrap_or_default();
     parse_deaths(&records, start_ms, end_ms)
 }
 
@@ -239,19 +238,19 @@ pub(crate) fn rfc3339(ms: i64) -> Option<String> {
 /// outside the window are dropped, and the same spawn id reported by several
 /// meters within a minute is one death.
 pub fn parse_deaths(
-    records: &[serde_json::Value],
+    records: &[crate::profiles::RecordMeta],
     start_ms: i64,
     end_ms: i64,
 ) -> BTreeMap<String, Vec<i64>> {
     // (target, spawn id) -> kill times, deduped by the minute
     let mut seen: BTreeMap<(String, String), Vec<i64>> = BTreeMap::new();
     for r in records {
-        let attrs = &r["attributes"];
+        let attrs = &r.attributes;
         let Some(target) = crate::profiles::string_attr(attrs, "everquest.combat.target") else {
             continue;
         };
         let spawn = crate::profiles::string_attr(attrs, "everquest.spawn.id").unwrap_or_default();
-        let ms = crate::profiles::nanos(&r["time_unix_nano"]) / 1_000_000;
+        let ms = crate::profiles::nanos(&r.time_unix_nano) / 1_000_000;
         if ms < start_ms || ms > end_ms + 60_000 {
             continue;
         }
@@ -722,13 +721,13 @@ mod tests {
                 ]
             })
         };
-        let records = vec![
+        let records = crate::profiles::rows(vec![
             rec(500_000, "Vulak`Aerr", "40211"),
             rec(500_400, "Vulak`Aerr", "40211"), // another reporter, same death
             rec(4_000_000, "Vulak`Aerr", "40999"), // a respawn, much later
             rec(50_000, "Vulak`Aerr", "1"),      // before the raid
             rec(600_000, "a cerulean warden", "7"),
-        ];
+        ]);
         let d = parse_deaths(&records, 100_000, 5_000_000);
         assert_eq!(d.get("vulak`aerr"), Some(&vec![500_000, 4_000_000]));
         assert_eq!(d.get("a cerulean warden"), Some(&vec![600_000]));
