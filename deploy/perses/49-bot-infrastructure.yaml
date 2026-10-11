@@ -1,10 +1,9 @@
 # The box: eq-perses as the gateway collector sees it (host metrics, unit states,
 # restarts, its own queues), the services on it as their traces and journals reveal
 # them (request rate, latency, errors - derived in the collector by the span-metrics
-# and count connectors, everquest-observability/collector/gateway.yaml). The bot itself is
-# on Business (43) and Platform (48). Project 'nocturnal', default Prometheus datasource.
-# The Ourios "VM logs" panel is removed until jensholdgaard/ourios#853 is fixed (a log query
-# costs Ourios a gigabyte and an OOM kill); restore it from git history (2026-09-28).
+# and count connectors, everquest-observability/collector/gateway.yaml), and the VM's
+# journal. The bot itself is on Business (43) and Platform (48). Project 'nocturnal';
+# metrics from the default Prometheus datasource, logs from the ourios-vm datasource.
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
@@ -225,6 +224,29 @@ spec:
               spec:
                 query: otelcol_exporter_queue_size
                 seriesNameFormat: '{{exporter}}'
+    vm_logs:
+      kind: Panel
+      spec:
+        display:
+          name: VM logs (warnings and up)
+          description: >-
+            journald lines from the services on the box, systemd and the kernel, shipped by the
+            gateway into Ourios under the VM's own tenant. Perses' per-query access lines are
+            dropped at the gateway; everything else at info is there too — lower the severity to see it.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios-vm
+                query: severity >= warn
+
     head_cpu:
       kind: Panel
       spec:
@@ -571,3 +593,16 @@ spec:
         height: 8
         content:
           $ref: '#/spec/panels/svc_promql'
+  - kind: Grid
+    spec:
+      display:
+        title: Logs
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 10
+        content:
+          $ref: '#/spec/panels/vm_logs'
