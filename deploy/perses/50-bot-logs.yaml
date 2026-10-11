@@ -1,0 +1,90 @@
+# The bot talking: its own OTLP log records, stored in Ourios under the guild's tenant
+# (nocturnal). That tenant also holds what members' Zeal clients export; those are on
+# Zeal export (51), and every query here pins service == "nocturnal" to keep them apart.
+# Only our crates are exported (the allowlist keeps third-party spans and their
+# credentials out — hazard B13), so this is the bot, not serenity. Records become
+# queryable one compaction behind, ~30s. The process's numbers are on Platform (48).
+# Back since 2026-10-11: the panels stepped aside for jensholdgaard/ourios#853 (a log
+# query cost a gigabyte and an OOM kill); on Ourios 0.12.2 a 6h query takes ~2s and
+# leaves its memory flat. If Ourios restarts while this is open, suspect it first.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: bot-logs
+  project: nocturnal
+spec:
+  display:
+    name: Bot logs
+  duration: 6h
+  refreshInterval: 1m
+  panels:
+    warnings:
+      kind: Panel
+      spec:
+        display:
+          name: Warnings and errors
+          description: >-
+            The bot's records at warn or worse: failed Discord calls, rejected
+            commands, storage trouble. Quiet is the healthy state.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: service == "nocturnal" and severity >= warn
+    all:
+      kind: Panel
+      spec:
+        display:
+          name: Everything at info and up
+          description: >-
+            All of the bot's records. Most are profile updates from members'
+            clients (profiles.rs); interactions, raid names, the roster page
+            and auctions make up the rest.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: service == "nocturnal" and severity >= info
+  layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: Problems
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 10
+        content:
+          $ref: '#/spec/panels/warnings'
+  - kind: Grid
+    spec:
+      display:
+        title: All records
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 16
+        content:
+          $ref: '#/spec/panels/all'

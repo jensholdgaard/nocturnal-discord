@@ -1,0 +1,124 @@
+# What members' Zeal clients export over OTLP: log records (service.name=everquest)
+# that the gateway stamps with the sending member (everquest.reporter, from the bearer
+# token — the character name is the client's claim, the reporter is a fact) and stores
+# in Ourios under the guild's tenant (nocturnal), next to the bot's own records (50).
+# Every query pins service == "everquest". Zeal's fight spans are not here: they go to
+# Jaeger and become everquest_fight_* metrics in Prometheus.
+apiVersion: perses.dev/v1alpha1
+kind: Dashboard
+metadata:
+  name: zeal-export
+  project: nocturnal
+spec:
+  display:
+    name: Zeal export
+  duration: 6h
+  refreshInterval: 1m
+  panels:
+    deaths:
+      kind: Panel
+      spec:
+        display:
+          name: Deaths
+          description: >-
+            everquest.combat.death: every death a member's client saw — target,
+            killer (everquest.combat.source), zone and spawn. Several raiders
+            on the same fight each report the same death; the reporter tells
+            them apart.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: service == "everquest" and event_name == "everquest.combat.death"
+    profiles:
+      kind: Panel
+      spec:
+        display:
+          name: Character profiles
+          description: >-
+            everquest.character.profile: a character's class and level as its
+            client reports them, and why it sent one (everquest.profile.reason).
+            The bot reads these to keep members' characters current.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: service == "everquest" and event_name == "everquest.character.profile"
+    other:
+      kind: Panel
+      spec:
+        display:
+          name: Anything else
+          description: >-
+            Records from Zeal that are neither deaths nor profiles. Empty until
+            a client starts exporting a new event, which then shows up here
+            first.
+        plugin:
+          kind: LogsTable
+          spec: {}
+        queries:
+        - kind: LogQuery
+          spec:
+            plugin:
+              kind: OuriosLogQuery
+              spec:
+                datasource:
+                  kind: OuriosDatasource
+                  name: ourios
+                query: service == "everquest" and event_name != "everquest.combat.death" and event_name != "everquest.character.profile"
+  layouts:
+  - kind: Grid
+    spec:
+      display:
+        title: Deaths
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 14
+        content:
+          $ref: '#/spec/panels/deaths'
+  - kind: Grid
+    spec:
+      display:
+        title: Characters
+        collapse:
+          open: true
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 10
+        content:
+          $ref: '#/spec/panels/profiles'
+  - kind: Grid
+    spec:
+      display:
+        title: Other events
+        collapse:
+          open: false
+      items:
+      - x: 0
+        y: 0
+        width: 24
+        height: 8
+        content:
+          $ref: '#/spec/panels/other'

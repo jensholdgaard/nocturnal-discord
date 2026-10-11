@@ -1,8 +1,9 @@
 # Nocturnal, the process: the bot as a service — commit and acknowledgment latency,
 # storage failures, saturation of its own resources, its Discord gateway, and its
-# traces and logs. The guild-side numbers are on Business (43); the box it runs on is
-# Infrastructure (49). Project 'nocturnal', default Prometheus datasource; the trace and
-# log panels name their Jaeger and Ourios datasources.
+# traces. The guild-side numbers are on Business (43); the box it runs on is
+# Infrastructure (49). Project 'nocturnal', default Prometheus datasource; the trace
+# panel names its Jaeger datasource. The bot's logs have their own dashboard, Bot logs
+# (50), since 2026-10-11: the guild's Ourios tenant also holds the Zeal export (51).
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
@@ -594,29 +595,6 @@ spec:
                   name: jaeger
                 service: nocturnal
                 limit: 50
-    logs:
-      kind: Panel
-      spec:
-        display:
-          name: Bot logs
-          description: >-
-            The bot's own OTLP logs, stored in Ourios. Only our crates are
-            exported (the allowlist keeps third-party spans and their
-            credentials out — hazard B13), so this is the bot talking, not
-            serenity. Records become queryable one compaction behind, ~30s.
-        plugin:
-          kind: LogsTable
-          spec: {}
-        queries:
-        - kind: LogQuery
-          spec:
-            plugin:
-              kind: OuriosLogQuery
-              spec:
-                datasource:
-                  kind: OuriosDatasource
-                  name: ourios
-                query: severity >= info
   layouts:
   - kind: Grid
     spec:
@@ -799,16 +777,3 @@ spec:
         height: 10
         content:
           $ref: '#/spec/panels/traces'
-  - kind: Grid
-    spec:
-      display:
-        title: Logs
-        collapse:
-          open: true
-      items:
-      - x: 0
-        y: 0
-        width: 24
-        height: 12
-        content:
-          $ref: '#/spec/panels/logs'
