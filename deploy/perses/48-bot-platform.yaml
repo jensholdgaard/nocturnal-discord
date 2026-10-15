@@ -281,6 +281,9 @@ spec:
           spec:
             legend:
               position: right
+            yAxis:
+              format:
+                unit: seconds
         queries:
         - kind: TimeSeriesQuery
           spec:
@@ -481,16 +484,21 @@ spec:
       kind: Panel
       spec:
         display:
-          name: Process CPU and memory
+          name: Process CPU
           description: >-
-            Self-reported from /proc — the VM runs no node_exporter. RSS holds
-            the whole replayed ledger, so steady growth between restarts is a
-            leak, not load.
+            Self-reported from /proc — the VM runs no node_exporter. CPU
+            seconds per second, i.e. cores busy; the box has 2. (Split from
+            memory 2026-10-15: one y-axis cannot carry cores and MiB, and the
+            CPU line sat flat on zero under the memory one.)
         plugin:
           kind: TimeSeriesChart
           spec:
             legend:
               position: right
+            yAxis:
+              format:
+                unit: decimal
+                decimalPlaces: 2
         queries:
         - kind: TimeSeriesQuery
           spec:
@@ -499,13 +507,31 @@ spec:
               spec:
                 query: sum(rate(process_cpu_time_seconds_total[5m]))
                 seriesNameFormat: cpu cores
+    ts_process_memory:
+      kind: Panel
+      spec:
+        display:
+          name: Process memory
+          description: >-
+            Self-reported RSS (process.memory.usage, unit By). It holds the
+            whole replayed ledger, so steady growth between restarts is a leak,
+            not load.
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: bytes
+        queries:
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: max(process_memory_usage_bytes) / 1024 / 1024
-                seriesNameFormat: rss (MiB)
+                query: max(process_memory_usage_bytes)
+                seriesNameFormat: rss
     ts_process_handles:
       kind: Panel
       spec:
@@ -539,7 +565,10 @@ spec:
           name: Gateway heartbeat latency
         plugin:
           kind: TimeSeriesChart
-          spec: {}
+          spec:
+            yAxis:
+              format:
+                unit: seconds
         queries:
         - kind: TimeSeriesQuery
           spec:
@@ -553,27 +582,53 @@ spec:
       spec:
         display:
           name: Rate-limit delays (pre-429 early warning)
-          description: Requests the client delayed to respect Discord buckets. Sustained values mean we are riding the limit; 429s would come next.
+          description: >-
+            Requests the client delayed to respect Discord buckets, per second.
+            Sustained values mean we are riding the limit; 429s would come
+            next. The counter is created on the first delay, so a flat 0 here
+            means none since the last restart.
         plugin:
           kind: TimeSeriesChart
           spec:
             legend:
               position: right
+            yAxis:
+              format:
+                unit: decimal
+                decimalPlaces: 2
         queries:
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: sum by (nocturnal_discord_ratelimit_global) (rate(nocturnal_discord_ratelimit_delays_total[5m]))
-                seriesNameFormat: 'delays (global={{nocturnal_discord_ratelimit_global}})'
+                query: sum by (nocturnal_discord_ratelimit_global) (rate(nocturnal_discord_ratelimit_delays_total[5m])) or vector(0)
+                seriesNameFormat: 'delays/s (global={{nocturnal_discord_ratelimit_global}})'
+    ts_ratelimit_wait:
+      kind: Panel
+      spec:
+        display:
+          name: Rate-limit wait (p95)
+          description: >-
+            How long a delayed request waited for its bucket. Blank when
+            nothing was delayed in the last 5 minutes. (Split from the delay
+            rate 2026-10-15: one y-axis cannot carry delays/s and seconds.)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
         - kind: TimeSeriesQuery
           spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
                 query: histogram_quantile(0.95, sum by (le) (rate(nocturnal_discord_ratelimit_delay_duration_seconds_bucket[5m]))) and on() (sum(rate(nocturnal_discord_ratelimit_delay_duration_seconds_count[5m])) > 0)
-                seriesNameFormat: delay p95 (s)
+                seriesNameFormat: wait p95
     traces:
       kind: Panel
       spec:
@@ -735,13 +790,19 @@ spec:
           $ref: '#/spec/panels/ts_drift'
       - x: 0
         y: 8
-        width: 12
+        width: 8
         height: 8
         content:
           $ref: '#/spec/panels/ts_process'
-      - x: 12
+      - x: 8
         y: 8
-        width: 12
+        width: 8
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_process_memory'
+      - x: 16
+        y: 8
+        width: 8
         height: 8
         content:
           $ref: '#/spec/panels/ts_process_handles'
@@ -754,16 +815,22 @@ spec:
       items:
       - x: 0
         y: 0
-        width: 12
+        width: 8
         height: 8
         content:
           $ref: '#/spec/panels/ts_gateway_latency'
-      - x: 12
+      - x: 8
         y: 0
-        width: 12
+        width: 8
         height: 8
         content:
           $ref: '#/spec/panels/ts_ratelimit'
+      - x: 16
+        y: 0
+        width: 8
+        height: 8
+        content:
+          $ref: '#/spec/panels/ts_ratelimit_wait'
   - kind: Grid
     spec:
       display:

@@ -442,10 +442,13 @@ spec:
       kind: Panel
       spec:
         display:
-          name: PromQL evaluation p50 / p95
+          name: PromQL evaluation p50 / p90 / p99
           description: >-
-            Duration of Prometheus's promqlEval spans, i.e. what every panel on every dashboard
-            waits for. Sampled at 25 %.
+            How long Prometheus spends evaluating a query (prometheus_engine_query_duration_seconds,
+            slice inner_eval), i.e. what every panel on every dashboard waits for. Prometheus's own
+            summary, over its last 10 minutes. (Until 2026-10-15 this read the gateway's span
+            metrics for promqlEval, which never had a series: Prometheus sends its traces straight
+            to Jaeger on 14318, past the gateway's spanmetrics.)
         plugin:
           kind: TimeSeriesChart
           spec:
@@ -460,15 +463,8 @@ spec:
             plugin:
               kind: PrometheusTimeSeriesQuery
               spec:
-                query: histogram_quantile(0.5, sum by (le) (rate(gateway_span_duration_seconds_bucket{service_name="prometheus", span_name="promqlEval"}[5m])))
-                seriesNameFormat: p50
-        - kind: TimeSeriesQuery
-          spec:
-            plugin:
-              kind: PrometheusTimeSeriesQuery
-              spec:
-                query: histogram_quantile(0.95, sum by (le) (rate(gateway_span_duration_seconds_bucket{service_name="prometheus", span_name="promqlEval"}[5m])))
-                seriesNameFormat: p95
+                query: max by (quantile) (prometheus_engine_query_duration_seconds{slice="inner_eval"})
+                seriesNameFormat: 'p{{quantile}}'
   layouts:
   - kind: Grid
     spec:
