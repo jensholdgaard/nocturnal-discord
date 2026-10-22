@@ -232,6 +232,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             debit_dkp,
             live,
             voice_channel,
+            rollers,
             roll_cost,
         } => {
             if g.auctions.contains_key(auction_id) {
@@ -258,6 +259,11 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 if !g.config.raid_channels().contains(channel) {
                     return Err(Rejection::NotARaidChannel { channel: *channel });
                 }
+                // The group is whoever is in the channel now; an empty
+                // channel would open a roll nobody can take.
+                if rollers.as_ref().map_or(true, Vec::is_empty) {
+                    return Err(Rejection::NobodyInVoiceChannel { channel: *channel });
+                }
             }
             let knob = |v: i64| if roll { 0 } else { v };
             Ok(vec![Event::AuctionOpened {
@@ -275,6 +281,8 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 // only a roll carries the choice in the fact.
                 live: *live && roll,
                 voice_channel: *voice_channel,
+                // Only a channel roll has a group to snapshot.
+                rollers: voice_channel.and(rollers.clone()),
                 roll_cost: *roll_cost,
             }])
         }
@@ -476,9 +484,18 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             if auction.status != AuctionStatus::Open {
                 return Err(Rejection::AuctionNotActive);
             }
+            // The snapshot taken at the open decides (2026-10-22). Rolls
+            // opened before it existed check where the member is now.
             if let Some(channel) = auction.voice_channel {
-                if *voice_channel != Some(channel) {
-                    return Err(Rejection::NotInVoiceChannel { channel });
+                match &auction.rollers {
+                    Some(rollers) if !rollers.contains(player) => {
+                        return Err(Rejection::NotInRollSnapshot { channel });
+                    }
+                    Some(_) => {}
+                    None if *voice_channel != Some(channel) => {
+                        return Err(Rejection::NotInVoiceChannel { channel });
+                    }
+                    None => {}
                 }
             }
             let p = g.players.get(player).ok_or(Rejection::PlayerNotFound)?;

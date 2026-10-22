@@ -403,10 +403,15 @@ pub fn live_message(
             let content = format!(
                 "Roll auction started - press **I want to roll** to roll 1-100.{} {} at <t:{}:f>, \
                  a tie is rolled off. {}",
-                auction
-                    .voice_channel
-                    .map(|c| format!(" Only members in <#{c}> can roll."))
-                    .unwrap_or_default(),
+                match (auction.voice_channel, &auction.rollers) {
+                    (Some(c), Some(r)) => format!(
+                        " Only the {} member{} who were in <#{c}> when it opened can roll.",
+                        r.len(),
+                        if r.len() == 1 { "" } else { "s" }
+                    ),
+                    (Some(c), None) => format!(" Only members in <#{c}> can roll."),
+                    _ => String::new(),
+                },
                 if auction.num_items > 1 {
                     format!("The top **{}** rolls win", auction.num_items)
                 } else {
@@ -1267,6 +1272,12 @@ async fn open_auction(
         live,
         voice_channel,
         roll_cost,
+        // Who may roll is fixed now, at the open (2026-10-22): the members in
+        // the channel this moment. Joining it later does not count.
+        rollers: voice_channel.map(|c| {
+            let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
+            crate::discord::voice_members(ctx.serenity_context(), discord_guild, c)
+        }),
     };
     // The item row for the character picker, fetched now so a click later
     // reads it from disk. Fire and forget: a miss only costs the picker its
@@ -2967,6 +2978,7 @@ mod tests {
             debit_dkp: true,
             live: flavor == Flavor::Short,
             voice_channel: None,
+            rollers: None,
             roll_cost: 0,
         }
     }
@@ -3320,6 +3332,7 @@ mod tests {
                     live: false,
                     voice_channel: None,
                     roll_cost: 0,
+                    rollers: None,
                 },
             )
             .await

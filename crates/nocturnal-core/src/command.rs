@@ -93,6 +93,10 @@ pub enum Command {
         /// members in that voice channel may roll, and only it hears the
         /// bell. Must be one of the guild's raid channels.
         voice_channel: Option<u64>,
+        /// Who was in `voice_channel` when the officer opened the roll, from
+        /// the gateway: they and nobody else may roll. Joining the channel
+        /// later does not count. Required with `voice_channel`.
+        rollers: Option<Vec<PlayerId>>,
         /// DKP each winner of a roll pays (2026-10-22); 0 = free, as every
         /// roll was before. Refused on the other flavors, which have bids.
         roll_cost: i64,
@@ -133,7 +137,8 @@ pub enum Command {
         player: PlayerId,
         seed: u64,
         /// The voice channel the member is in at the click, from the
-        /// gateway. Only read when the auction is for one raid channel.
+        /// gateway. Only read for a roll opened for one raid channel without
+        /// a `rollers` snapshot: those opened 16:29-17:xx UTC on 2026-10-22.
         voice_channel: Option<u64>,
     },
     UpdateConfig {

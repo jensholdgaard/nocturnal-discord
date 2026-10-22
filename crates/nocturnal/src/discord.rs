@@ -1327,6 +1327,12 @@ pub fn rejection_text(e: &ExecError) -> String {
         R::NotInVoiceChannel { channel } => {
             format!(":no_entry: This roll is for members in <#{channel}>: join it to roll")
         }
+        R::NotInRollSnapshot { channel } => format!(
+            ":no_entry: This roll is for the members who were in <#{channel}> when it opened"
+        ),
+        R::NobodyInVoiceChannel { channel } => format!(
+            ":no_entry: Nobody is in <#{channel}> right now, so nobody could roll; the roll was not opened"
+        ),
         R::RaidAlreadyActive { name } => {
             format!(":no_entry: There is already an active raid: {name}")
         }
@@ -2606,6 +2612,7 @@ pub async fn stresstest(
                     live: false,
                     voice_channel: None,
                     roll_cost: 0,
+                    rollers: None,
                 },
             )
             .await

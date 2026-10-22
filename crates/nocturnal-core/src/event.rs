@@ -407,6 +407,13 @@ pub enum Event {
         /// rings only there. Absent on every earlier event: anyone may roll.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         voice_channel: Option<u64>,
+        /// The members in `voice_channel` when the roll opened, and so the
+        /// only ones who may roll (2026-10-22: a snapshot, not "whoever is in
+        /// the channel at the click"). Absent on a roll for everyone, and on
+        /// the few channel rolls opened before the snapshot existed, which
+        /// check the clicker's channel instead.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rollers: Option<Vec<PlayerId>>,
         /// DKP each winner of a roll pays (2026-10-22). Absent = 0, which is
         /// every roll before it: no debit. When set, `debit_dkp` is true and
         /// the winners carry it as their amount.

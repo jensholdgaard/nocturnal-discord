@@ -74,6 +74,7 @@ fn running_auction_with(debit_dkp: bool) -> Ledger {
             live: false,
             voice_channel: None,
             roll_cost: 0,
+            rollers: None,
         },
     )
     .unwrap();
