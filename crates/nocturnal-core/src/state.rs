@@ -103,6 +103,9 @@ pub struct Auction {
     pub roll_offs: Vec<Vec<crate::event::Roll>>,
     /// The tie-break seed recorded by `auction.closed` (#7); `None` while
     /// open, and for closes logged before the seed was recorded.
+    /// Only members in this voice channel may roll, and only it hears the
+    /// bell (2026-10-22). `None`: anyone, every raid channel.
+    pub voice_channel: Option<u64>,
     pub close_seed: Option<u64>,
 }
 
@@ -556,6 +559,7 @@ mod tests {
             rolls: Vec::new(),
             roll_offs: Vec::new(),
             close_seed: None,
+            voice_channel: None,
         }
     }
 

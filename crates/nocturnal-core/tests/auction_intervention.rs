@@ -72,6 +72,7 @@ fn running_auction_with(debit_dkp: bool) -> Ledger {
             duration_ms: DEADLINE - 1_000_000,
             debit_dkp,
             live: false,
+            voice_channel: None,
         },
     )
     .unwrap();

@@ -69,6 +69,7 @@ fn bid_storm_is_fast_on_heavy_history() {
                     duration_ms: 60_000,
                     debit_dkp: true,
                     live: false,
+                    voice_channel: None,
                 },
             )
             .unwrap();

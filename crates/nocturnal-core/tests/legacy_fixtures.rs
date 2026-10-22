@@ -58,6 +58,7 @@ fn open_auction(l: &mut Ledger, id: &str, min_bid: i64, num_items: u32, lock: i6
             duration_ms: 60_000,
             debit_dkp: true,
             live: false,
+            voice_channel: None,
         },
     )
     .unwrap();

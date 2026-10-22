@@ -398,6 +398,11 @@ pub enum Event {
         /// roll keeps the long auction channel.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         live: bool,
+        /// A roll for one raid channel's group (2026-10-22, Plane of Time
+        /// splits): only members in this voice channel may roll, and the bell
+        /// rings only there. Absent on every earlier event: anyone may roll.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        voice_channel: Option<u64>,
     },
     #[serde(rename = "auction.bid_placed")]
     BidPlaced {

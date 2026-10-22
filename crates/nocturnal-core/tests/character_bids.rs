@@ -112,6 +112,7 @@ fn ledger() -> Ledger {
             duration_ms: 60_000,
             debit_dkp: true,
             live: false,
+            voice_channel: None,
         },
     )
     .unwrap();

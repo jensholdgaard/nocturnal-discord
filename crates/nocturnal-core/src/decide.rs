@@ -231,6 +231,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             duration_ms,
             debit_dkp,
             live,
+            voice_channel,
         } => {
             if g.auctions.contains_key(auction_id) {
                 return Err(Rejection::AuctionIdTaken);
@@ -241,6 +242,16 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             // A roll auction has no bids and moves no DKP: whatever the
             // request carried, the fact records none of the bid knobs.
             let roll = *flavor == Flavor::Roll;
+            // One group's roll (2026-10-22): only a roll can be limited to a
+            // voice channel, and only to one the raid counts.
+            if let Some(channel) = voice_channel {
+                if !roll {
+                    return Err(Rejection::WrongAuctionFlavor);
+                }
+                if !g.config.raid_channels().contains(channel) {
+                    return Err(Rejection::NotARaidChannel { channel: *channel });
+                }
+            }
             let knob = |v: i64| if roll { 0 } else { v };
             Ok(vec![Event::AuctionOpened {
                 auction_id: auction_id.clone(),
@@ -255,6 +266,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 // A short auction is live by flavor and a long one never is:
                 // only a roll carries the choice in the fact.
                 live: *live && roll,
+                voice_channel: *voice_channel,
             }])
         }
 
@@ -443,6 +455,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             auction_id,
             player,
             seed,
+            voice_channel,
         } => {
             let auction = g
                 .auctions
@@ -453,6 +466,11 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }
             if auction.status != AuctionStatus::Open {
                 return Err(Rejection::AuctionNotActive);
+            }
+            if let Some(channel) = auction.voice_channel {
+                if *voice_channel != Some(channel) {
+                    return Err(Rejection::NotInVoiceChannel { channel });
+                }
             }
             g.players.get(player).ok_or(Rejection::PlayerNotFound)?;
             if let Some(r) = auction.rolls.iter().find(|r| r.player == *player) {

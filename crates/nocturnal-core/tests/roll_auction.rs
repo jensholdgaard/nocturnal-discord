@@ -85,6 +85,7 @@ fn roll_auction(num_items: u32) -> Ledger {
             duration_ms: DEADLINE - OPENED,
             debit_dkp: true,
             live: false,
+            voice_channel: None,
         },
     )
     .unwrap();
@@ -99,6 +100,7 @@ fn roll(l: &mut Ledger, player: PlayerId, roll: u32) -> Result<Vec<Envelope>, Re
             auction_id: "au-1".into(),
             player,
             seed: seed_for(roll),
+            voice_channel: None,
         },
     )
 }
@@ -156,6 +158,7 @@ fn a_roll_is_one_d100_recorded_with_its_seed() {
             auction_id: "au-1".into(),
             player: ANNA,
             seed,
+            voice_channel: None,
         },
     )
     .unwrap();
@@ -228,6 +231,7 @@ fn a_roll_on_a_bidding_auction_is_refused() {
             duration_ms: DEADLINE - OPENED,
             debit_dkp: true,
             live: false,
+            voice_channel: None,
         },
     )
     .unwrap();
@@ -238,6 +242,7 @@ fn a_roll_on_a_bidding_auction_is_refused() {
             auction_id: "au-2".into(),
             player: ANNA,
             seed: 1,
+            voice_channel: None,
         },
     )
     .unwrap_err();
@@ -491,6 +496,7 @@ fn opened_asking(flavor: Flavor, live: bool) -> (Vec<Envelope>, Auction) {
             duration_ms: DEADLINE - OPENED,
             debit_dkp: false,
             live,
+            voice_channel: None,
         },
     )
     .unwrap();
@@ -534,4 +540,154 @@ fn only_a_roll_carries_live_in_the_fact() {
         assert!(!recorded_live(&envelopes));
         assert!(!a.live, "a long auction is never live");
     }
+}
+
+const RAID: u64 = 500;
+const RAID_3: u64 = 503;
+
+/// The three members, a raid channel plus `RAID_3` as an extra one, and a
+/// roll opened with `voice_channel`.
+fn group_roll(voice_channel: Option<u64>, flavor: Flavor) -> Result<Ledger, Rejection> {
+    let mut l = roll_auction(1);
+    exec(
+        &mut l,
+        &ctx_at(OPENED, Actor::System),
+        Command::UpdateConfig {
+            patch: nocturnal_core::event::ConfigPatch {
+                raid_channel: Some(RAID),
+                extra_raid_channels: Some(vec![RAID_3]),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    exec(
+        &mut l,
+        &ctx_at(OPENED, Actor::User(OFFICER)),
+        Command::OpenAuction {
+            auction_id: "au-2".into(),
+            item: cloak(),
+            flavor,
+            min_bid: 0,
+            num_items: 1,
+            min_bid_to_lock_for_main: 0,
+            over_bid_to_win_main: 0,
+            duration_ms: DEADLINE - OPENED,
+            debit_dkp: false,
+            live: true,
+            voice_channel,
+        },
+    )?;
+    Ok(l)
+}
+
+fn roll_from(l: &mut Ledger, player: PlayerId, in_channel: Option<u64>) -> Result<(), Rejection> {
+    exec(
+        l,
+        &ctx_at(OPENED + 1, Actor::User(player)),
+        Command::RollForAuction {
+            auction_id: "au-2".into(),
+            player,
+            seed: seed_for(50),
+            voice_channel: in_channel,
+        },
+    )
+    .map(|_| ())
+}
+
+/// 2026-10-22: Plane of Time splits the raid into groups, and loot that drops
+/// for the group in Raid 3 is rolled by the members in Raid 3. Anyone else,
+/// in another raid channel or in no voice channel at all, is refused.
+#[test]
+fn a_roll_for_one_raid_channel_takes_rolls_only_from_its_members() {
+    let mut l = group_roll(Some(RAID_3), Flavor::Roll).unwrap();
+    assert_eq!(
+        l.state().guild(GUILD).unwrap().auctions["au-2"].voice_channel,
+        Some(RAID_3)
+    );
+    roll_from(&mut l, ANNA, Some(RAID_3)).unwrap();
+    assert_eq!(
+        roll_from(&mut l, BORIS, Some(RAID)),
+        Err(Rejection::NotInVoiceChannel { channel: RAID_3 })
+    );
+    assert_eq!(
+        roll_from(&mut l, CLEO, None),
+        Err(Rejection::NotInVoiceChannel { channel: RAID_3 })
+    );
+    let rolled: Vec<_> = l.state().guild(GUILD).unwrap().auctions["au-2"]
+        .rolls
+        .iter()
+        .map(|r| r.player)
+        .collect();
+    assert_eq!(rolled, vec![ANNA]);
+}
+
+/// Without a channel a roll is open to everyone, wherever they are, as every
+/// roll auction before 2026-10-22 was.
+#[test]
+fn a_roll_without_a_channel_takes_anyone() {
+    let mut l = group_roll(None, Flavor::Roll).unwrap();
+    roll_from(&mut l, ANNA, Some(RAID_3)).unwrap();
+    roll_from(&mut l, BORIS, None).unwrap();
+}
+
+/// The channel must be one the raid counts, and only a roll can be limited:
+/// a bidding auction has no rolls to gate.
+#[test]
+fn only_a_roll_and_only_a_raid_channel() {
+    assert_eq!(
+        group_roll(Some(777), Flavor::Roll).err(),
+        Some(Rejection::NotARaidChannel { channel: 777 })
+    );
+    assert_eq!(
+        group_roll(Some(RAID_3), Flavor::Short).err(),
+        Some(Rejection::WrongAuctionFlavor)
+    );
+}
+
+/// Earlier `auction.opened` events carry no channel and replay as open to
+/// everyone; a roll for one channel keeps it through the log's JSON.
+#[test]
+fn the_channel_survives_the_log_and_old_events_have_none() {
+    let old: Event = serde_json::from_str(
+        r#"{"kind":"auction.opened","payload":{"auction_id":"a","item":{"id":"1","name":"Cloak"},"flavor":"roll","min_bid":0,"num_items":1,"min_bid_to_lock_for_main":0,"over_bid_to_win_main":0,"deadline_ts_ms":1}}"#,
+    )
+    .unwrap_or_else(|e| panic!("old event no longer parses: {e}"));
+    assert!(matches!(
+        old,
+        Event::AuctionOpened {
+            voice_channel: None,
+            ..
+        }
+    ));
+
+    let l = group_roll(Some(RAID_3), Flavor::Roll).unwrap();
+    let envelopes = l
+        .propose(
+            &ctx_at(OPENED + 2, Actor::User(OFFICER)),
+            &Command::OpenAuction {
+                auction_id: "au-3".into(),
+                item: cloak(),
+                flavor: Flavor::Roll,
+                min_bid: 0,
+                num_items: 1,
+                min_bid_to_lock_for_main: 0,
+                over_bid_to_win_main: 0,
+                duration_ms: 1,
+                debit_dkp: false,
+                live: true,
+                voice_channel: Some(RAID_3),
+            },
+        )
+        .unwrap();
+    let json = serde_json::to_string(&envelopes[0].event).unwrap();
+    assert!(json.contains(r#""voice_channel":503"#), "{json}");
+    let back: Event = serde_json::from_str(&json).unwrap();
+    assert!(matches!(
+        back,
+        Event::AuctionOpened {
+            voice_channel: Some(RAID_3),
+            ..
+        }
+    ));
 }
