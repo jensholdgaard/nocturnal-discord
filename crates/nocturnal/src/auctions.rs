@@ -9,12 +9,13 @@
 //! The only in-memory state is a message registry (auction → posted embed),
 //! which is presentation, not truth: on boot, open auctions re-post.
 //!
-//! The collapsible item history follows the same rule. Discord has no
-//! accordion, so every auction embed carries an "Item history" toggle whose
-//! custom id *is* the expanded/collapsed state (`histon`/`histoff`): the
-//! click re-renders the clicked message from the ledger, with the field
-//! present or absent, and the last three won auctions of the item (the
-//! history lines) are looked up from the ledger only when expanding.
+//! The item history follows the same rule: every short, long and settled
+//! auction embed shows an "Item history" field, the last three won auctions
+//! of the item, rendered from the ledger on every post and edit. Until
+//! 2026-10-22 it hid behind a `histon`/`histoff` toggle (Discord has no
+//! accordion); members kept flipping it, so it is always shown now (#9).
+//! Posts made before then still carry the old button; a click on it simply
+//! re-renders the post, which drops the button.
 
 use nocturnal_telemetry::attr;
 use std::collections::HashMap;
@@ -55,9 +56,10 @@ pub enum Action {
     PickAlt,
     /// A roll auction's "I want to roll" button.
     Roll,
-    /// Expand the "Item history" field of the auction's embed.
+    /// The old "Item history" toggle (until 2026-10-22, #9). No longer
+    /// rendered; still parsed, so a click on a post that carries one
+    /// re-renders that post without it.
     HistoryShow,
-    /// Collapse the "Item history" field of the auction's embed.
     HistoryHide,
 }
 
@@ -254,17 +256,14 @@ fn roll_off_text(auction: &Auction) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Collapsible item history
+// Item history
 //
-// Discord has no accordion, so the history hides behind a toggle button: a
-// collapsed embed carries an "Item history" button whose custom id *is* the
-// state (histon expands, histoff collapses). Handling stays a pure function
-// of (custom id, ledger state) like everything else here — the expanded
-// field is rebuilt from the ledger on demand, never stored.
+// Always shown (#9, 2026-10-22; it used to be a histon/histoff toggle). The
+// field is rebuilt from the ledger on every render, never stored.
 // ---------------------------------------------------------------------------
 
 /// The last few won auctions of an item, one line per winner, newest auction
-/// first: who won, for how much, and when. What an expanded history shows.
+/// first: who won, for how much, and when.
 fn item_history_lines(won: &[Auction]) -> Vec<String> {
     won.iter()
         .flat_map(|a| {
@@ -285,34 +284,25 @@ fn item_history_lines(won: &[Auction]) -> Vec<String> {
         .collect()
 }
 
-/// Append the expanded "Item history" field and return the toggle button for
-/// the matching state: `Some(lines)` shows the field and offers "Hide
-/// history", `None` hides it and offers "Item history".
-fn with_item_history(
-    embed: serenity::CreateEmbed,
-    auction_id: &str,
-    history: Option<&[String]>,
-) -> (serenity::CreateEmbed, serenity::CreateButton) {
-    let embed = match history {
-        Some(lines) => embed.field(
-            "Item history",
-            field_lines(
-                lines.to_vec(),
-                "No previous auction of this item has paid a winner yet.",
-            ),
-            false,
+/// Append the "Item history" field.
+fn with_item_history(embed: serenity::CreateEmbed, history: &[String]) -> serenity::CreateEmbed {
+    embed.field(
+        "Item history",
+        field_lines(
+            history.to_vec(),
+            "No previous auction of this item has paid a winner yet.",
         ),
-        None => embed,
-    };
-    let button = match history {
-        Some(_) => serenity::CreateButton::new(custom_id(Action::HistoryHide, auction_id))
-            .label("Hide history")
-            .style(serenity::ButtonStyle::Secondary),
-        None => serenity::CreateButton::new(custom_id(Action::HistoryShow, auction_id))
-            .label("Item history")
-            .style(serenity::ButtonStyle::Secondary),
-    };
-    (embed, button)
+        false,
+    )
+}
+
+/// One row of buttons, or none: Discord refuses an empty action row.
+fn button_rows(buttons: Vec<serenity::CreateButton>) -> Vec<serenity::CreateActionRow> {
+    if buttons.is_empty() {
+        Vec::new()
+    } else {
+        vec![serenity::CreateActionRow::Buttons(buttons)]
+    }
 }
 
 /// The live (bidding) message — legacy `sendAuctionStartEmbed` /
@@ -320,11 +310,11 @@ fn with_item_history(
 /// ends" field and the three bid buttons; long auctions are blue, carry the
 /// auction id, and have the two bid buttons. A roll auction (2026-09-30) is
 /// laid out like a long one, with its rolls as they land and one button.
-/// Short and long ones end with the item-history toggle.
+/// Short and long ones end with the item's history.
 pub fn live_message(
     auction_id: &str,
     auction: &Auction,
-    history: Option<&[String]>,
+    history: &[String],
 ) -> (
     String,
     serenity::CreateEmbed,
@@ -351,7 +341,7 @@ pub fn live_message(
                 format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
                 true,
             );
-            let (embed, toggle) = with_item_history(embed, auction_id, history);
+            let embed = with_item_history(embed, history);
             let row = serenity::CreateActionRow::Buttons(vec![
                 serenity::CreateButton::new(custom_id(Action::Bid, auction_id))
                     .label("Main bid")
@@ -362,7 +352,6 @@ pub fn live_message(
                 serenity::CreateButton::new(custom_id(Action::Cancel, auction_id))
                     .label("Cancel")
                     .style(serenity::ButtonStyle::Danger),
-                toggle,
             ]);
             (content, embed, vec![row])
         }
@@ -392,7 +381,7 @@ pub fn live_message(
                     format!("<t:{}:R>", ts_sec(auction.deadline_ts_ms)),
                     true,
                 );
-            let (embed, toggle) = with_item_history(embed, auction_id, history);
+            let embed = with_item_history(embed, history);
             // The same buttons as a short auction. They keep working across a
             // restart because the auction id is in the custom id and the
             // auction itself is in the ledger — nothing here is a listener
@@ -404,7 +393,6 @@ pub fn live_message(
                 serenity::CreateButton::new(custom_id(Action::BidAlt, auction_id))
                     .label("Alt bid")
                     .style(serenity::ButtonStyle::Secondary),
-                toggle,
             ]);
             (content, embed, vec![row])
         }
@@ -457,14 +445,14 @@ pub fn roll_closed_message(
 }
 
 /// Closed short auction: winners proposed, awaiting the officer's confirm
-/// (legacy `callback` in startbid.js — bids shown anonymised). The item
-/// history toggle sits beside the confirm.
+/// (legacy `callback` in startbid.js — bids shown anonymised), above the
+/// item's history.
 pub fn closed_message(
     auction_id: &str,
     auction: &Auction,
     proposed: &[nocturnal_core::event::Winner],
     warnings: &[String],
-    history: Option<&[String]>,
+    history: &[String],
 ) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
     // A winner whose character cannot use the item turns the embed orange
     // and puts the reason above the button. Discord has four button
@@ -487,7 +475,7 @@ pub fn closed_message(
         );
     }
     embed = embed.field("Auction ID", format!("```{auction_id}```"), false);
-    let (embed, toggle) = with_item_history(embed, auction_id, history);
+    let embed = with_item_history(embed, history);
     let mut buttons = Vec::new();
     if !proposed.is_empty() {
         buttons.push(
@@ -500,20 +488,19 @@ pub fn closed_message(
                 .style(serenity::ButtonStyle::Primary),
         );
     }
-    buttons.push(toggle);
-    (embed, vec![serenity::CreateActionRow::Buttons(buttons)])
+    (embed, button_rows(buttons))
 }
 
 /// Terminal states. Legacy keeps the button as the status indicator: a
 /// disabled green "Winner/s Confirmed", or a disabled red "Auction
-/// Cancelled". The item-history toggle stays live next to either, so the
-/// post keeps showing what the item used to go for.
+/// Cancelled". The item's history stays on the post, so it keeps showing
+/// what the item used to go for.
 pub fn settled_message(
     auction_id: &str,
     auction: &Auction,
-    history: Option<&[String]>,
+    history: &[String],
 ) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
-    let (embed, mut buttons) = match auction.status {
+    let (embed, buttons) = match auction.status {
         AuctionStatus::Cancelled => {
             let embed = item_embed(&auction.item, EMBED_RED).field(
                 "Auction ID",
@@ -572,20 +559,13 @@ pub fn settled_message(
             (embed, buttons)
         }
     };
-    // A roll auction's post never carried the toggle while it ran: what the
+    // A roll auction's post never shows the history while it runs: what the
     // item went for in DKP has no bearing on a free roll, so the settled post
     // leaves it out too.
     if auction.flavor == Flavor::Roll {
-        let rows = if buttons.is_empty() {
-            Vec::new()
-        } else {
-            vec![serenity::CreateActionRow::Buttons(buttons)]
-        };
-        return (embed, rows);
+        return (embed, button_rows(buttons));
     }
-    let (embed, toggle) = with_item_history(embed, auction_id, history);
-    buttons.push(toggle);
-    (embed, vec![serenity::CreateActionRow::Buttons(buttons)])
+    (with_item_history(embed, history), button_rows(buttons))
 }
 
 // ---------------------------------------------------------------------------
@@ -665,18 +645,18 @@ impl AuctionUi {
 }
 
 /// Render the embed and action rows an auction's post should show for the
-/// current ledger, with (`Some`) or without (`None`) the expanded item
-/// history. Shared by `refresh` (re-render after every ledger change) and
-/// the history toggle, so both produce the same post for the same ledger and
-/// history state — toggling never has to re-derive a *different* embed shape.
+/// current ledger, item history included. Shared by `refresh` (re-render
+/// after every ledger change) and a click on a pre-#9 history button, so both
+/// produce the same post for the same ledger.
 async fn build_post(
     ui: &AuctionUi,
     driver: &DriverHandle,
     ledger_guild: GuildId,
     auction_id: &str,
     auction: &Auction,
-    history: Option<&[String]>,
 ) -> (serenity::CreateEmbed, Vec<serenity::CreateActionRow>) {
+    let history = item_history(driver, ledger_guild, auction_id, auction).await;
+    let history = history.as_slice();
     match auction.status {
         AuctionStatus::Open => {
             let (_, embed, rows) = live_message(auction_id, auction, history);
@@ -815,9 +795,7 @@ async fn refresh_now(
     else {
         return Shown::No;
     };
-    // Every ledger change collapses the history field: the re-render is a
-    // pure function of ledger state, and the toggle is one click away.
-    let (embed, rows) = build_post(ui, driver, ledger_guild, auction_id, &auction, None).await;
+    let (embed, rows) = build_post(ui, driver, ledger_guild, auction_id, &auction).await;
     if matches!(
         auction.status,
         AuctionStatus::Finalized | AuctionStatus::Cancelled
@@ -864,16 +842,48 @@ async fn refresh_now(
     Shown::Yes
 }
 
-/// Post an auction's embed to its channel and remember where it went. A fresh
-/// post starts collapsed; the history is looked up only when it is expanded.
+/// The item's history lines for an auction's post: the last three finalized
+/// auctions won for the same item, this one excluded
+/// (`GuildState::recent_won_auctions`). A local, in-memory ledger read.
+async fn item_history(
+    driver: &DriverHandle,
+    ledger_guild: GuildId,
+    auction_id: &str,
+    auction: &Auction,
+) -> Vec<String> {
+    if auction.flavor == Flavor::Roll {
+        return Vec::new(); // never shown on a roll auction
+    }
+    let item_id = auction.item.id.clone();
+    let aid = auction_id.to_owned();
+    let won: Vec<Auction> = driver
+        .query(move |l| {
+            l.state()
+                .guild(ledger_guild)
+                .map(|g| {
+                    g.recent_won_auctions(&item_id, Some(&aid), 3)
+                        .into_iter()
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+        .await;
+    item_history_lines(&won)
+}
+
+/// Post an auction's embed to its channel and remember where it went.
 pub async fn post(
     http: &serenity::Http,
     ui: &AuctionUi,
+    driver: &DriverHandle,
+    ledger_guild: GuildId,
     channel: u64,
     auction_id: &str,
     auction: &Auction,
 ) -> anyhow::Result<()> {
-    let (content, embed, rows) = live_message(auction_id, auction, None);
+    let history = item_history(driver, ledger_guild, auction_id, auction).await;
+    let (content, embed, rows) = live_message(auction_id, auction, &history);
     let msg = discord_call("post auction embed", async {
         serenity::ChannelId::new(channel)
             .send_message(
@@ -962,7 +972,7 @@ pub async fn repost_open_auctions(
             }
             ui.forget(&id);
         }
-        if let Err(e) = post(http, ui, channel, &id, &auction).await {
+        if let Err(e) = post(http, ui, driver, ledger_guild, channel, &id, &auction).await {
             tracing::warn!(
                 { attr::NOCTURNAL_AUCTION_ID } = %id,
                 { attr::NOCTURNAL_ERROR_MESSAGE } = %e,
@@ -1263,6 +1273,8 @@ async fn open_auction(
                 post(
                     ctx.serenity_context().http.as_ref(),
                     &ctx.data().auctions,
+                    &ctx.data().driver,
+                    ledger_guild,
                     channel,
                     &auction_id,
                     auction,
@@ -2501,22 +2513,22 @@ async fn modal_reply(
     Ok(())
 }
 
-/// Expand or collapse the "Item history" field of an auction post. Public —
-/// what an item used to go for is not a secret — and pure presentation: the
-/// click never touches the ledger, it re-renders the message it sits on from
-/// the ledger with the history field shown (`histon`) or hidden (`histoff`).
+/// A click on a history button from before #9 (`histon`/`histoff`, posts
+/// made until 2026-10-22). The history is always shown now, so the click just
+/// re-renders the message it sits on from the ledger, which drops the button.
+/// Public and pure presentation, like the toggle it replaces: it never
+/// touches the ledger.
 ///
 /// The answer is the edit itself: an `UpdateMessage` response replaces the
 /// clicked message's embed and buttons in one call. Everything below it is a
 /// local, in-memory ledger read (plus, on a closed auction, a mirror disk
 /// cache hit), so it fits the three-second window the way the bid modal does.
-async fn history_toggle(
+async fn legacy_history_click(
     ctx: &serenity::Context,
     interaction: &serenity::ComponentInteraction,
     data: &Data,
     ledger_guild: GuildId,
     auction_id: &str,
-    action: Action,
     entered: i64,
 ) -> anyhow::Result<()> {
     let aid = auction_id.to_owned();
@@ -2538,36 +2550,12 @@ async fn history_toggle(
         )
         .await;
     };
-    // Expanding looks the item's past winners up in the ledger (this auction
-    // excluded); collapsing just drops the field again.
-    let history = if action == Action::HistoryShow {
-        let item_id = auction.item.id.clone();
-        let aid = auction_id.to_owned();
-        let won: Vec<Auction> = data
-            .driver
-            .query(move |l| {
-                l.state()
-                    .guild(ledger_guild)
-                    .map(|g| {
-                        g.recent_won_auctions(&item_id, Some(&aid), 3)
-                            .into_iter()
-                            .cloned()
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            })
-            .await;
-        Some(item_history_lines(&won))
-    } else {
-        None
-    };
     let (embed, rows) = build_post(
         &data.auctions,
         &data.driver,
         ledger_guild,
         auction_id,
         &auction,
-        history.as_deref(),
     )
     .await;
     interaction
@@ -2580,7 +2568,7 @@ async fn history_toggle(
             ),
         )
         .await
-        .context("toggling the item history field")?;
+        .context("re-rendering a post with an old history button")?;
     crate::discord::record_component_ack(interaction.id.get(), entered);
     Ok(())
 }
@@ -2643,20 +2631,12 @@ pub async fn handle_component(
         )
         .await;
     }
-    // History is public and edits only the message it sits on, so it is
-    // handled before the status gate below: a settled post is still
-    // toggleable, and the click never needs an officer role.
+    // An old history button (#9) is public and edits only the message it
+    // sits on, so it is handled before the status gate below: a settled
+    // post re-renders too, and the click never needs an officer role.
     if matches!(action, Action::HistoryShow | Action::HistoryHide) {
-        return history_toggle(
-            ctx,
-            interaction,
-            data,
-            ledger_guild,
-            auction_id,
-            action,
-            entered,
-        )
-        .await;
+        return legacy_history_click(ctx, interaction, data, ledger_guild, auction_id, entered)
+            .await;
     }
     // Defer-first: nothing below this line races the 3-second window.
     ack(ctx, interaction, entered).await?;
@@ -2677,7 +2657,7 @@ pub async fn handle_component(
 
     match action {
         // Answered above: a bid opens a modal instead of being acknowledged,
-        // and the history toggle answers on its own before the status gate.
+        // and an old history button answers on its own before the status gate.
         Action::Bid
         | Action::BidAlt
         | Action::PickMain
@@ -2929,10 +2909,10 @@ mod tests {
     }
 
     /// A live short auction MUST carry its bid buttons — without them there is
-    /// no way to bid at all — plus the item-history toggle.
+    /// no way to bid at all — and no history toggle any more (#9).
     #[test]
     fn live_short_auction_has_bid_buttons() {
-        let (content, _, rows) = live_message("au-1", &sample_auction(Flavor::Short), None);
+        let (content, _, rows) = live_message("au-1", &sample_auction(Flavor::Short), &[]);
         assert!(content.contains("**5 DKP** minimum bid"), "{content}");
         let json = serde_json::to_value(&rows).expect("rows serialize");
         let ids: Vec<String> = json[0]["components"]
@@ -2943,13 +2923,8 @@ mod tests {
             .collect();
         assert_eq!(
             ids,
-            vec![
-                "nb:bid:au-1",
-                "nb:alt:au-1",
-                "nb:cancel:au-1",
-                "nb:histon:au-1"
-            ],
-            "live short auction must offer bid / alt / cancel and the history toggle"
+            vec!["nb:bid:au-1", "nb:alt:au-1", "nb:cancel:au-1"],
+            "live short auction must offer bid / alt / cancel"
         );
     }
 
@@ -2958,7 +2933,7 @@ mod tests {
     /// auction is in the ledger — no listener has to stay alive for 48 hours.
     #[test]
     fn live_long_auction_offers_the_bid_buttons() {
-        let (_, _, rows) = live_message("au-2", &sample_auction(Flavor::Long), None);
+        let (_, _, rows) = live_message("au-2", &sample_auction(Flavor::Long), &[]);
         let json = serde_json::to_value(&rows).expect("rows serialize");
         let ids: Vec<String> = json[0]["components"]
             .as_array()
@@ -2968,21 +2943,17 @@ mod tests {
             .collect();
         assert_eq!(
             ids,
-            vec!["nb:bid:au-2", "nb:alt:au-2", "nb:histon:au-2"],
+            vec!["nb:bid:au-2", "nb:alt:au-2"],
             "main and alt, and no Cancel — a long auction is pulled with /cancelauction"
         );
     }
 
-    /// Expanding the history puts the past winners in an "Item history" field
-    /// and turns the toggle into a collapse button; collapsing reverses it.
+    /// The past winners are always on the post (#9): an "Item history" field,
+    /// with no button to hide it.
     #[test]
-    fn expanding_history_adds_the_field_and_flips_the_toggle() {
+    fn the_history_is_always_on_the_post() {
         let history = item_history_lines(&[auction_that_won(40)]);
-        let (content, embed, rows) = live_message(
-            "au-1",
-            &sample_auction(Flavor::Short),
-            Some(history.as_slice()),
-        );
+        let (content, embed, rows) = live_message("au-1", &sample_auction(Flavor::Short), &history);
         assert!(content.contains("**5 DKP** minimum bid"), "{content}");
         let e = serde_json::to_value(&embed).expect("embed serializes");
         let fields = e["fields"].as_array().expect("fields");
@@ -3001,19 +2972,13 @@ mod tests {
             .iter()
             .map(|b| b["custom_id"].as_str().unwrap_or_default().to_owned())
             .collect();
-        assert!(ids.ends_with(&["nb:histoff:au-1".to_owned()]), "{ids:?}");
+        assert!(!ids.iter().any(|id| id.contains(":hist")), "{ids:?}");
     }
 
-    /// An item that has never paid a winner still explains itself when its
-    /// history is expanded.
+    /// An item that has never paid a winner still explains itself.
     #[test]
-    fn expanding_an_empty_history_says_so() {
-        let empty: Vec<String> = Vec::new();
-        let (_, embed, rows) = live_message(
-            "au-1",
-            &sample_auction(Flavor::Short),
-            Some(empty.as_slice()),
-        );
+    fn an_empty_history_says_so() {
+        let (_, embed, _) = live_message("au-1", &sample_auction(Flavor::Short), &[]);
         let e = serde_json::to_value(&embed).expect("embed serializes");
         let fields = e["fields"].as_array().expect("fields");
         let item_history = fields
@@ -3026,12 +2991,11 @@ mod tests {
                 .is_some_and(|v| v.contains("No previous auction")),
             "{item_history:?}"
         );
-        let json = serde_json::to_value(&rows).expect("rows serialize");
-        assert_eq!(json[0]["components"][3]["custom_id"], "nb:histoff:au-1");
     }
 
-    /// A closed auction with proposed winners offers the Confirm button and
-    /// the history toggle; with nobody to confirm it offers only the toggle.
+    /// A closed auction with proposed winners offers the Confirm button; with
+    /// nobody to confirm it offers no buttons at all (an empty row is
+    /// refused by Discord).
     #[test]
     fn closed_auction_offers_confirm() {
         let mut auction = sample_auction(Flavor::Short);
@@ -3042,22 +3006,20 @@ mod tests {
             for_main: true,
             character: None,
         }];
-        let (_, rows) = closed_message("au-3", &auction, &winners, &[], None);
+        let (_, rows) = closed_message("au-3", &auction, &winners, &[], &[]);
         let json = serde_json::to_value(&rows).expect("rows serialize");
         assert_eq!(json[0]["components"][0]["custom_id"], "nb:confirm:au-3");
         assert_eq!(json[0]["components"][0]["label"], "Confirm Winner/s");
-        assert_eq!(json[0]["components"][1]["custom_id"], "nb:histon:au-3");
-        // …and the toggle alone when there is nothing to confirm.
-        let (_, rows) = closed_message("au-3", &auction, &[], &[], None);
-        let json = serde_json::to_value(&rows).expect("rows serialize");
         assert_eq!(json[0]["components"].as_array().expect("buttons").len(), 1);
-        assert_eq!(json[0]["components"][0]["custom_id"], "nb:histon:au-3");
+        // …and no row at all when there is nothing to confirm.
+        let (_, rows) = closed_message("au-3", &auction, &[], &[], &[]);
+        assert!(rows.is_empty());
     }
 
-    /// A settled auction keeps its status button and an enabled history
-    /// toggle, so the post still says what the item used to go for.
+    /// A settled auction keeps its status button and its history field, so
+    /// the post still says what the item used to go for.
     #[test]
-    fn settled_auction_keeps_the_history_toggle() {
+    fn settled_auction_keeps_the_history() {
         let mut auction = sample_auction(Flavor::Short);
         auction.status = nocturnal_core::state::AuctionStatus::Finalized;
         auction.winners = vec![nocturnal_core::event::Winner {
@@ -3066,16 +3028,24 @@ mod tests {
             for_main: true,
             character: None,
         }];
-        let (_, rows) = settled_message("au-4", &auction, None);
+        let has_history = |embed: &serenity::CreateEmbed| {
+            let e = serde_json::to_value(embed).expect("embed serializes");
+            e["fields"]
+                .as_array()
+                .is_some_and(|f| f.iter().any(|f| f["name"] == "Item history"))
+        };
+        let (embed, rows) = settled_message("au-4", &auction, &[]);
         let json = serde_json::to_value(&rows).expect("rows serialize");
         assert_eq!(json[0]["components"][0]["custom_id"], "nb:confirm:au-4");
-        assert_eq!(json[0]["components"][1]["custom_id"], "nb:histon:au-4");
-        // A cancelled auction is no exception.
+        assert_eq!(json[0]["components"].as_array().expect("buttons").len(), 1);
+        assert!(has_history(&embed));
+        // A cancelled auction is no exception (#4: its toggle did nothing).
         auction.status = nocturnal_core::state::AuctionStatus::Cancelled;
-        let (_, rows) = settled_message("au-4", &auction, None);
+        let (embed, rows) = settled_message("au-4", &auction, &[]);
         let json = serde_json::to_value(&rows).expect("rows serialize");
         assert_eq!(json[0]["components"][0]["custom_id"], "nb:cancel:au-4");
-        assert_eq!(json[0]["components"][1]["custom_id"], "nb:histon:au-4");
+        assert_eq!(json[0]["components"].as_array().expect("buttons").len(), 1);
+        assert!(has_history(&embed));
     }
 
     /// A winner who cannot use the item: the embed turns orange, says why,
@@ -3092,7 +3062,7 @@ mod tests {
             character: Some("Thurgo".into()),
         }];
         let warning = "**Thurgo** (Warrior) cannot use Tome of Secrets — Class: NEC WIZ MAG ENC";
-        let (embed, rows) = closed_message("au-3", &auction, &winners, &[warning.to_owned()], None);
+        let (embed, rows) = closed_message("au-3", &auction, &winners, &[warning.to_owned()], &[]);
         let e = serde_json::to_value(&embed).expect("embed serializes");
         assert_eq!(e["color"], crate::discord::EMBED_ORANGE);
         let fields = e["fields"].as_array().expect("fields");
@@ -3111,7 +3081,7 @@ mod tests {
     /// roll, and the message says up front that no DKP is spent.
     #[test]
     fn live_roll_auction_offers_one_roll_button() {
-        let (content, _, rows) = live_message("au-4", &sample_auction(Flavor::Roll), None);
+        let (content, _, rows) = live_message("au-4", &sample_auction(Flavor::Roll), &[]);
         assert!(content.contains("No DKP is spent"), "{content}");
         assert!(!content.contains("minimum bid"), "{content}");
         let json = serde_json::to_value(&rows).expect("rows serialize");
@@ -3136,7 +3106,7 @@ mod tests {
                 roll: 88,
             },
         ];
-        let (_, embed, _) = live_message("au-4", &auction, None);
+        let (_, embed, _) = live_message("au-4", &auction, &[]);
         let e = serde_json::to_value(&embed).expect("embed serializes");
         let fields = e["fields"].as_array().expect("fields");
         let rolls = fields
@@ -3179,7 +3149,7 @@ mod tests {
             for_main: true,
             character: None,
         }];
-        let (embed, rows) = super::settled_message("au-4", &auction, None);
+        let (embed, rows) = super::settled_message("au-4", &auction, &[]);
         assert!(rows.is_empty(), "nothing to confirm on a roll auction");
         let e = serde_json::to_value(&embed).expect("embed serializes");
         let fields = e["fields"].as_array().expect("fields");
