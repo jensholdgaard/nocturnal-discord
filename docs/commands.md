@@ -39,7 +39,7 @@ by picker, role by picker):
 | logchannel | ✔ | Text channel for DKP movement embeds | |
 | auctionchannel | ✔ | Text channel for short auctions | |
 | longauctionchannel | | Text channel for long auctions | falls back to auctionchannel |
-| secondraidchannel | | Second voice channel for attendance | must differ from raidchannel |
+| ~~secondraidchannel~~ | | Removed 2026-10-22 (#11): use `/raidchannel add` | a ledger that set it replays as the only extra raid channel |
 | tickduration | | Minutes between ticks (0.5 = 30 s) | 6 min if unset at raid start |
 | raiddeprecationtime | | Days before raids stop counting for attendance | **legacy default bug: 90 ms, not 90 days** |
 | bidtime | | Short-auction duration, seconds (30–1000) | 60 |
@@ -51,6 +51,14 @@ by picker, role by picker):
 | altbidminra | | Attendance % a member needs to bid as ALT (0 = none) | 0; refused outside 0–100 |
 | mainbidminlevel | | Level a named character needs to bid as MAIN (0 = none) | 0; refused outside 0–65 |
 | altbidminlevel | | Level a named character needs to bid as ALT (0 = none); Bubblie, 2026-09-08 | 0; refused outside 0–65 |
+
+Extra raid channels are not `/configure` options either (#11, Plane of Time
+splits the raid into more than two groups): `/raidchannel add <channel>` and
+`/raidchannel remove <channel>` (officer) keep a list of up to 9 voice
+channels besides raidchannel. Every one is counted for ticks, `/startraid`,
+`/endraid` and `/addraiddkp`, and the bell rings in each. No channel can be
+listed twice or be the raidchannel too, and raidchannel itself is changed
+only by `/configure`. `/showconfig` lists them as "Other raid channels".
 
 Feature toggles are not `/configure` options: `/feature <name> on|off` (officer)
 flips one without re-sending the channels and the role. Today's only toggle is
@@ -72,7 +80,7 @@ guild Administrator) · **admin** = Discord Administrator default-perms.
 | `/listplayersdkps` | all | — | Paginated DKP + attendance table; **refused during an active raid** |
 | `/adddkp` | officer | player, dkp ≥1, comment | Credit one player |
 | `/removedkp` | officer | player, dkp, comment | Debit one player (**no lower bound — legacy bug**) |
-| `/addraiddkp` | officer | dkp, comment | Credit everyone in the raid channel; needs active raid; logs attendance entry + embed |
+| `/addraiddkp` | officer | dkp, comment | Credit everyone in the raid channels (all of them since #11; the first one only before); needs active raid; logs attendance entry + embed |
 | `/registercharacter` | all | name | Link an EQ character to the caller |
 | `/startraid` | officer | name?, dkpspertick?, tickduration? | Start the (single) raid; awards a `Start` tick to those present |
 | `/endraid` | officer | — | End raid; final `End` attendance entry (0 DKP); posts full movement log; RaidHelper auto-award if event-linked |
@@ -100,10 +108,10 @@ part of the bot's personality; keep the tone (render the emoji properly, E13).
 - One active raid per guild (checked, not enforced — race in legacy).
 - `/startraid`: RaidHelper (if key set) is queried for an event starting ±10
   min; its title/id auto-name and link the raid when no name given. Fallback
-  name: current date. Members of raidchannel (+ secondraidchannel) get
+  name: current date. Members of every raid channel get
   `dkpsPerTick` with comment `Start`.
 - **Tick** (worker, every 10 s): due when `last attendance entry date +
-  tickDuration < now`. Members of both voice channels get `dkpsPerTick`
+  tickDuration < now`. Members of every raid channel get `dkpsPerTick`
   (comment `Tick`), one attendance entry appended, blue embed to logchannel
   listing everyone present.
 - `/endraid`: 0-DKP `End` attendance entry; movement log (gains, losses, loot

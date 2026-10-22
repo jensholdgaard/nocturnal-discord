@@ -480,6 +480,47 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
+        // The list is rebuilt here from the projection, not by the caller, so
+        // two officers adding channels at once both land (#11).
+        Command::AddRaidChannel { channel } => {
+            let mut extras = g.config.extra_raid_channels.clone();
+            extras.push(*channel);
+            let patch = ConfigPatch {
+                extra_raid_channels: Some(extras),
+                ..Default::default()
+            };
+            validate_config(g, &patch)?;
+            Ok(vec![Event::ConfigUpdated { patch }])
+        }
+        Command::RemoveRaidChannel { channel } => {
+            if g.config.raid_channel == Some(*channel) {
+                return Err(Rejection::InvalidConfig {
+                    setting: "raidchannel",
+                    reason: "is the main raid channel: point /configure at another one instead"
+                        .into(),
+                });
+            }
+            if !g.config.extra_raid_channels.contains(channel) {
+                return Err(Rejection::InvalidConfig {
+                    setting: "raidchannel",
+                    reason: "is not one of the raid channels".into(),
+                });
+            }
+            let extras = g
+                .config
+                .extra_raid_channels
+                .iter()
+                .copied()
+                .filter(|c| c != channel)
+                .collect();
+            Ok(vec![Event::ConfigUpdated {
+                patch: ConfigPatch {
+                    extra_raid_channels: Some(extras),
+                    ..Default::default()
+                },
+            }])
+        }
+
         Command::SetRosterCharacter {
             player,
             character,
@@ -737,11 +778,16 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
             "cannot be blank or have surrounding whitespace",
         ));
     }
-    // Both channels are counted for attendance, so the same one twice would
-    // award a doubled tick to everyone in it.
-    let raid = p.raid_channel.or(g.config.raid_channel);
-    let second = p.second_raid_channel.or(g.config.second_raid_channel);
-    if let (Some(r), Some(s)) = (raid, second) {
+    // Every raid channel is counted for attendance, so the same one twice
+    // would award a doubled tick to everyone in it. Checked against the
+    // merged result: set the extras today and the raid channel tomorrow and
+    // no single call sees both.
+    let mut merged = g.config.clone();
+    merged.apply_patch(p);
+    if let (Some(r), Some(s)) = (
+        p.raid_channel.or(g.config.raid_channel),
+        p.second_raid_channel,
+    ) {
         if r == s {
             return Err(bad(
                 "secondraidchannel",
@@ -749,8 +795,25 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
             ));
         }
     }
+    if merged.extra_raid_channels.len() > MAX_EXTRA_RAID_CHANNELS {
+        return Err(bad(
+            "raidchannel",
+            "has no room for more: a raid counts at most 10 voice channels",
+        ));
+    }
+    let channels = merged.raid_channels();
+    for (i, c) in channels.iter().enumerate() {
+        if channels[..i].contains(c) {
+            return Err(bad("raidchannel", "is already one of the raid channels"));
+        }
+    }
     Ok(())
 }
+
+/// Extra voice channels a raid can count besides the raid channel (#11). A
+/// raid split into ten groups is far past anything Quarm asks for, and the
+/// bell rings in every channel one after another.
+pub const MAX_EXTRA_RAID_CHANNELS: usize = 9;
 
 /// The classes a character can be, in the order the roster shows them. The
 /// materializer's column order and this list are the same list.

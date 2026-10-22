@@ -775,6 +775,7 @@ pub async fn run(
         configure(),
         showconfig(),
         feature(),
+        raidchannel(),
         startraid(),
         endraid(),
         mergeraid(),
@@ -1110,6 +1111,19 @@ where
     fut.instrument(span).await
 }
 
+/// Members currently in any of `channels`, in channel order. A member is in
+/// one voice channel at a time, so nobody appears twice.
+pub fn voice_members_in(
+    ctx: &serenity::Context,
+    discord_guild: u64,
+    channels: &[u64],
+) -> Vec<nocturnal_core::PlayerId> {
+    channels
+        .iter()
+        .flat_map(|&c| voice_members(ctx, discord_guild, c))
+        .collect()
+}
+
 /// Members currently in a voice channel, from the gateway cache.
 pub fn voice_members(
     ctx: &serenity::Context,
@@ -1374,9 +1388,6 @@ pub async fn configure(
     #[description = "Channel for long auctions"]
     #[channel_types("Text")]
     longauctionchannel: Option<serenity::GuildChannel>,
-    #[description = "Second raid voice channel"]
-    #[channel_types("Voice")]
-    secondraidchannel: Option<serenity::GuildChannel>,
     #[description = "Minimum bid"]
     #[min = 0]
     minbid: Option<i64>,
@@ -1418,7 +1429,10 @@ pub async fn configure(
         log_channel: Some(logchannel.id.get()),
         auction_channel: Some(auctionchannel.id.get()),
         long_auction_channel: longauctionchannel.map(|c| c.id.get()),
-        second_raid_channel: secondraidchannel.map(|c| c.id.get()),
+        // `/configure secondraidchannel` until 2026-10-22; the extra raid
+        // channels are `/raidchannel add|remove` now, a list (#11).
+        second_raid_channel: None,
+        extra_raid_channels: None,
         tick_duration_ms: tickduration.map(|m| (m * 60_000.0) as i64),
         raid_deprecation_ms: raiddeprecationtime
             .map(|d| (d * nocturnal_core::state::DAY_MS as f64) as i64),
@@ -1505,6 +1519,90 @@ pub async fn feature(
     Ok(())
 }
 
+/// Officers: the voice channels counted for attendance besides the raid
+/// channel.
+//
+// Feedback, bot-discussions, 2026-10-22 (#11): Plane of Time splits the raid
+// into more groups than the one `secondraidchannel` had room for. Ticks,
+// /startraid, /endraid, /addraiddkp and the bell all read every channel.
+#[poise::command(
+    slash_command,
+    rename = "raidchannel",
+    subcommands("raidchannel_add", "raidchannel_remove")
+)]
+pub async fn raidchannel(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Count another voice channel for attendance, and ring the bell there.
+#[tracing::instrument(name = "command.raidchannel.add", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, rename = "add", check = "officer_check")]
+pub async fn raidchannel_add(
+    ctx: Context<'_>,
+    #[description = "The voice channel to add"]
+    #[channel_types("Voice")]
+    channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let cmd = Command::AddRaidChannel {
+        channel: channel.id.get(),
+    };
+    raid_channels_reply(
+        &ctx,
+        cmd,
+        &format!("<#{}> is now a raid channel", channel.id),
+    )
+    .await
+}
+
+/// Stop counting a voice channel for attendance.
+#[tracing::instrument(name = "command.raidchannel.remove", skip_all, err, fields(otel.kind = "server"))]
+#[poise::command(slash_command, ephemeral, rename = "remove", check = "officer_check")]
+pub async fn raidchannel_remove(
+    ctx: Context<'_>,
+    #[description = "The voice channel to remove"]
+    #[channel_types("Voice")]
+    channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    crate::discord::ack_ephemeral(&ctx).await?;
+    let cmd = Command::RemoveRaidChannel {
+        channel: channel.id.get(),
+    };
+    raid_channels_reply(
+        &ctx,
+        cmd,
+        &format!("<#{}> is no longer a raid channel", channel.id),
+    )
+    .await
+}
+
+/// Run a `/raidchannel` change and answer with every raid channel as the
+/// ledger now has them, so the officer sees the whole set.
+async fn raid_channels_reply(ctx: &Context<'_>, cmd: Command, done: &str) -> Result<(), Error> {
+    let ledger_guild = require_guild(ctx)?;
+    match execute(ctx, cmd).await? {
+        Ok(_) => {
+            let channels = ctx
+                .data()
+                .driver
+                .query(move |l| {
+                    l.state()
+                        .guild(ledger_guild)
+                        .map_or_else(Vec::new, |g| g.config.raid_channels())
+                })
+                .await;
+            let list = channels
+                .iter()
+                .map(|c| format!("<#{c}>"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            ctx.say(format!("{done}. Raid channels: {list}")).await?
+        }
+        Err(e) => ctx.say(rejection_text(&e)).await?,
+    };
+    Ok(())
+}
+
 /// Tick durations are sub-minute in practice (`0.5` = 30 s), so plain integer
 /// minutes would render the guild's real setting as "0 minutes".
 fn human_ms(ms: i64) -> String {
@@ -1562,7 +1660,19 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
         .field("Raid channel", chan(cfg.raid_channel), false)
-        .field("Second raid channel", chan(cfg.second_raid_channel), false)
+        .field(
+            "Other raid channels",
+            if cfg.extra_raid_channels.is_empty() {
+                "None (add one with /raidchannel add)".to_owned()
+            } else {
+                cfg.extra_raid_channels
+                    .iter()
+                    .map(|c| format!("<#{c}>"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
+            false,
+        )
         .field("Log channel", chan(cfg.log_channel), false)
         .field("Auction channel", chan(cfg.auction_channel), false)
         .field(
@@ -1816,27 +1926,23 @@ pub async fn startraid(
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let (raid_channel, second_channel, cfg_tick_ms) = ctx
+    let (raid_channels, cfg_tick_ms) = ctx
         .data()
         .driver
         .query(move |l| {
             let g = l.state().guild(ledger_guild);
             (
-                g.and_then(|g| g.config.raid_channel),
-                g.and_then(|g| g.config.second_raid_channel),
+                g.map_or_else(Vec::new, |g| g.config.raid_channels()),
                 g.map_or(6 * 60_000, |g| g.config.tick_duration_ms),
             )
         })
         .await;
-    let Some(raid_channel) = raid_channel else {
+    if raid_channels.is_empty() {
         ctx.say(":no_entry: Raid channel not set, use /configure to set it")
             .await?;
         return Ok(());
-    };
-    let mut players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
-    if let Some(second) = second_channel {
-        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
     }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     let dkp_per_tick = dkpspertick.unwrap_or(1);
     let tick_interval_ms = tickduration.map_or(cfg_tick_ms, |m| (m * 60_000.0) as i64);
 
@@ -1916,24 +2022,16 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let (raid_channel, second_channel) = ctx
+    let raid_channels = ctx
         .data()
         .driver
         .query(move |l| {
-            let g = l.state().guild(ledger_guild);
-            (
-                g.and_then(|g| g.config.raid_channel),
-                g.and_then(|g| g.config.second_raid_channel),
-            )
+            l.state()
+                .guild(ledger_guild)
+                .map_or_else(Vec::new, |g| g.config.raid_channels())
         })
         .await;
-    let mut players = Vec::new();
-    if let Some(c) = raid_channel {
-        players = voice_members(ctx.serenity_context(), discord_guild, c);
-    }
-    if let Some(second) = second_channel {
-        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
-    }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     let envelopes = match execute(
         &ctx,
         Command::EndRaid {
@@ -2230,7 +2328,7 @@ pub async fn removedkp(
     Ok(())
 }
 
-/// Add DKP to everyone in the raid channel.
+/// Add DKP to everyone in the raid channels.
 #[tracing::instrument(name = "command.addraiddkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
@@ -2248,23 +2346,26 @@ pub async fn addraiddkp(
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let raid_channel = ctx
+    // Every raid channel, like a tick (#11). Until 2026-10-22 this read only
+    // the first one, so a split raid's second group missed the award.
+    let raid_channels = ctx
         .data()
         .driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
-                .and_then(|g| g.config.raid_channel)
+                .map_or_else(Vec::new, |g| g.config.raid_channels())
         })
         .await;
-    let Some(raid_channel) = raid_channel else {
+    if raid_channels.is_empty() {
         ctx.say(":no_entry: Please set the raid channel first with /configure")
             .await?;
         return Ok(());
-    };
-    let players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
+    }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     if players.is_empty() {
-        ctx.say(":no_entry: No players in the raid channel").await?;
+        ctx.say(":no_entry: No players in the raid channels")
+            .await?;
         return Ok(());
     }
     let (raid_name, dkp_amount) = (comment.clone(), dkp);
@@ -2280,7 +2381,7 @@ pub async fn addraiddkp(
     {
         Ok(_) => {
             ctx.say(format!(
-                "Added {dkp} DKP to all players ({}) in the raid channel",
+                "Added {dkp} DKP to all players ({}) in the raid channels",
                 players.len()
             ))
             .await?;

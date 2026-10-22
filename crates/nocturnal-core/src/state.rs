@@ -109,7 +109,11 @@ pub struct Auction {
 pub struct GuildConfig {
     pub admin_role: Option<u64>,
     pub raid_channel: Option<u64>,
-    pub second_raid_channel: Option<u64>,
+    /// Voice channels counted for attendance besides `raid_channel`, in the
+    /// order officers added them (#11). Until 2026-10-22 there was room for
+    /// one, the `secondraidchannel`; a ledger that set it replays to a list
+    /// holding just that channel.
+    pub extra_raid_channels: Vec<u64>,
     pub log_channel: Option<u64>,
     pub auction_channel: Option<u64>,
     pub long_auction_channel: Option<u64>,
@@ -141,7 +145,7 @@ impl Default for GuildConfig {
         GuildConfig {
             admin_role: None,
             raid_channel: None,
-            second_raid_channel: None,
+            extra_raid_channels: Vec::new(),
             log_channel: None,
             auction_channel: None,
             long_auction_channel: None,
@@ -163,6 +167,15 @@ impl Default for GuildConfig {
 }
 
 impl GuildConfig {
+    /// Every voice channel counted for attendance and rung by the bell: the
+    /// raid channel first, then the extras. Empty until `/configure` has run.
+    pub fn raid_channels(&self) -> Vec<u64> {
+        self.raid_channel
+            .into_iter()
+            .chain(self.extra_raid_channels.iter().copied())
+            .collect()
+    }
+
     pub fn apply_patch(&mut self, p: &ConfigPatch) {
         macro_rules! opt {
             ($($f:ident),*) => { $( if let Some(v) = &p.$f { self.$f = Some(v.clone()); } )* };
@@ -177,8 +190,13 @@ impl GuildConfig {
         if let Some(v) = p.raid_channel {
             self.raid_channel = Some(v);
         }
+        // Legacy patches named one second channel, replacing the previous
+        // one; that is a one-entry list. A patch never carries both.
         if let Some(v) = p.second_raid_channel {
-            self.second_raid_channel = Some(v);
+            self.extra_raid_channels = vec![v];
+        }
+        if let Some(v) = &p.extra_raid_channels {
+            self.extra_raid_channels = v.clone();
         }
         if let Some(v) = p.log_channel {
             self.log_channel = Some(v);

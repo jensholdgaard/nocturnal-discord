@@ -1270,23 +1270,20 @@ async fn open_auction(
                 { attr::NOCTURNAL_AUCTION_ID } = auction_id,
                 "auction opened"
             );
-            // The bell, as officers know it: both raid channels, right after
+            // The bell, as officers know it: every raid channel, right after
             // the auction embed goes up. Decorative and never fatal. Rung for
             // what the ledger calls live: a short auction, and since
             // 2026-10-05 a roll auction opened without hours.
             if auction.as_ref().is_some_and(|a| a.live) && ctx.data().bell.enabled {
-                let (raid_channel, second) = ctx
+                let channels = ctx
                     .data()
                     .driver
                     .query(move |l| {
-                        let g = l.state().guild(ledger_guild);
-                        (
-                            g.and_then(|g| g.config.raid_channel),
-                            g.and_then(|g| g.config.second_raid_channel),
-                        )
+                        l.state()
+                            .guild(ledger_guild)
+                            .map_or_else(Vec::new, |g| g.config.raid_channels())
                     })
                     .await;
-                let channels: Vec<u64> = [raid_channel, second].into_iter().flatten().collect();
                 crate::bell::ring(
                     ctx.serenity_context(),
                     ctx.guild_id().map(|g| g.get()).unwrap_or_default(),

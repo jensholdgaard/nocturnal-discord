@@ -11,7 +11,7 @@ use nocturnal_core::state::AuctionStatus;
 use nocturnal_core::{Actor, Command, GuildId};
 use poise::serenity_prelude as serenity;
 
-use crate::discord::{raid_embed, voice_members, EMBED_BLUE_TICK};
+use crate::discord::{raid_embed, voice_members_in, EMBED_BLUE_TICK};
 use crate::driver::{DriverHandle, ExecError};
 
 fn now_ms() -> i64 {
@@ -88,8 +88,7 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
                 Some((
                     raid.name.clone(),
                     raid.dkp_per_tick,
-                    g.config.raid_channel,
-                    g.config.second_raid_channel,
+                    g.config.raid_channels(),
                     g.config.log_channel,
                     // When this tick became due, by the same rule `decide`
                     // applies: one interval after the last attendance entry.
@@ -98,18 +97,14 @@ async fn cycle(s: &Scheduler) -> anyhow::Result<()> {
             })
         })
         .await;
-    let Some((name, dkp_per_tick, raid_channel, second_channel, log_channel, due_ms)) = raid else {
+    let Some((name, dkp_per_tick, raid_channels, log_channel, due_ms)) = raid else {
         return Ok(());
     };
-    let Some(raid_channel) = raid_channel else {
+    if raid_channels.is_empty() {
         return Ok(()); // no raid channel configured; nothing to count
-    };
-
-    let mut players = voice_members(&s.ctx, s.discord_guild, raid_channel);
-    if let Some(second) = second_channel {
-        players.extend(voice_members(&s.ctx, s.discord_guild, second));
     }
-    players.dedup();
+
+    let players = voice_members_in(&s.ctx, s.discord_guild, &raid_channels);
 
     match s
         .driver
