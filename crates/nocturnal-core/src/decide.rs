@@ -480,47 +480,6 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             }])
         }
 
-        // The list is rebuilt here from the projection, not by the caller, so
-        // two officers adding channels at once both land (#11).
-        Command::AddRaidChannel { channel } => {
-            let mut extras = g.config.extra_raid_channels.clone();
-            extras.push(*channel);
-            let patch = ConfigPatch {
-                extra_raid_channels: Some(extras),
-                ..Default::default()
-            };
-            validate_config(g, &patch)?;
-            Ok(vec![Event::ConfigUpdated { patch }])
-        }
-        Command::RemoveRaidChannel { channel } => {
-            if g.config.raid_channel == Some(*channel) {
-                return Err(Rejection::InvalidConfig {
-                    setting: "raidchannel",
-                    reason: "is the main raid channel: point /configure at another one instead"
-                        .into(),
-                });
-            }
-            if !g.config.extra_raid_channels.contains(channel) {
-                return Err(Rejection::InvalidConfig {
-                    setting: "raidchannel",
-                    reason: "is not one of the raid channels".into(),
-                });
-            }
-            let extras = g
-                .config
-                .extra_raid_channels
-                .iter()
-                .copied()
-                .filter(|c| c != channel)
-                .collect();
-            Ok(vec![Event::ConfigUpdated {
-                patch: ConfigPatch {
-                    extra_raid_channels: Some(extras),
-                    ..Default::default()
-                },
-            }])
-        }
-
         Command::SetRosterCharacter {
             player,
             character,
@@ -797,15 +756,25 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
     }
     if merged.extra_raid_channels.len() > MAX_EXTRA_RAID_CHANNELS {
         return Err(bad(
-            "raidchannel",
-            "has no room for more: a raid counts at most 10 voice channels",
+            "extraraidchannels",
+            "has room for 9 channels: a raid counts at most 10 voice channels",
         ));
     }
-    let channels = merged.raid_channels();
-    for (i, c) in channels.iter().enumerate() {
-        if channels[..i].contains(c) {
-            return Err(bad("raidchannel", "is already one of the raid channels"));
+    if let Some(r) = merged.raid_channel {
+        if merged.extra_raid_channels.contains(&r) {
+            return Err(bad(
+                "extraraidchannels",
+                "cannot include the raid channel itself",
+            ));
         }
+    }
+    let extras = &merged.extra_raid_channels;
+    if extras
+        .iter()
+        .enumerate()
+        .any(|(i, c)| extras[..i].contains(c))
+    {
+        return Err(bad("extraraidchannels", "names the same channel twice"));
     }
     Ok(())
 }

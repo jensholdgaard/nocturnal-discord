@@ -241,16 +241,14 @@ fn the_two_raid_channels_cannot_collide_even_across_separate_calls() {
     assert_eq!(config(&l).extra_raid_channels, vec![501]);
 }
 
-fn add_channel(l: &mut Ledger, channel: u64) -> Result<(), Rejection> {
-    let envelopes = l.propose(&ctx(), &Command::AddRaidChannel { channel })?;
-    l.commit(&envelopes);
-    Ok(())
-}
-
-fn remove_channel(l: &mut Ledger, channel: u64) -> Result<(), Rejection> {
-    let envelopes = l.propose(&ctx(), &Command::RemoveRaidChannel { channel })?;
-    l.commit(&envelopes);
-    Ok(())
+fn set_extras(l: &mut Ledger, channels: &[u64]) -> Result<(), Rejection> {
+    apply(
+        l,
+        ConfigPatch {
+            extra_raid_channels: Some(channels.to_vec()),
+            ..Default::default()
+        },
+    )
 }
 
 fn with_raid_channel(channel: u64) -> Ledger {
@@ -267,35 +265,43 @@ fn with_raid_channel(channel: u64) -> Ledger {
 }
 
 /// #11: Plane of Time splits the raid into more groups than a raid channel
-/// and one second channel could hold. Officers add as many as they need, in
-/// order, and remove any but the raid channel itself.
+/// and one second channel could hold. `/configure extraraidchannels` sets the
+/// whole list, in order; an empty list clears it, and a patch that does not
+/// name it leaves it alone.
 #[test]
-fn a_raid_counts_as_many_voice_channels_as_officers_add() {
+fn a_raid_counts_every_voice_channel_officers_list() {
     let mut l = with_raid_channel(500);
-    for c in [501, 502, 503] {
-        add_channel(&mut l, c).unwrap();
-    }
+    set_extras(&mut l, &[501, 502, 503]).unwrap();
     assert_eq!(config(&l).raid_channels(), vec![500, 501, 502, 503]);
 
-    remove_channel(&mut l, 502).unwrap();
-    assert_eq!(config(&l).raid_channels(), vec![500, 501, 503]);
+    apply(
+        &mut l,
+        ConfigPatch {
+            bid_time_s: Some(45),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 501, 502, 503]);
 
-    let err = remove_channel(&mut l, 500).unwrap_err();
-    assert!(matches!(err, Rejection::InvalidConfig { .. }), "{err:?}");
-    let err = remove_channel(&mut l, 999).unwrap_err();
-    assert!(matches!(err, Rejection::InvalidConfig { .. }), "{err:?}");
-    assert_eq!(config(&l).raid_channels(), vec![500, 501, 503]);
+    set_extras(&mut l, &[503]).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 503]);
+    set_extras(&mut l, &[]).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500]);
 }
 
 /// A channel counted twice pays its members twice per tick, whichever way the
-/// duplicate arrives: added again, added when it is the raid channel, or the
-/// raid channel moved onto an extra one.
+/// duplicate arrives: listed twice, listed when it is the raid channel, or the
+/// raid channel moved onto a listed one.
 #[test]
 fn no_channel_is_ever_a_raid_channel_twice() {
     let mut l = with_raid_channel(500);
-    add_channel(&mut l, 501).unwrap();
-    assert!(add_channel(&mut l, 501).is_err(), "added twice");
-    assert!(add_channel(&mut l, 500).is_err(), "the raid channel itself");
+    set_extras(&mut l, &[501]).unwrap();
+    assert!(set_extras(&mut l, &[502, 502]).is_err(), "listed twice");
+    assert!(
+        set_extras(&mut l, &[500, 502]).is_err(),
+        "the raid channel itself"
+    );
     assert!(
         apply(
             &mut l,
@@ -305,30 +311,27 @@ fn no_channel_is_ever_a_raid_channel_twice() {
             },
         )
         .is_err(),
-        "the raid channel moved onto an extra one"
+        "the raid channel moved onto a listed one"
     );
-    assert!(
-        apply(
-            &mut l,
-            ConfigPatch {
-                extra_raid_channels: Some(vec![502, 502]),
-                ..Default::default()
-            },
-        )
-        .is_err(),
-        "a list naming one twice"
-    );
-    assert_eq!(config(&l).raid_channels(), vec![500, 501]);
+    // The same move is fine when the call also takes it off the list.
+    apply(
+        &mut l,
+        ConfigPatch {
+            raid_channel: Some(501),
+            extra_raid_channels: Some(vec![500]),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![501, 500]);
 }
 
 #[test]
 fn a_raid_counts_at_most_ten_voice_channels() {
     let mut l = with_raid_channel(500);
-    for c in 501..510 {
-        add_channel(&mut l, c).unwrap();
-    }
+    set_extras(&mut l, &(501..510).collect::<Vec<_>>()).unwrap();
     assert_eq!(config(&l).raid_channels().len(), 10);
-    assert!(add_channel(&mut l, 510).is_err());
+    assert!(set_extras(&mut l, &(501..511).collect::<Vec<_>>()).is_err());
 }
 
 /// Ledgers written before #11 set `second_raid_channel`. Replayed, that is a

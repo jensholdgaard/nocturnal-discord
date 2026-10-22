@@ -234,9 +234,8 @@ pub struct ConfigPatch {
     pub second_raid_channel: Option<u64>,
     /// Every voice channel counted for attendance besides `raid_channel`, as
     /// a whole list that replaces the previous one (#11: Plane of Time splits
-    /// the raid into more than two groups). `/raidchannel add|remove` build
-    /// it from the current config inside `decide`, so two officers editing
-    /// at once cannot lose each other's change.
+    /// the raid into more than two groups). Set by `/configure
+    /// extraraidchannels`; an empty list clears them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_raid_channels: Option<Vec<u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -39,7 +39,8 @@ by picker, role by picker):
 | logchannel | ✔ | Text channel for DKP movement embeds | |
 | auctionchannel | ✔ | Text channel for short auctions | |
 | longauctionchannel | | Text channel for long auctions | falls back to auctionchannel |
-| ~~secondraidchannel~~ | | Removed 2026-10-22 (#11): use `/raidchannel add` | a ledger that set it replays as the only extra raid channel |
+| extraraidchannels | | More voice channels counted for attendance, as `#` mentions (#11) | replaces the list; `none` clears it; up to 9, none twice, not raidchannel |
+| ~~secondraidchannel~~ | | Removed 2026-10-22 (#11), superseded by extraraidchannels | a ledger that set it replays as the only extra raid channel |
 | tickduration | | Minutes between ticks (0.5 = 30 s) | 6 min if unset at raid start |
 | raiddeprecationtime | | Days before raids stop counting for attendance | **legacy default bug: 90 ms, not 90 days** |
 | bidtime | | Short-auction duration, seconds (30–1000) | 60 |
@@ -52,13 +53,11 @@ by picker, role by picker):
 | mainbidminlevel | | Level a named character needs to bid as MAIN (0 = none) | 0; refused outside 0–65 |
 | altbidminlevel | | Level a named character needs to bid as ALT (0 = none); Bubblie, 2026-09-08 | 0; refused outside 0–65 |
 
-Extra raid channels are not `/configure` options either (#11, Plane of Time
-splits the raid into more than two groups): `/raidchannel add <channel>` and
-`/raidchannel remove <channel>` (officer) keep a list of up to 9 voice
-channels besides raidchannel. Every one is counted for ticks, `/startraid`,
-`/endraid` and `/addraiddkp`, and the bell rings in each. No channel can be
-listed twice or be the raidchannel too, and raidchannel itself is changed
-only by `/configure`. `/showconfig` lists them as "Other raid channels".
+Raid channels (#11, Plane of Time splits the raid into more than two
+groups): raidchannel plus every channel in extraraidchannels is counted for
+ticks, `/startraid`, `/endraid` and `/addraiddkp`, and the bell rings in each.
+The option is text because slash options cannot repeat: type `#` and pick
+each voice channel. `/showconfig` lists them as "Other raid channels".
 
 Feature toggles are not `/configure` options: `/feature <name> on|off` (officer)
 flips one without re-sending the channels and the role. Today's only toggle is

@@ -127,15 +127,6 @@ pub enum Command {
     UpdateConfig {
         patch: ConfigPatch,
     },
-    /// `/raidchannel add|remove`: one more voice channel counted for
-    /// attendance, or one fewer (#11). The raid channel itself is set by
-    /// `/configure` and cannot be removed here.
-    AddRaidChannel {
-        channel: u64,
-    },
-    RemoveRaidChannel {
-        channel: u64,
-    },
     /// `/roster add` and `/roster edit`. `replace` distinguishes them: an edit
     /// of a character the player does not have is a refusal, and an add of
     /// one they do is a refusal too, exactly as the legacy bot behaved.
@@ -222,8 +213,6 @@ impl Command {
             Command::CancelAuction { .. } => "cancel_auction",
             Command::RollForAuction { .. } => "roll_for_auction",
             Command::UpdateConfig { .. } => "update_config",
-            Command::AddRaidChannel { .. } => "add_raid_channel",
-            Command::RemoveRaidChannel { .. } => "remove_raid_channel",
             Command::SetRosterCharacter { .. } => "set_roster_character",
             Command::RankRosterCharacter { .. } => "rank_roster_character",
             Command::UploadRosterProfile { .. } => "upload_roster_profile",
