@@ -89,6 +89,10 @@ pub enum Command {
         /// `true` runs a roll auction like a short one: auction channel and
         /// bell. Ignored for the other flavors, whose flavor already says.
         live: bool,
+        /// A roll auction for one raid channel's group only (2026-10-22): only
+        /// members in that voice channel may roll, and only it hears the
+        /// bell. Must be one of the guild's raid channels.
+        voice_channel: Option<u64>,
     },
     PlaceBid {
         auction_id: String,
@@ -125,6 +129,9 @@ pub enum Command {
         auction_id: String,
         player: PlayerId,
         seed: u64,
+        /// The voice channel the member is in at the click, from the
+        /// gateway. Only read when the auction is for one raid channel.
+        voice_channel: Option<u64>,
     },
     UpdateConfig {
         patch: ConfigPatch,

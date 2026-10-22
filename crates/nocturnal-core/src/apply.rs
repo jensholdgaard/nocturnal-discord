@@ -226,6 +226,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             deadline_ts_ms,
             debit_dkp,
             live,
+            voice_channel,
         } => {
             g.auctions.insert(
                 auction_id.clone(),
@@ -247,6 +248,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     rolls: Vec::new(),
                     roll_offs: Vec::new(),
                     close_seed: None,
+                    voice_channel: *voice_channel,
                 },
             );
         }

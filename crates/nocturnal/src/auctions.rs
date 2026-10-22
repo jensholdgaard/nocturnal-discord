@@ -398,8 +398,12 @@ pub fn live_message(
         }
         Flavor::Roll => {
             let content = format!(
-                "Roll auction started - press **I want to roll** to roll 1-100. {} at <t:{}:f>, \
+                "Roll auction started - press **I want to roll** to roll 1-100.{} {} at <t:{}:f>, \
                  a tie is rolled off. **No DKP is spent.**",
+                auction
+                    .voice_channel
+                    .map(|c| format!(" Only members in <#{c}> can roll."))
+                    .unwrap_or_default(),
                 if auction.num_items > 1 {
                     format!("The top **{}** rolls win", auction.num_items)
                 } else {
@@ -1207,6 +1211,7 @@ async fn open_auction(
     duration_ms: i64,
     debit_dkp: bool,
     live: bool,
+    voice_channel: Option<u64>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(ctx)?;
     let (cfg_min_bid, lock, over, short_channel, long_channel) = ctx
@@ -1242,6 +1247,7 @@ async fn open_auction(
         duration_ms,
         debit_dkp,
         live,
+        voice_channel,
     };
     // The item row for the character picker, fetched now so a click later
     // reads it from disk. Fire and forget: a miss only costs the picker its
@@ -1288,17 +1294,23 @@ async fn open_auction(
             // The bell, as officers know it: every raid channel, right after
             // the auction embed goes up. Decorative and never fatal. Rung for
             // what the ledger calls live: a short auction, and since
-            // 2026-10-05 a roll auction opened without hours.
+            // 2026-10-05 a roll auction opened without hours. A roll for one
+            // channel's group (2026-10-22) rings only that channel.
             if auction.as_ref().is_some_and(|a| a.live) && ctx.data().bell.enabled {
-                let channels = ctx
-                    .data()
-                    .driver
-                    .query(move |l| {
-                        l.state()
-                            .guild(ledger_guild)
-                            .map_or_else(Vec::new, |g| g.config.raid_channels())
-                    })
-                    .await;
+                let only = auction.as_ref().and_then(|a| a.voice_channel);
+                let channels = match only {
+                    Some(c) => vec![c],
+                    None => {
+                        ctx.data()
+                            .driver
+                            .query(move |l| {
+                                l.state()
+                                    .guild(ledger_guild)
+                                    .map_or_else(Vec::new, |g| g.config.raid_channels())
+                            })
+                            .await
+                    }
+                };
                 crate::bell::ring(
                     ctx.serenity_context(),
                     ctx.guild_id().map(|g| g.get()).unwrap_or_default(),
@@ -1354,6 +1366,7 @@ pub async fn startbid(
         bid_time_s * 1000,
         true,
         true,
+        None,
     )
     .await
 }
@@ -1402,6 +1415,7 @@ pub async fn startlongbid(
         hours * 3_600_000,
         debit.unwrap_or(true),
         false,
+        None,
     )
     .await
 }
@@ -1424,9 +1438,35 @@ pub async fn rollauction(
     #[min = 1]
     duration: Option<i64>,
     #[description = "quarm | takp"] database: Option<String>,
+    #[description = "Only members in this raid voice channel may roll, and only it hears the bell"]
+    #[channel_types("Voice")]
+    channel: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     crate::discord::ack_ephemeral(&ctx).await?;
+    // 2026-10-22: Plane of Time splits the raid into groups, each in its own
+    // raid channel, and loot dropped for one group is rolled by that group.
+    // The ledger refuses a channel the raid does not count; asked before the
+    // item search so the officer is not walked through the picker first.
+    if let Some(c) = &channel {
+        let id = c.id.get();
+        let counted = ctx
+            .data()
+            .driver
+            .query(move |l| {
+                l.state()
+                    .guild(ledger_guild)
+                    .is_some_and(|g| g.config.raid_channels().contains(&id))
+            })
+            .await;
+        if !counted {
+            ctx.say(rejection_text(&crate::driver::ExecError::Rejected(
+                nocturnal_core::Rejection::NotARaidChannel { channel: id },
+            )))
+            .await?;
+            return Ok(());
+        }
+    }
     let Some(item) = pick_item(&ctx, &search, database).await? else {
         return Ok(());
     };
@@ -1463,6 +1503,7 @@ pub async fn rollauction(
         duration_ms,
         false,
         duration.is_none(),
+        channel.map(|c| c.id.get()),
     )
     .await
 }
@@ -2764,6 +2805,18 @@ pub async fn handle_component(
                         auction_id: auction_id.to_owned(),
                         player: interaction.user.id.get(),
                         seed: interaction.id.get(),
+                        // Where the member is right now, from the gateway
+                        // cache; the ledger compares it when the auction is
+                        // for one channel's group.
+                        voice_channel: ctx
+                            .cache
+                            .guild(serenity::GuildId::new(discord_guild))
+                            .and_then(|g| {
+                                g.voice_states
+                                    .get(&interaction.user.id)
+                                    .and_then(|v| v.channel_id)
+                            })
+                            .map(|c| c.get()),
                     },
                 )
                 .await;
@@ -2888,6 +2941,7 @@ mod tests {
             close_seed: None,
             debit_dkp: true,
             live: flavor == Flavor::Short,
+            voice_channel: None,
         }
     }
 
@@ -3238,6 +3292,7 @@ mod tests {
                     duration_ms: 600_000,
                     debit_dkp: true,
                     live: false,
+                    voice_channel: None,
                 },
             )
             .await

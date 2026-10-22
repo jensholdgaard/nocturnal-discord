@@ -108,6 +108,7 @@ fn raid_night_survives_kill_dash_nine() {
                 duration_ms: 60_000,
                 debit_dkp: true,
                 live: false,
+                voice_channel: None,
             },
         );
     }

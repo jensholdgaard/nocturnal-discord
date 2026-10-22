@@ -162,6 +162,7 @@ fn run_scenario(seed: u64) {
                         duration_ms: 30_000,
                         debit_dkp: true,
                         live: false,
+                        voice_channel: None,
                     },
                 )
                 .is_some()

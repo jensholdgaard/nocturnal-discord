@@ -1321,6 +1321,12 @@ pub fn rejection_text(e: &ExecError) -> String {
         R::AlreadyRolled { roll } => {
             format!(":no_entry: One roll each: you already rolled **{roll}** on this auction")
         }
+        R::NotARaidChannel { channel } => format!(
+            ":no_entry: <#{channel}> is not a raid channel; a roll can be limited to one of the raid channels (`/showconfig`)"
+        ),
+        R::NotInVoiceChannel { channel } => {
+            format!(":no_entry: This roll is for members in <#{channel}>: join it to roll")
+        }
         R::RaidAlreadyActive { name } => {
             format!(":no_entry: There is already an active raid: {name}")
         }
@@ -2598,6 +2604,7 @@ pub async fn stresstest(
                     duration_ms: 600_000,
                     debit_dkp: true,
                     live: false,
+                    voice_channel: None,
                 },
             )
             .await

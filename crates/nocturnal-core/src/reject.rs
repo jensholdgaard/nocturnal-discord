@@ -52,6 +52,16 @@ pub enum Rejection {
     AlreadyRolled {
         roll: u32,
     },
+    /// A roll auction opened for a voice channel that is not one of the
+    /// guild's raid channels (2026-10-22).
+    NotARaidChannel {
+        channel: u64,
+    },
+    /// A roll on an auction for one raid channel's group, by a member who is
+    /// not in that voice channel.
+    NotInVoiceChannel {
+        channel: u64,
+    },
     /// The guild requires a raid-attendance percentage to bid on this side
     /// (`mainbidminra` / `altbidminra`), and the player is under it.
     AttendanceBelowMinimum {
@@ -130,6 +140,8 @@ impl Rejection {
             Rejection::BidBelowMinimum { .. } => "bid_below_minimum",
             Rejection::WrongAuctionFlavor => "wrong_auction_flavor",
             Rejection::AlreadyRolled { .. } => "already_rolled",
+            Rejection::NotARaidChannel { .. } => "not_a_raid_channel",
+            Rejection::NotInVoiceChannel { .. } => "not_in_voice_channel",
             Rejection::AttendanceBelowMinimum { .. } => "attendance_below_minimum",
             Rejection::CharacterNotEligible { .. } => "character_not_eligible",
             Rejection::CharacterBelowMinLevel { .. } => "character_below_min_level",
