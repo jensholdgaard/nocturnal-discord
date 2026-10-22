@@ -130,6 +130,7 @@ fn samples() -> Vec<Event> {
         Event::AuctionClosed {
             auction_id: "a".into(),
             ended_ts_ms: None,
+            seed: None,
         },
         Event::AuctionFinalized {
             auction_id: "a".into(),

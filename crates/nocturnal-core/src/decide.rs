@@ -1,6 +1,6 @@
 //! The decide step: validate a command against current projections and emit
 //! the events it becomes. Pure — same inputs, same output, no I/O, no clock,
-//! no RNG beyond the seed carried by the command.
+//! no RNG beyond the seeds carried by the command or recorded at close.
 
 use crate::auction::{roll_winners, winners, Rng};
 use crate::command::{Command, Ctx};
@@ -396,13 +396,17 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             if auction.status != AuctionStatus::Open {
                 return Err(Rejection::AuctionNotActive);
             }
+            // The tie-break draw is fixed here, once (#7): the close's clock
+            // is the seed, recorded in the event so preview and finalize read
+            // the same one back from the projection.
             Ok(vec![Event::AuctionClosed {
                 auction_id: auction_id.clone(),
                 ended_ts_ms: *ended_ts_ms,
+                seed: Some(ctx.now_ms as u64),
             }])
         }
 
-        Command::FinalizeAuction { auction_id, seed } => {
+        Command::FinalizeAuction { auction_id } => {
             let auction = g
                 .auctions
                 .get(auction_id)
@@ -410,15 +414,18 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             if auction.status != AuctionStatus::Closed {
                 return Err(Rejection::AuctionNotClosed);
             }
+            // Never a fresh draw (#7): the seed is the one the close recorded,
+            // the same one the closed embed proposed its winners from.
+            let seed = auction.tie_break_seed();
             let finalized = |winners| Event::AuctionFinalized {
                 auction_id: auction_id.clone(),
                 winners,
-                seed: *seed,
+                seed,
             };
             if auction.flavor == Flavor::Roll {
                 // The roll-off, when a tie straddled the cut, is its own
                 // fact ahead of the close, drawn from the close's seed.
-                let (winners, rounds) = compute_roll_winners(g, auction_id, *seed);
+                let (winners, rounds) = compute_roll_winners(g, auction_id, seed);
                 let mut events = Vec::with_capacity(2);
                 if !rounds.is_empty() {
                     events.push(Event::AuctionRollOff {
@@ -429,7 +436,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 events.push(finalized(winners));
                 return Ok(events);
             }
-            Ok(vec![finalized(compute_winners(g, auction_id, *seed))])
+            Ok(vec![finalized(compute_winners(g, auction_id, seed))])
         }
 
         Command::RollForAuction {

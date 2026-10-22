@@ -90,7 +90,6 @@ fn finish(l: &mut Ledger, id: &str) -> Vec<(u64, i64, bool)> {
         &ctx(70_001),
         &Command::FinalizeAuction {
             auction_id: id.into(),
-            seed: 42,
         },
     )
     .unwrap();
@@ -496,7 +495,6 @@ fn finalize_debits_winner_exactly_once() {
             &ctx(80_000),
             &Command::FinalizeAuction {
                 auction_id: "a".into(),
-                seed: 1
             }
         )
         .is_err());
@@ -554,7 +552,6 @@ fn stale_winner_dropped_if_balance_no_longer_covers() {
         &ctx(71_000),
         &Command::FinalizeAuction {
             auction_id: "a".into(),
-            seed: 7,
         },
     )
     .unwrap();

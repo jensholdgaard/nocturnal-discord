@@ -227,7 +227,6 @@ fn run_scenario(seed: u64) {
                     now,
                     &Command::FinalizeAuction {
                         auction_id: auction_id.clone(),
-                        seed: rng.next(),
                     },
                 ) {
                     for env in &envelopes {

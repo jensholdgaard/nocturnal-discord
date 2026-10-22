@@ -206,8 +206,7 @@ async fn auction_cycle(s: &Scheduler) -> anyhow::Result<()> {
             let cmd = if finalize {
                 Command::FinalizeAuction {
                     auction_id: auction_id.clone(),
-                    // Recorded in the event, so any tie-break draw is reproducible.
-                    seed: now as u64,
+                    // The tie-break seed is the close's, recorded in its event (#7).
                 }
             } else {
                 Command::CloseAuction {

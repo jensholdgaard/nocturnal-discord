@@ -25,7 +25,41 @@ pub fn embedded() -> &'static [u8] {
 }
 
 /// A bell must never outlive the auction it announces.
-const PLAY_TIMEOUT: Duration = Duration::from_secs(10);
+///
+/// 2026-10-22 (#8): was 10 s, the same as songbird's own join timeout, so a
+/// join that hung used the whole budget and the retry below never ran: 14 of
+/// 136 rings over 2026-10-17..21 timed out exactly 10 s in. Joins now give up
+/// after `JOIN_TIMEOUT`, and this covers two joins plus the sound.
+const PLAY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// songbird's `gateway_timeout`, set where the voice manager is registered
+/// (`discord.rs`). A join Discord answers at all answers in well under a
+/// second; one that has not answered in four is not going to.
+pub const JOIN_TIMEOUT: Duration = Duration::from_secs(4);
+
+/// One bell at a time, process-wide. A guild has one voice connection, and
+/// two auctions opened seconds apart used to ring in two tasks at once, each
+/// joining over the other: "request was cancelled/dropped" (#8). The second
+/// bell now waits its turn instead.
+static RINGING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// How far an attempt got, so a timeout says which step hung.
+#[derive(Clone, Copy)]
+enum Step {
+    Decoding = 0,
+    Joining = 1,
+    Playing = 2,
+}
+
+impl Step {
+    fn from_u8(v: u8) -> Self {
+        match v {
+            0 => Step::Decoding,
+            1 => Step::Joining,
+            _ => Step::Playing,
+        }
+    }
+}
 
 /// How long to let Discord finish a disconnect before joining the next
 /// channel.
@@ -39,8 +73,9 @@ const PLAY_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTLE: Duration = Duration::from_millis(500);
 
 /// One retry for a join that lost that race anyway - two bells for two
-/// auctions opened seconds apart collide the same way, and that ordering is
-/// not ours to control. Both attempts still sit inside `PLAY_TIMEOUT`.
+/// auctions opened seconds apart collided the same way (now serialized by
+/// `RINGING`), and Discord sometimes simply never answers a join. Both
+/// attempts, each bounded by `JOIN_TIMEOUT`, sit inside `PLAY_TIMEOUT`.
 const JOIN_RETRY_WAIT: Duration = Duration::from_millis(400);
 
 fn sound(path: Option<&std::path::Path>) -> Input {
@@ -69,12 +104,14 @@ pub fn ring(
     }
     let ctx = ctx.clone();
     tokio::spawn(async move {
+        let _turn = RINGING.lock().await;
         for channel in channels {
             let span = tracing::info_span!("bell.ring", guild_id, channel);
             let _entered = span.enter();
+            let step = std::sync::atomic::AtomicU8::new(Step::Decoding as u8);
             match tokio::time::timeout(
                 PLAY_TIMEOUT,
-                play_in(&ctx, guild_id, channel, path.as_deref()),
+                play_in(&ctx, guild_id, channel, path.as_deref(), &step),
             )
             .await
             {
@@ -82,7 +119,11 @@ pub fn ring(
                 Ok(Err(e)) => {
                     tracing::info!({ attr::NOCTURNAL_ERROR_MESSAGE } = %e, "bell skipped")
                 }
-                Err(_) => tracing::warn!("bell timed out"),
+                Err(_) => match Step::from_u8(step.load(std::sync::atomic::Ordering::Relaxed)) {
+                    Step::Decoding => tracing::warn!("bell timed out decoding"),
+                    Step::Joining => tracing::warn!("bell timed out joining"),
+                    Step::Playing => tracing::warn!("bell timed out playing"),
+                },
             }
             // Always hand the channel back, however the attempt went.
             if let Some(manager) = songbird::get(&ctx).await {
@@ -100,6 +141,7 @@ async fn play_in(
     guild_id: u64,
     channel: u64,
     path: Option<&std::path::Path>,
+    step: &std::sync::atomic::AtomicU8,
 ) -> anyhow::Result<()> {
     let manager = songbird::get(ctx)
         .await
@@ -115,6 +157,7 @@ async fn play_in(
         .await
         .map_err(|e| anyhow::anyhow!("bell audio could not be decoded: {e}"))?;
 
+    step.store(Step::Joining as u8, std::sync::atomic::Ordering::Relaxed);
     let call = match manager
         .join(
             serenity::GuildId::new(guild_id),
@@ -124,7 +167,10 @@ async fn play_in(
     {
         Ok(call) => call,
         Err(first) => {
-            tracing::debug!({ attr::NOCTURNAL_ERROR_MESSAGE } = %first, "voice join lost a race; retrying once");
+            tracing::info!({ attr::NOCTURNAL_ERROR_MESSAGE } = %first, "voice join failed; retrying once");
+            // Hand back the half-made connection first (#8): retrying into
+            // it asked Discord to finish a join it had already dropped.
+            let _ = manager.remove(serenity::GuildId::new(guild_id)).await;
             tokio::time::sleep(JOIN_RETRY_WAIT).await;
             manager
                 .join(
@@ -134,6 +180,7 @@ async fn play_in(
                 .await?
         }
     };
+    step.store(Step::Playing as u8, std::sync::atomic::Ordering::Relaxed);
     let mut locked = call.lock().await;
     let track = locked.play_input(input);
     drop(locked);

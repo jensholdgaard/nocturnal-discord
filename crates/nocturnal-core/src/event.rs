@@ -427,6 +427,15 @@ pub enum Event {
         /// the scheduler's own close, which happens at the deadline anyway.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ended_ts_ms: Option<i64>,
+        /// Additive (2026-10-22, #7): the tie-break seed, fixed the moment
+        /// bidding stops. The closed embed proposes winners from it and
+        /// finalize charges from it, so the winner an officer confirms is the
+        /// winner who pays. Before this the embed drew with seed 0 and
+        /// Confirm re-drew with the click's clock, and a full tie could
+        /// charge the other member. Absent on closes logged before then;
+        /// those use seed 0, the draw their embed showed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        seed: Option<u64>,
     },
     /// The debit: winners are charged in this fold step (audit E2).
     #[serde(rename = "auction.finalized")]

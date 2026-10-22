@@ -29,15 +29,15 @@ store, telemetry, provisioning, migration tooling, and the Discord bot itself
   handling is a pure function of (custom id, ledger state). No in-memory
   collector must survive for an auction to work. On boot, open auctions adopt
   their existing post (found by its buttons) and only re-post when none is found.
-- Every auction embed (live short/long, closed recap, settled recap) ends with
-  an "Item history" toggle. The button's custom id encodes the current
-  presentation state (`histon` expands, `histoff` collapses), and a click
-  re-renders the clicked message from the ledger — never from memory. The
-  expanded field lists the last 3 finalized auctions won for the item
-  (`GuildState::recent_won_auctions`, which excludes the auction being bid
-  on). `refresh` re-renders collapsed after every ledger change; that is
-  intended and stateless.
-- Discord has no native accordion; the toggle approach is deliberate and the
-  renderers all share `build_post` so expand/collapse/refresh produce
-  byte-identical posts for the same ledger + history state. Keep it that way
-  when changing embed layout.
+- Every auction embed (live short/long, closed recap, settled recap; not roll
+  auctions) shows an "Item history" field: the last 3 finalized auctions won
+  for the item (`GuildState::recent_won_auctions`, which excludes the auction
+  being bid on), looked up from the ledger on every post and edit — never
+  from memory.
+- Until 2026-10-22 the field hid behind a `histon`/`histoff` toggle button.
+  Members kept flipping it, so it is always shown now (#9) and the button is
+  gone. Old posts still carry it: the ids still parse, and a click re-renders
+  that post from the ledger, which drops the button. Keep parsing them.
+- The renderers all share `build_post`, so a post, a `refresh` and a click on
+  an old button produce byte-identical posts for the same ledger. Keep it
+  that way when changing embed layout.

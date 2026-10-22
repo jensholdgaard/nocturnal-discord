@@ -239,7 +239,6 @@ fn cancelling_is_refused_only_once_the_dkp_has_moved() {
         &ctx_at(DEADLINE + 1, Actor::User(OFFICER)),
         Command::FinalizeAuction {
             auction_id: "au-1".into(),
-            seed: 1,
         },
     )
     .unwrap();
@@ -280,7 +279,6 @@ fn ending_early_settles_exactly_as_the_scheduler_would() {
         &ctx_at(now, Actor::User(OFFICER)),
         Command::FinalizeAuction {
             auction_id: "au-1".into(),
-            seed: now as u64,
         },
     )
     .unwrap();
@@ -349,7 +347,6 @@ fn a_free_auction_names_a_winner_and_charges_nothing() {
         },
         Command::FinalizeAuction {
             auction_id: "au-1".into(),
-            seed: now as u64,
         },
     ] {
         exec(&mut l, &ctx_at(now, Actor::User(OFFICER)), cmd).unwrap();
@@ -365,4 +362,89 @@ fn a_free_auction_names_a_winner_and_charges_nothing() {
     assert_eq!(last.dkp, 0);
     assert!(last.comment.ends_with("(free auction)"), "{}", last.comment);
     assert!(last.item.is_some(), "the loot is still on record");
+}
+
+/// #7 (feedback, 2026-10-21): on a full tie the closed embed named one
+/// member and Confirm charged the other. The embed drew with seed 0, Confirm
+/// re-drew with the click's clock. The draw is now fixed at close: whatever
+/// moment bidding stops, the winners the embed proposes from the recorded
+/// seed are exactly the winners finalize charges - and finalize's own clock
+/// (an officer clicking minutes later) changes nothing.
+#[test]
+fn a_tie_is_charged_to_the_winner_the_closed_embed_proposed() {
+    const RIVAL: u64 = 11;
+    let mut seen = std::collections::BTreeSet::new();
+    for t in 0..64 {
+        let mut l = running_auction();
+        let ctx = ctx_at(1_000_000, Actor::System);
+        exec(
+            &mut l,
+            &ctx,
+            Command::ImportPlayer {
+                player: RIVAL,
+                balance: 500,
+                characters: vec![],
+                creation_ts_ms: 1,
+                log: vec![],
+                legacy_id: None,
+            },
+        )
+        .unwrap();
+        // Same amount, same (zero) attendance: only the draw separates them.
+        for p in [BIDDER, RIVAL] {
+            exec(
+                &mut l,
+                &ctx_at(1_000_001, Actor::User(p)),
+                Command::PlaceBid {
+                    auction_id: "au-1".into(),
+                    player: p,
+                    amount: 100,
+                    for_main: true,
+                    character: None,
+                },
+            )
+            .unwrap();
+        }
+        exec(
+            &mut l,
+            &ctx_at(DEADLINE + t, Actor::System),
+            Command::CloseAuction {
+                auction_id: "au-1".into(),
+                ended_ts_ms: None,
+            },
+        )
+        .unwrap();
+        let g = l.state().guild(GUILD).unwrap();
+        let seed = g.auctions["au-1"].tie_break_seed();
+        let proposed = nocturnal_core::compute_winners(g, "au-1", seed);
+        assert_eq!(proposed.len(), 1);
+
+        exec(
+            &mut l,
+            &ctx_at(DEADLINE + t + 123_457, Actor::User(OFFICER)),
+            Command::FinalizeAuction {
+                auction_id: "au-1".into(),
+            },
+        )
+        .unwrap();
+        let g = l.state().guild(GUILD).unwrap();
+        let charged = &g.auctions["au-1"].winners;
+        assert_eq!(
+            charged, &proposed,
+            "close at +{t}: charged a different winner"
+        );
+        let loser = if proposed[0].player == BIDDER {
+            RIVAL
+        } else {
+            BIDDER
+        };
+        assert_eq!(g.balance(proposed[0].player), 400);
+        assert_eq!(g.balance(loser), 500, "the proposed loser kept their DKP");
+        seen.insert(proposed[0].player);
+    }
+    assert_eq!(
+        seen.len(),
+        2,
+        "the draw really is a draw: both sides won some closes"
+    );
 }
