@@ -109,6 +109,7 @@ fn raid_night_survives_kill_dash_nine() {
                 debit_dkp: true,
                 live: false,
                 voice_channel: None,
+                roll_cost: 0,
             },
         );
     }

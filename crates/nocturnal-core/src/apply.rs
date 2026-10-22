@@ -227,6 +227,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             debit_dkp,
             live,
             voice_channel,
+            roll_cost,
         } => {
             g.auctions.insert(
                 auction_id.clone(),
@@ -249,6 +250,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     roll_offs: Vec::new(),
                     close_seed: None,
                     voice_channel: *voice_channel,
+                    roll_cost: *roll_cost,
                 },
             );
         }
@@ -313,13 +315,13 @@ pub fn apply(state: &mut State, env: &Envelope) {
             // winner at 0 DKP, so history says who got it, and the balance
             // stands. Auctions from before the flag existed always debit.
             let debit = g.auctions.get(auction_id).map_or(true, |a| a.debit_dkp);
-            // A roll auction (2026-09-30) never debits, whatever the flag,
-            // and its log line names the roll that won the item.
+            // A roll auction's log line names the roll that won the item. It
+            // debits only with a cost (2026-10-22): decide records the flag
+            // true for those alone, and every earlier roll carries false.
             let rolled = g
                 .auctions
                 .get(auction_id)
                 .filter(|a| a.flavor == Flavor::Roll);
-            let debit = debit && rolled.is_none();
             let notes: Vec<Option<String>> = winners
                 .iter()
                 .map(|w| rolled.and_then(|a| roll_note(a, w.player)))

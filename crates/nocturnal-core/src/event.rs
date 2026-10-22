@@ -149,6 +149,10 @@ impl ProfileSource {
     }
 }
 
+fn is_zero(v: &i64) -> bool {
+    *v == 0
+}
+
 fn default_true() -> bool {
     true
 }
@@ -403,6 +407,11 @@ pub enum Event {
         /// rings only there. Absent on every earlier event: anyone may roll.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         voice_channel: Option<u64>,
+        /// DKP each winner of a roll pays (2026-10-22). Absent = 0, which is
+        /// every roll before it: no debit. When set, `debit_dkp` is true and
+        /// the winners carry it as their amount.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        roll_cost: i64,
     },
     #[serde(rename = "auction.bid_placed")]
     BidPlaced {
