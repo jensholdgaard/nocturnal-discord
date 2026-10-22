@@ -110,6 +110,7 @@ fn raid_night_survives_kill_dash_nine() {
                 live: false,
                 voice_channel: None,
                 roll_cost: 0,
+                rollers: None,
             },
         );
     }

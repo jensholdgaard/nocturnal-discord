@@ -227,6 +227,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
             debit_dkp,
             live,
             voice_channel,
+            rollers,
             roll_cost,
         } => {
             g.auctions.insert(
@@ -250,6 +251,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     roll_offs: Vec::new(),
                     close_seed: None,
                     voice_channel: *voice_channel,
+                    rollers: rollers.clone(),
                     roll_cost: *roll_cost,
                 },
             );

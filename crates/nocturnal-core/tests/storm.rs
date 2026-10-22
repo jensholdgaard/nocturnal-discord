@@ -71,6 +71,7 @@ fn bid_storm_is_fast_on_heavy_history() {
                     live: false,
                     voice_channel: None,
                     roll_cost: 0,
+                    rollers: None,
                 },
             )
             .unwrap();

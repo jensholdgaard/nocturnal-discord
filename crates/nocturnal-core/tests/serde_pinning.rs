@@ -116,6 +116,7 @@ fn samples() -> Vec<Event> {
             live: false,
             voice_channel: None,
             roll_cost: 0,
+            rollers: None,
         },
         Event::BidPlaced {
             auction_id: "a".into(),

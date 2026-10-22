@@ -64,6 +64,7 @@ fn arb_command() -> impl Strategy<Value = Command> {
             live: false,
             voice_channel: None,
             roll_cost: 0,
+            rollers: None,
         }),
         (auction_id.clone(), player.clone(), amount, any::<bool>()).prop_map(
             |(id, player, amount, for_main)| Command::PlaceBid {

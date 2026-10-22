@@ -164,6 +164,7 @@ fn run_scenario(seed: u64) {
                         live: false,
                         voice_channel: None,
                         roll_cost: 0,
+                        rollers: None,
                     },
                 )
                 .is_some()

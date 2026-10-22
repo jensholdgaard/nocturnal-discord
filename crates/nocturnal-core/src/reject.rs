@@ -62,6 +62,15 @@ pub enum Rejection {
     NotInVoiceChannel {
         channel: u64,
     },
+    /// A roll on an auction for one raid channel's group, by a member who
+    /// was not in that voice channel when it opened.
+    NotInRollSnapshot {
+        channel: u64,
+    },
+    /// A roll for one raid channel opened while nobody was in it.
+    NobodyInVoiceChannel {
+        channel: u64,
+    },
     /// The guild requires a raid-attendance percentage to bid on this side
     /// (`mainbidminra` / `altbidminra`), and the player is under it.
     AttendanceBelowMinimum {
@@ -142,6 +151,8 @@ impl Rejection {
             Rejection::AlreadyRolled { .. } => "already_rolled",
             Rejection::NotARaidChannel { .. } => "not_a_raid_channel",
             Rejection::NotInVoiceChannel { .. } => "not_in_voice_channel",
+            Rejection::NotInRollSnapshot { .. } => "not_in_roll_snapshot",
+            Rejection::NobodyInVoiceChannel { .. } => "nobody_in_voice_channel",
             Rejection::AttendanceBelowMinimum { .. } => "attendance_below_minimum",
             Rejection::CharacterNotEligible { .. } => "character_not_eligible",
             Rejection::CharacterBelowMinLevel { .. } => "character_below_min_level",
