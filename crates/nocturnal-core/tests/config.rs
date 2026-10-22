@@ -2,7 +2,7 @@
 //!
 //! A bad value here is not felt here: a zero tick interval surfaces at
 //! `/startraid`, a deprecation window of nothing empties `/listplayersdkps`,
-//! and a second raid channel equal to the first doubles everyone's tick. So
+//! and a raid channel listed twice doubles everyone's tick. So
 //! the guarantees are that the defaults are the *fixed* ones (the legacy
 //! fallbacks were wrong), that a patch touches only what it names, and that
 //! the values the ledger refuses are refused where they are typed.
@@ -200,7 +200,9 @@ fn values_that_would_break_something_later_are_refused_now() {
 }
 
 /// The two voice channels are both counted for attendance, so pointing them at
-/// the same place awards a doubled tick to everyone in it. The invariant spans
+/// the same place awards a doubled tick to everyone in it. (The legacy
+/// `second_raid_channel` patch; #11's list is checked the same way below.)
+/// The invariant spans
 /// two settings, which means it can only be checked against the merged result:
 /// set one today and the other tomorrow and no single call sees both.
 #[test]
@@ -226,7 +228,7 @@ fn the_two_raid_channels_cannot_collide_even_across_separate_calls() {
         matches!(err, Rejection::InvalidConfig { setting, .. } if setting == "secondraidchannel"),
         "got {err:?}"
     );
-    assert_eq!(config(&l).second_raid_channel, None);
+    assert!(config(&l).extra_raid_channels.is_empty());
 
     apply(
         &mut l,
@@ -236,7 +238,124 @@ fn the_two_raid_channels_cannot_collide_even_across_separate_calls() {
         },
     )
     .unwrap();
-    assert_eq!(config(&l).second_raid_channel, Some(501));
+    assert_eq!(config(&l).extra_raid_channels, vec![501]);
+}
+
+fn set_extras(l: &mut Ledger, channels: &[u64]) -> Result<(), Rejection> {
+    apply(
+        l,
+        ConfigPatch {
+            extra_raid_channels: Some(channels.to_vec()),
+            ..Default::default()
+        },
+    )
+}
+
+fn with_raid_channel(channel: u64) -> Ledger {
+    let mut l = Ledger::new();
+    apply(
+        &mut l,
+        ConfigPatch {
+            raid_channel: Some(channel),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    l
+}
+
+/// #11: Plane of Time splits the raid into more groups than a raid channel
+/// and one second channel could hold. `/configure extraraidchannels` sets the
+/// whole list, in order; an empty list clears it, and a patch that does not
+/// name it leaves it alone.
+#[test]
+fn a_raid_counts_every_voice_channel_officers_list() {
+    let mut l = with_raid_channel(500);
+    set_extras(&mut l, &[501, 502, 503]).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 501, 502, 503]);
+
+    apply(
+        &mut l,
+        ConfigPatch {
+            bid_time_s: Some(45),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 501, 502, 503]);
+
+    set_extras(&mut l, &[503]).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 503]);
+    set_extras(&mut l, &[]).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500]);
+}
+
+/// A channel counted twice pays its members twice per tick, whichever way the
+/// duplicate arrives: listed twice, listed when it is the raid channel, or the
+/// raid channel moved onto a listed one.
+#[test]
+fn no_channel_is_ever_a_raid_channel_twice() {
+    let mut l = with_raid_channel(500);
+    set_extras(&mut l, &[501]).unwrap();
+    assert!(set_extras(&mut l, &[502, 502]).is_err(), "listed twice");
+    assert!(
+        set_extras(&mut l, &[500, 502]).is_err(),
+        "the raid channel itself"
+    );
+    assert!(
+        apply(
+            &mut l,
+            ConfigPatch {
+                raid_channel: Some(501),
+                ..Default::default()
+            },
+        )
+        .is_err(),
+        "the raid channel moved onto a listed one"
+    );
+    // The same move is fine when the call also takes it off the list.
+    apply(
+        &mut l,
+        ConfigPatch {
+            raid_channel: Some(501),
+            extra_raid_channels: Some(vec![500]),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![501, 500]);
+}
+
+#[test]
+fn a_raid_counts_at_most_ten_voice_channels() {
+    let mut l = with_raid_channel(500);
+    set_extras(&mut l, &(501..510).collect::<Vec<_>>()).unwrap();
+    assert_eq!(config(&l).raid_channels().len(), 10);
+    assert!(set_extras(&mut l, &(501..511).collect::<Vec<_>>()).is_err());
+}
+
+/// Ledgers written before #11 set `second_raid_channel`. Replayed, that is a
+/// one-entry list, so deploying the change leaves the live config as it was,
+/// and a later legacy write still replaces the earlier one as it used to.
+#[test]
+fn a_legacy_second_channel_replays_as_the_only_extra_one() {
+    let mut l = with_raid_channel(500);
+    for second in [501, 502] {
+        apply(
+            &mut l,
+            ConfigPatch {
+                second_raid_channel: Some(second),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+    assert_eq!(config(&l).raid_channels(), vec![500, 502]);
+
+    let old: ConfigPatch = serde_json::from_str(r#"{"second_raid_channel":503}"#).unwrap();
+    assert_eq!(old.second_raid_channel, Some(503));
+    apply(&mut l, old).unwrap();
+    assert_eq!(config(&l).raid_channels(), vec![500, 503]);
 }
 
 /// The config is a fold like everything else, so a restart has to land on the

@@ -226,8 +226,18 @@ pub struct ConfigPatch {
     pub admin_role: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raid_channel: Option<u64>,
+    /// Legacy (until 2026-10-22): the one extra voice channel `/configure`
+    /// could set. Still read, so old `config.updated` events replay; applying
+    /// it makes it the only extra raid channel, which is what it meant then.
+    /// New patches set `extra_raid_channels` instead (#11).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub second_raid_channel: Option<u64>,
+    /// Every voice channel counted for attendance besides `raid_channel`, as
+    /// a whole list that replaces the previous one (#11: Plane of Time splits
+    /// the raid into more than two groups). Set by `/configure
+    /// extraraidchannels`; an empty list clears them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_raid_channels: Option<Vec<u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_channel: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

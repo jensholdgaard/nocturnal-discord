@@ -737,11 +737,16 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
             "cannot be blank or have surrounding whitespace",
         ));
     }
-    // Both channels are counted for attendance, so the same one twice would
-    // award a doubled tick to everyone in it.
-    let raid = p.raid_channel.or(g.config.raid_channel);
-    let second = p.second_raid_channel.or(g.config.second_raid_channel);
-    if let (Some(r), Some(s)) = (raid, second) {
+    // Every raid channel is counted for attendance, so the same one twice
+    // would award a doubled tick to everyone in it. Checked against the
+    // merged result: set the extras today and the raid channel tomorrow and
+    // no single call sees both.
+    let mut merged = g.config.clone();
+    merged.apply_patch(p);
+    if let (Some(r), Some(s)) = (
+        p.raid_channel.or(g.config.raid_channel),
+        p.second_raid_channel,
+    ) {
         if r == s {
             return Err(bad(
                 "secondraidchannel",
@@ -749,8 +754,35 @@ fn validate_config(g: &crate::state::GuildState, p: &ConfigPatch) -> Result<(), 
             ));
         }
     }
+    if merged.extra_raid_channels.len() > MAX_EXTRA_RAID_CHANNELS {
+        return Err(bad(
+            "extraraidchannels",
+            "has room for 9 channels: a raid counts at most 10 voice channels",
+        ));
+    }
+    if let Some(r) = merged.raid_channel {
+        if merged.extra_raid_channels.contains(&r) {
+            return Err(bad(
+                "extraraidchannels",
+                "cannot include the raid channel itself",
+            ));
+        }
+    }
+    let extras = &merged.extra_raid_channels;
+    if extras
+        .iter()
+        .enumerate()
+        .any(|(i, c)| extras[..i].contains(c))
+    {
+        return Err(bad("extraraidchannels", "names the same channel twice"));
+    }
     Ok(())
 }
+
+/// Extra voice channels a raid can count besides the raid channel (#11). A
+/// raid split into ten groups is far past anything Quarm asks for, and the
+/// bell rings in every channel one after another.
+pub const MAX_EXTRA_RAID_CHANNELS: usize = 9;
 
 /// The classes a character can be, in the order the roster shows them. The
 /// materializer's column order and this list are the same list.

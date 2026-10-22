@@ -1110,6 +1110,19 @@ where
     fut.instrument(span).await
 }
 
+/// Members currently in any of `channels`, in channel order. A member is in
+/// one voice channel at a time, so nobody appears twice.
+pub fn voice_members_in(
+    ctx: &serenity::Context,
+    discord_guild: u64,
+    channels: &[u64],
+) -> Vec<nocturnal_core::PlayerId> {
+    channels
+        .iter()
+        .flat_map(|&c| voice_members(ctx, discord_guild, c))
+        .collect()
+}
+
 /// Members currently in a voice channel, from the gateway cache.
 pub fn voice_members(
     ctx: &serenity::Context,
@@ -1374,9 +1387,6 @@ pub async fn configure(
     #[description = "Channel for long auctions"]
     #[channel_types("Text")]
     longauctionchannel: Option<serenity::GuildChannel>,
-    #[description = "Second raid voice channel"]
-    #[channel_types("Voice")]
-    secondraidchannel: Option<serenity::GuildChannel>,
     #[description = "Minimum bid"]
     #[min = 0]
     minbid: Option<i64>,
@@ -1407,8 +1417,43 @@ pub async fn configure(
     #[min = 0]
     #[max = 65]
     altbidminlevel: Option<i64>,
+    #[description = "More raid voice channels, as #mentions (replaces the list; none clears it)"]
+    extraraidchannels: Option<String>,
 ) -> Result<(), Error> {
     crate::discord::ack_ephemeral(&ctx).await?;
+    // #11: Plane of Time splits the raid into more groups than one
+    // `secondraidchannel` had room for. Slash options cannot repeat, so the
+    // list is one text option of channel mentions.
+    let extra_raid_channels = match extraraidchannels.as_deref().map(parse_channel_list) {
+        None => None,
+        Some(Ok(ids)) => {
+            let not_voice: Vec<u64> = ids
+                .iter()
+                .copied()
+                .filter(|&c| !is_voice_channel(ctx.serenity_context(), ctx.guild_id(), c))
+                .collect();
+            if !not_voice.is_empty() {
+                let list = not_voice
+                    .iter()
+                    .map(|c| format!("<#{c}>"))
+                    .collect::<Vec<_>>();
+                ctx.say(format!(
+                    ":no_entry: `extraraidchannels` takes voice channels of this server; not one: {}",
+                    list.join(", ")
+                ))
+                .await?;
+                return Ok(());
+            }
+            Some(ids)
+        }
+        Some(Err(bad)) => {
+            ctx.say(format!(
+                ":no_entry: `extraraidchannels` takes channel mentions (type `#` and pick the channel) or `none`; could not read `{bad}`"
+            ))
+            .await?;
+            return Ok(());
+        }
+    };
     // Every value here is validated by the decide step, which is the only
     // place that sees the merged result — set the second raid channel today
     // and the raid channel tomorrow and there is no single call to check.
@@ -1418,7 +1463,10 @@ pub async fn configure(
         log_channel: Some(logchannel.id.get()),
         auction_channel: Some(auctionchannel.id.get()),
         long_auction_channel: longauctionchannel.map(|c| c.id.get()),
-        second_raid_channel: secondraidchannel.map(|c| c.id.get()),
+        // `/configure secondraidchannel` until 2026-10-22; the extra raid
+        // channels are a list now (#11).
+        second_raid_channel: None,
+        extra_raid_channels,
         tick_duration_ms: tickduration.map(|m| (m * 60_000.0) as i64),
         raid_deprecation_ms: raiddeprecationtime
             .map(|d| (d * nocturnal_core::state::DAY_MS as f64) as i64),
@@ -1505,6 +1553,41 @@ pub async fn feature(
     Ok(())
 }
 
+/// `extraraidchannels` as typed: channel mentions (`<#id>`, what Discord
+/// sends for a picked `#channel`) or bare ids, separated by spaces or commas.
+/// `none` (or nothing at all) is the empty list. Err names the first word
+/// that is neither.
+fn parse_channel_list(text: &str) -> Result<Vec<u64>, String> {
+    if text.trim().eq_ignore_ascii_case("none") {
+        return Ok(Vec::new());
+    }
+    text.split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            w.strip_prefix("<#")
+                .and_then(|w| w.strip_suffix('>'))
+                .unwrap_or(w)
+                .parse::<u64>()
+                .map_err(|_| w.to_owned())
+        })
+        .collect()
+}
+
+fn is_voice_channel(
+    ctx: &serenity::Context,
+    guild: Option<serenity::GuildId>,
+    channel: u64,
+) -> bool {
+    guild
+        .and_then(|g| ctx.cache.guild(g))
+        .and_then(|g| {
+            g.channels
+                .get(&serenity::ChannelId::new(channel))
+                .map(|c| c.kind == serenity::ChannelType::Voice)
+        })
+        .unwrap_or(false)
+}
+
 /// Tick durations are sub-minute in practice (`0.5` = 30 s), so plain integer
 /// minutes would render the guild's real setting as "0 minutes".
 fn human_ms(ms: i64) -> String {
@@ -1562,7 +1645,19 @@ pub async fn showconfig(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
         .field("Raid channel", chan(cfg.raid_channel), false)
-        .field("Second raid channel", chan(cfg.second_raid_channel), false)
+        .field(
+            "Other raid channels",
+            if cfg.extra_raid_channels.is_empty() {
+                "None (set them with /configure extraraidchannels)".to_owned()
+            } else {
+                cfg.extra_raid_channels
+                    .iter()
+                    .map(|c| format!("<#{c}>"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
+            false,
+        )
         .field("Log channel", chan(cfg.log_channel), false)
         .field("Auction channel", chan(cfg.auction_channel), false)
         .field(
@@ -1816,27 +1911,23 @@ pub async fn startraid(
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let (raid_channel, second_channel, cfg_tick_ms) = ctx
+    let (raid_channels, cfg_tick_ms) = ctx
         .data()
         .driver
         .query(move |l| {
             let g = l.state().guild(ledger_guild);
             (
-                g.and_then(|g| g.config.raid_channel),
-                g.and_then(|g| g.config.second_raid_channel),
+                g.map_or_else(Vec::new, |g| g.config.raid_channels()),
                 g.map_or(6 * 60_000, |g| g.config.tick_duration_ms),
             )
         })
         .await;
-    let Some(raid_channel) = raid_channel else {
+    if raid_channels.is_empty() {
         ctx.say(":no_entry: Raid channel not set, use /configure to set it")
             .await?;
         return Ok(());
-    };
-    let mut players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
-    if let Some(second) = second_channel {
-        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
     }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     let dkp_per_tick = dkpspertick.unwrap_or(1);
     let tick_interval_ms = tickduration.map_or(cfg_tick_ms, |m| (m * 60_000.0) as i64);
 
@@ -1916,24 +2007,16 @@ pub async fn endraid(ctx: Context<'_>) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let (raid_channel, second_channel) = ctx
+    let raid_channels = ctx
         .data()
         .driver
         .query(move |l| {
-            let g = l.state().guild(ledger_guild);
-            (
-                g.and_then(|g| g.config.raid_channel),
-                g.and_then(|g| g.config.second_raid_channel),
-            )
+            l.state()
+                .guild(ledger_guild)
+                .map_or_else(Vec::new, |g| g.config.raid_channels())
         })
         .await;
-    let mut players = Vec::new();
-    if let Some(c) = raid_channel {
-        players = voice_members(ctx.serenity_context(), discord_guild, c);
-    }
-    if let Some(second) = second_channel {
-        players.extend(voice_members(ctx.serenity_context(), discord_guild, second));
-    }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     let envelopes = match execute(
         &ctx,
         Command::EndRaid {
@@ -2230,7 +2313,7 @@ pub async fn removedkp(
     Ok(())
 }
 
-/// Add DKP to everyone in the raid channel.
+/// Add DKP to everyone in the raid channels.
 #[tracing::instrument(name = "command.addraiddkp", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
@@ -2248,23 +2331,26 @@ pub async fn addraiddkp(
     let ledger_guild = require_guild(&ctx)?;
     let discord_guild = ctx.guild_id().map(|g| g.get()).unwrap_or_default();
     crate::discord::ack_ephemeral(&ctx).await?;
-    let raid_channel = ctx
+    // Every raid channel, like a tick (#11). Until 2026-10-22 this read only
+    // the first one, so a split raid's second group missed the award.
+    let raid_channels = ctx
         .data()
         .driver
         .query(move |l| {
             l.state()
                 .guild(ledger_guild)
-                .and_then(|g| g.config.raid_channel)
+                .map_or_else(Vec::new, |g| g.config.raid_channels())
         })
         .await;
-    let Some(raid_channel) = raid_channel else {
+    if raid_channels.is_empty() {
         ctx.say(":no_entry: Please set the raid channel first with /configure")
             .await?;
         return Ok(());
-    };
-    let players = voice_members(ctx.serenity_context(), discord_guild, raid_channel);
+    }
+    let players = voice_members_in(ctx.serenity_context(), discord_guild, &raid_channels);
     if players.is_empty() {
-        ctx.say(":no_entry: No players in the raid channel").await?;
+        ctx.say(":no_entry: No players in the raid channels")
+            .await?;
         return Ok(());
     }
     let (raid_name, dkp_amount) = (comment.clone(), dkp);
@@ -2280,7 +2366,7 @@ pub async fn addraiddkp(
     {
         Ok(_) => {
             ctx.say(format!(
-                "Added {dkp} DKP to all players ({}) in the raid channel",
+                "Added {dkp} DKP to all players ({}) in the raid channels",
                 players.len()
             ))
             .await?;
@@ -3189,5 +3275,38 @@ mod ack_tests {
         let ack = leg_seconds(created, done).unwrap();
         assert!((delivery + response - ack).abs() < f64::EPSILON);
         assert_eq!(delivery, 0.4);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod channel_list_tests {
+    use super::parse_channel_list;
+
+    /// What Discord sends when an officer types `#` and picks channels, as
+    /// well as pasted ids, with whatever separators they used.
+    #[test]
+    fn mentions_and_ids_parse_in_order() {
+        assert_eq!(
+            parse_channel_list("<#501> <#502>, 503,<#504>"),
+            Ok(vec![501, 502, 503, 504])
+        );
+    }
+
+    #[test]
+    fn none_or_blank_clears_the_list() {
+        assert_eq!(parse_channel_list("none"), Ok(vec![]));
+        assert_eq!(parse_channel_list(" NONE "), Ok(vec![]));
+        assert_eq!(parse_channel_list("   "), Ok(vec![]));
+    }
+
+    /// A plain channel name is not looked up: names repeat and contain
+    /// spaces, and a guess would count the wrong channel.
+    #[test]
+    fn a_plain_name_is_refused_by_name() {
+        assert_eq!(
+            parse_channel_list("<#501> pot-group-2"),
+            Err("pot-group-2".to_owned())
+        );
     }
 }
