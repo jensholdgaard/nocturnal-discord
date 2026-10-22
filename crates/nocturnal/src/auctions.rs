@@ -696,7 +696,10 @@ async fn build_post(
                     let Some(g) = l.state().guild(ledger_guild) else {
                         return (Vec::new(), HashMap::new());
                     };
-                    let winners = nocturnal_core::compute_winners(g, &aid, 0);
+                    // The close's recorded seed, the one finalize draws from
+                    // (#7). This used to be a hard 0, and Confirm re-drew.
+                    let seed = g.auctions.get(&aid).map_or(0, |a| a.tie_break_seed());
+                    let winners = nocturnal_core::compute_winners(g, &aid, seed);
                     let classes: HashMap<String, String> = winners
                         .iter()
                         .filter_map(|w| {
@@ -1749,7 +1752,6 @@ pub async fn endauction(
         &ctx,
         Command::FinalizeAuction {
             auction_id: auctionid.clone(),
-            seed: now as u64,
         },
     )
     .await?;
@@ -2729,8 +2731,9 @@ pub async fn handle_component(
                 )
                 .await;
             }
-            // Finalization *is* the debit; the seed makes any tie-break draw
-            // reproducible from the log.
+            // Finalization *is* the debit. It draws any tie-break from the
+            // seed the close recorded (#7), so the winner charged is the one
+            // this embed proposed; the click no longer brings a seed.
             let outcome = data
                 .driver
                 .execute(
@@ -2738,7 +2741,6 @@ pub async fn handle_component(
                     Actor::User(interaction.user.id.get()),
                     Command::FinalizeAuction {
                         auction_id: auction_id.to_owned(),
-                        seed: chrono_now_ms() as u64,
                     },
                 )
                 .await;
@@ -2906,6 +2908,7 @@ mod tests {
             cancelled_ts_ms: None,
             rolls: Vec::new(),
             roll_offs: Vec::new(),
+            close_seed: None,
             debit_dkp: true,
             live: flavor == Flavor::Short,
         }

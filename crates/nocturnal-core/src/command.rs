@@ -109,9 +109,11 @@ pub enum Command {
         ended_ts_ms: Option<i64>,
     },
     /// Debits the winners (short: officer confirm; long: scheduler).
+    /// 2026-10-22 (#7): no seed of its own any more. It carried the caller's
+    /// clock and re-drew a full tie after the closed embed had already named
+    /// a winner; the draw now uses the seed `auction.closed` recorded.
     FinalizeAuction {
         auction_id: String,
-        seed: u64,
     },
     CancelAuction {
         auction_id: String,

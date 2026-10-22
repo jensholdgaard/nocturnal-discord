@@ -198,7 +198,6 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::FinalizeAuction {
             auction_id: "a1".into(),
-            seed: 0xE0,
         },
     );
     run(
@@ -216,7 +215,6 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::FinalizeAuction {
             auction_id: "a2".into(),
-            seed: 2,
         },
     );
     run(
@@ -234,7 +232,6 @@ fn raid_night_survives_kill_dash_nine() {
         t,
         Command::FinalizeAuction {
             auction_id: "a3".into(),
-            seed: 3,
         },
     );
     t += 361_000;

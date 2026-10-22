@@ -246,6 +246,7 @@ pub fn apply(state: &mut State, env: &Envelope) {
                     cancelled_ts_ms: None,
                     rolls: Vec::new(),
                     roll_offs: Vec::new(),
+                    close_seed: None,
                 },
             );
         }
@@ -286,9 +287,11 @@ pub fn apply(state: &mut State, env: &Envelope) {
         Event::AuctionClosed {
             auction_id,
             ended_ts_ms,
+            seed,
         } => {
             if let Some(a) = g.auctions.get_mut(auction_id) {
                 a.status = AuctionStatus::Closed;
+                a.close_seed = *seed;
                 // An officer stopped it early: the deadline *is* that moment,
                 // so every embed and every later read reports when bidding
                 // actually stopped.

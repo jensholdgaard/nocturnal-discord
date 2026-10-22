@@ -2682,7 +2682,6 @@ pub async fn stresstest(
                     actor,
                     Command::FinalizeAuction {
                         auction_id: auction_id.clone(),
-                        seed: run_id as u64,
                     },
                 )
                 .await

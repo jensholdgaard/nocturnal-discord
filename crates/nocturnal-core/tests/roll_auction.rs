@@ -104,7 +104,7 @@ fn roll(l: &mut Ledger, player: PlayerId, roll: u32) -> Result<Vec<Envelope>, Re
 }
 
 /// The scheduler's two steps at the deadline; returns the draw's events.
-fn close_and_draw(l: &mut Ledger, seed: u64) -> Vec<Envelope> {
+fn close_and_draw(l: &mut Ledger) -> Vec<Envelope> {
     let ctx = ctx_at(DEADLINE, Actor::System);
     exec(
         l,
@@ -120,7 +120,6 @@ fn close_and_draw(l: &mut Ledger, seed: u64) -> Vec<Envelope> {
         &ctx,
         Command::FinalizeAuction {
             auction_id: "au-1".into(),
-            seed,
         },
     )
     .unwrap()
@@ -276,7 +275,7 @@ fn the_highest_roll_wins_and_nobody_is_charged() {
     roll(&mut l, BORIS, 90).unwrap();
     roll(&mut l, CLEO, 7).unwrap();
 
-    let drawn = close_and_draw(&mut l, 1);
+    let drawn = close_and_draw(&mut l);
     assert_eq!(drawn.len(), 1, "no tie, so no roll-off: {drawn:?}");
     assert!(matches!(drawn[0].event, Event::AuctionFinalized { .. }));
 
@@ -303,7 +302,7 @@ fn a_tie_at_the_top_is_rolled_off_between_the_tied_only() {
     roll(&mut l, BORIS, 90).unwrap();
     roll(&mut l, CLEO, 50).unwrap();
 
-    let drawn = close_and_draw(&mut l, 7);
+    let drawn = close_and_draw(&mut l);
     assert_eq!(drawn.len(), 2, "{drawn:?}");
     let rounds = match &drawn[0].event {
         Event::AuctionRollOff { rounds, .. } => rounds.clone(),
@@ -346,7 +345,7 @@ fn a_tie_inside_the_winners_needs_no_roll_off() {
     roll(&mut l, BORIS, 90).unwrap();
     roll(&mut l, CLEO, 50).unwrap();
 
-    let drawn = close_and_draw(&mut l, 7);
+    let drawn = close_and_draw(&mut l);
     assert_eq!(drawn.len(), 1, "two 90s for two items is no tie: {drawn:?}");
     let mut won: Vec<_> = auction(&l).winners.iter().map(|w| w.player).collect();
     won.sort_unstable();
@@ -356,7 +355,7 @@ fn a_tie_inside_the_winners_needs_no_roll_off() {
 #[test]
 fn nobody_rolled_means_nobody_wins() {
     let mut l = roll_auction(1);
-    let drawn = close_and_draw(&mut l, 1);
+    let drawn = close_and_draw(&mut l);
     assert_eq!(drawn.len(), 1);
     let a = auction(&l);
     assert_eq!(a.status, AuctionStatus::Finalized);
@@ -398,7 +397,6 @@ fn a_roll_auction_replays_identically() {
         },
         Command::FinalizeAuction {
             auction_id: "au-1".into(),
-            seed: 11,
         },
     ] {
         log.extend(exec(&mut live, &ctx, cmd).unwrap());

@@ -80,9 +80,8 @@ fn arb_command() -> impl Strategy<Value = Command> {
             auction_id: id.into(),
             ended_ts_ms: None,
         }),
-        (auction_id.clone(), any::<u64>()).prop_map(|(id, seed)| Command::FinalizeAuction {
+        auction_id.clone().prop_map(|id| Command::FinalizeAuction {
             auction_id: id.into(),
-            seed,
         }),
         auction_id.prop_map(|id| Command::CancelAuction {
             auction_id: id.into(),

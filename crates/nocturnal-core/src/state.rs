@@ -101,6 +101,18 @@ pub struct Auction {
     pub rolls: Vec<crate::event::Roll>,
     /// The roll-off that settled a tie across the cut, round by round.
     pub roll_offs: Vec<Vec<crate::event::Roll>>,
+    /// The tie-break seed recorded by `auction.closed` (#7); `None` while
+    /// open, and for closes logged before the seed was recorded.
+    pub close_seed: Option<u64>,
+}
+
+impl Auction {
+    /// The seed every tie-break draw for this auction uses, preview and
+    /// finalize alike (#7). A close logged before the seed was recorded
+    /// draws with 0, which is what its closed embed proposed.
+    pub fn tie_break_seed(&self) -> u64 {
+        self.close_seed.unwrap_or(0)
+    }
 }
 
 /// Per-guild behavioural config with the *fixed* defaults (audit S9: the
@@ -525,6 +537,7 @@ mod tests {
             live: false,
             rolls: Vec::new(),
             roll_offs: Vec::new(),
+            close_seed: None,
         }
     }
 
