@@ -93,6 +93,9 @@ pub enum Command {
         /// members in that voice channel may roll, and only it hears the
         /// bell. Must be one of the guild's raid channels.
         voice_channel: Option<u64>,
+        /// DKP each winner of a roll pays (2026-10-22); 0 = free, as every
+        /// roll was before. Refused on the other flavors, which have bids.
+        roll_cost: i64,
     },
     PlaceBid {
         auction_id: String,

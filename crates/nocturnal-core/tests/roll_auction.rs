@@ -54,6 +54,11 @@ fn cloak() -> Item {
 /// Three registered members with DKP to spare, and a roll auction opened
 /// with bid knobs and a debit it must ignore.
 fn roll_auction(num_items: u32) -> Ledger {
+    roll_auction_costing(num_items, 0)
+}
+
+/// [`roll_auction`] with a price on winning (2026-10-22).
+fn roll_auction_costing(num_items: u32, roll_cost: i64) -> Ledger {
     let mut l = Ledger::new();
     let ctx = ctx_at(OPENED, Actor::System);
     for player in [ANNA, BORIS, CLEO] {
@@ -86,6 +91,7 @@ fn roll_auction(num_items: u32) -> Ledger {
             debit_dkp: true,
             live: false,
             voice_channel: None,
+            roll_cost,
         },
     )
     .unwrap();
@@ -142,7 +148,7 @@ fn a_roll_auction_records_no_minimum_bid_and_no_debit() {
     assert_eq!(a.over_bid_to_win_main, 0);
     assert!(
         !a.debit_dkp,
-        "a roll auction never debits, whatever it was asked"
+        "a free roll never debits, whatever it was asked"
     );
     assert_eq!(a.deadline_ts_ms, DEADLINE);
 }
@@ -232,6 +238,7 @@ fn a_roll_on_a_bidding_auction_is_refused() {
             debit_dkp: true,
             live: false,
             voice_channel: None,
+            roll_cost: 0,
         },
     )
     .unwrap();
@@ -497,6 +504,7 @@ fn opened_asking(flavor: Flavor, live: bool) -> (Vec<Envelope>, Auction) {
             debit_dkp: false,
             live,
             voice_channel: None,
+            roll_cost: 0,
         },
     )
     .unwrap();
@@ -576,6 +584,7 @@ fn group_roll(voice_channel: Option<u64>, flavor: Flavor) -> Result<Ledger, Reje
             debit_dkp: false,
             live: true,
             voice_channel,
+            roll_cost: 0,
         },
     )?;
     Ok(l)
@@ -677,6 +686,7 @@ fn the_channel_survives_the_log_and_old_events_have_none() {
                 debit_dkp: false,
                 live: true,
                 voice_channel: Some(RAID_3),
+                roll_cost: 0,
             },
         )
         .unwrap();
@@ -690,4 +700,103 @@ fn the_channel_survives_the_log_and_old_events_have_none() {
             ..
         }
     ));
+}
+
+/// 2026-10-22: a roll can cost the winner DKP (5 for the guild's rolls). The
+/// winner pays it, with the winning roll in the log line; everyone else keeps
+/// their DKP.
+#[test]
+fn a_roll_with_a_cost_charges_the_winner_and_nobody_else() {
+    let mut l = roll_auction_costing(1, 5);
+    assert!(auction(&l).debit_dkp);
+    roll(&mut l, ANNA, 90).unwrap();
+    roll(&mut l, BORIS, 40).unwrap();
+    close_and_draw(&mut l);
+    let g = l.state().guild(GUILD).unwrap();
+    assert_eq!(auction(&l).winners[0].player, ANNA);
+    assert_eq!(auction(&l).winners[0].amount, 5);
+    assert_eq!(g.balance(ANNA), 495);
+    assert_eq!(g.balance(BORIS), 500);
+    let line = g.players[&ANNA].log.last().unwrap();
+    assert_eq!(line.dkp, -5);
+    assert!(line.comment.contains("Cloak"), "{}", line.comment);
+}
+
+/// With two items each winner pays, and a roll-off loser pays nothing.
+#[test]
+fn every_winner_of_a_costed_roll_pays() {
+    let mut l = roll_auction_costing(2, 5);
+    roll(&mut l, ANNA, 90).unwrap();
+    roll(&mut l, BORIS, 60).unwrap();
+    roll(&mut l, CLEO, 10).unwrap();
+    close_and_draw(&mut l);
+    let g = l.state().guild(GUILD).unwrap();
+    assert_eq!(
+        (g.balance(ANNA), g.balance(BORIS), g.balance(CLEO)),
+        (495, 495, 500)
+    );
+}
+
+/// A member who could not pay is refused the roll, by the same reservation a
+/// bid is held to, so a winner is never charged into the negative at the draw.
+#[test]
+fn a_member_who_cannot_pay_the_cost_cannot_roll() {
+    let mut l = roll_auction_costing(1, 5);
+    exec(
+        &mut l,
+        &ctx_at(OPENED, Actor::System),
+        Command::ImportPlayer {
+            player: STRANGER,
+            balance: 3,
+            characters: vec![],
+            creation_ts_ms: 1,
+            log: vec![],
+            legacy_id: None,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        roll(&mut l, STRANGER, 50),
+        Err(Rejection::InsufficientBalance { needed: 5, .. })
+    ));
+}
+
+/// A free roll stays free, and the cost is only for rolls: a bidding auction
+/// has its bids, and a negative cost would pay the winner.
+#[test]
+fn a_cost_is_for_rolls_and_never_negative() {
+    let mut l = roll_auction(1);
+    roll(&mut l, ANNA, 90).unwrap();
+    close_and_draw(&mut l);
+    assert_eq!(l.state().guild(GUILD).unwrap().balance(ANNA), 500);
+
+    let open = |flavor, roll_cost| Command::OpenAuction {
+        auction_id: "au-9".into(),
+        item: cloak(),
+        flavor,
+        min_bid: 0,
+        num_items: 1,
+        min_bid_to_lock_for_main: 0,
+        over_bid_to_win_main: 0,
+        duration_ms: 1,
+        debit_dkp: true,
+        live: false,
+        voice_channel: None,
+        roll_cost,
+    };
+    let ctx = ctx_at(OPENED, Actor::User(OFFICER));
+    assert_eq!(
+        l.propose(&ctx, &open(Flavor::Long, 5)).err(),
+        Some(Rejection::WrongAuctionFlavor)
+    );
+    assert_eq!(
+        l.propose(&ctx, &open(Flavor::Roll, -5)).err(),
+        Some(Rejection::InvalidAmount)
+    );
+    let free = l.propose(&ctx, &open(Flavor::Roll, 0)).unwrap();
+    let json = serde_json::to_string(&free[0].event).unwrap();
+    assert!(
+        !json.contains("roll_cost"),
+        "a free roll writes no cost: {json}"
+    );
 }

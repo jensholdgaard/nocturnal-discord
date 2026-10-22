@@ -229,6 +229,9 @@ fn roll_winners_text(auction: &Auction) -> String {
                 if let Some(o) = off {
                     line.push_str(&format!(" (roll-off **{}**)", o.roll));
                 }
+                if w.amount > 0 {
+                    line.push_str(&format!(" - {} DKP", w.amount));
+                }
                 line
             })
             .collect(),
@@ -399,7 +402,7 @@ pub fn live_message(
         Flavor::Roll => {
             let content = format!(
                 "Roll auction started - press **I want to roll** to roll 1-100.{} {} at <t:{}:f>, \
-                 a tie is rolled off. **No DKP is spent.**",
+                 a tie is rolled off. {}",
                 auction
                     .voice_channel
                     .map(|c| format!(" Only members in <#{c}> can roll."))
@@ -409,7 +412,21 @@ pub fn live_message(
                 } else {
                     "The highest roll wins".to_owned()
                 },
-                ts_sec(auction.deadline_ts_ms)
+                ts_sec(auction.deadline_ts_ms),
+                // 2026-10-22: a roll can cost the winner DKP.
+                if auction.roll_cost > 0 {
+                    format!(
+                        "**{} pays {} DKP.**",
+                        if auction.num_items > 1 {
+                            "Each winner"
+                        } else {
+                            "The winner"
+                        },
+                        auction.roll_cost
+                    )
+                } else {
+                    "**No DKP is spent.**".to_owned()
+                }
             );
             let embed = roll_embed(auction_id, auction).field("Rolls", rolls_text(auction), false);
             let row = serenity::CreateActionRow::Buttons(vec![serenity::CreateButton::new(
@@ -1212,6 +1229,7 @@ async fn open_auction(
     debit_dkp: bool,
     live: bool,
     voice_channel: Option<u64>,
+    roll_cost: i64,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(ctx)?;
     let (cfg_min_bid, lock, over, short_channel, long_channel) = ctx
@@ -1248,6 +1266,7 @@ async fn open_auction(
         debit_dkp,
         live,
         voice_channel,
+        roll_cost,
     };
     // The item row for the character picker, fetched now so a click later
     // reads it from disk. Fire and forget: a miss only costs the picker its
@@ -1367,6 +1386,7 @@ pub async fn startbid(
         true,
         true,
         None,
+        0,
     )
     .await
 }
@@ -1416,11 +1436,12 @@ pub async fn startlongbid(
         debit.unwrap_or(true),
         false,
         None,
+        0,
     )
     .await
 }
 
-/// Start a roll auction (highest 1-100 roll wins, no DKP).
+/// Start a roll auction (highest 1-100 roll wins; free unless given a cost).
 #[tracing::instrument(name = "command.rollauction", skip_all, err, fields(otel.kind = "server"))]
 #[poise::command(
     slash_command,
@@ -1441,6 +1462,9 @@ pub async fn rollauction(
     #[description = "Only members in this raid voice channel may roll, and only it hears the bell"]
     #[channel_types("Voice")]
     channel: Option<serenity::GuildChannel>,
+    #[description = "DKP each winner pays (default 0: a free roll)"]
+    #[min = 0]
+    cost: Option<i64>,
 ) -> Result<(), Error> {
     let ledger_guild = require_guild(&ctx)?;
     crate::discord::ack_ephemeral(&ctx).await?;
@@ -1504,6 +1528,7 @@ pub async fn rollauction(
         false,
         duration.is_none(),
         channel.map(|c| c.id.get()),
+        cost.unwrap_or(0),
     )
     .await
 }
@@ -2942,6 +2967,7 @@ mod tests {
             debit_dkp: true,
             live: flavor == Flavor::Short,
             voice_channel: None,
+            roll_cost: 0,
         }
     }
 
@@ -3293,6 +3319,7 @@ mod tests {
                     debit_dkp: true,
                     live: false,
                     voice_channel: None,
+                    roll_cost: 0,
                 },
             )
             .await

@@ -113,6 +113,7 @@ fn ledger() -> Ledger {
             debit_dkp: true,
             live: false,
             voice_channel: None,
+            roll_cost: 0,
         },
     )
     .unwrap();

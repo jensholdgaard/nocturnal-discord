@@ -232,6 +232,7 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             debit_dkp,
             live,
             voice_channel,
+            roll_cost,
         } => {
             if g.auctions.contains_key(auction_id) {
                 return Err(Rejection::AuctionIdTaken);
@@ -244,6 +245,12 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
             let roll = *flavor == Flavor::Roll;
             // One group's roll (2026-10-22): only a roll can be limited to a
             // voice channel, and only to one the raid counts.
+            if *roll_cost < 0 {
+                return Err(Rejection::InvalidAmount);
+            }
+            if *roll_cost > 0 && !roll {
+                return Err(Rejection::WrongAuctionFlavor);
+            }
             if let Some(channel) = voice_channel {
                 if !roll {
                     return Err(Rejection::WrongAuctionFlavor);
@@ -262,11 +269,13 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                 min_bid_to_lock_for_main: knob(*min_bid_to_lock_for_main),
                 over_bid_to_win_main: knob(*over_bid_to_win_main),
                 deadline_ts_ms: ctx.now_ms + *duration_ms,
-                debit_dkp: *debit_dkp && !roll,
+                // A roll debits only what it costs (2026-10-22).
+                debit_dkp: if roll { *roll_cost > 0 } else { *debit_dkp },
                 // A short auction is live by flavor and a long one never is:
                 // only a roll carries the choice in the fact.
                 live: *live && roll,
                 voice_channel: *voice_channel,
+                roll_cost: *roll_cost,
             }])
         }
 
@@ -472,9 +481,21 @@ pub fn decide(state: &State, ctx: &Ctx, cmd: &Command) -> Result<Vec<Event>, Rej
                     return Err(Rejection::NotInVoiceChannel { channel });
                 }
             }
-            g.players.get(player).ok_or(Rejection::PlayerNotFound)?;
+            let p = g.players.get(player).ok_or(Rejection::PlayerNotFound)?;
             if let Some(r) = auction.rolls.iter().find(|r| r.player == *player) {
                 return Err(Rejection::AlreadyRolled { roll: r.roll });
+            }
+            // A roll that costs DKP takes rolls only from members who could
+            // pay it, by the same reservation a bid is held to.
+            if auction.roll_cost > 0 {
+                let committed = g.committed_elsewhere(*player, auction_id);
+                if auction.roll_cost > p.balance - committed {
+                    return Err(Rejection::InsufficientBalance {
+                        available: p.balance - committed,
+                        committed,
+                        needed: auction.roll_cost,
+                    });
+                }
             }
             Ok(vec![Event::AuctionRolled {
                 auction_id: auction_id.clone(),
@@ -950,7 +971,7 @@ pub fn compute_winners(g: &crate::state::GuildState, auction_id: &str, seed: u64
     .collect()
 }
 
-/// A roll auction's winners (at 0 DKP) and the roll-off rounds that settled
+/// A roll auction's winners (at its cost, 0 for a free roll) and the roll-off rounds that settled
 /// a tie across the cut, drawn from the close's `seed`. Shared by finalize
 /// and the Discord layer, like [`compute_winners`].
 pub fn compute_roll_winners(
@@ -970,7 +991,7 @@ pub fn compute_roll_winners(
         .into_iter()
         .map(|player| Winner {
             player,
-            amount: 0,
+            amount: auction.roll_cost,
             // A roll has no main/alt side; main is the default every other
             // reader already treats as "no remark" (no " - alter" suffix).
             for_main: true,

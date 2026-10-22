@@ -106,6 +106,8 @@ pub struct Auction {
     /// Only members in this voice channel may roll, and only it hears the
     /// bell (2026-10-22). `None`: anyone, every raid channel.
     pub voice_channel: Option<u64>,
+    /// DKP each winner of a roll pays; 0 = a free roll (2026-10-22).
+    pub roll_cost: i64,
     pub close_seed: Option<u64>,
 }
 
@@ -560,6 +562,7 @@ mod tests {
             roll_offs: Vec::new(),
             close_seed: None,
             voice_channel: None,
+            roll_cost: 0,
         }
     }
 

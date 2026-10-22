@@ -163,6 +163,7 @@ fn run_scenario(seed: u64) {
                         debit_dkp: true,
                         live: false,
                         voice_channel: None,
+                        roll_cost: 0,
                     },
                 )
                 .is_some()
