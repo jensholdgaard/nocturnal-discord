@@ -1013,7 +1013,11 @@ pub async fn run(
         crate::feedback::gateway_intents(feedback_enabled),
     )
     .framework(framework)
-    .register_songbird()
+    // A short join timeout, so a hung join fails inside the bell's budget
+    // and its one retry gets to run (#8; songbird's default is 10 s).
+    .register_songbird_from_config(
+        songbird::Config::default().gateway_timeout(Some(crate::bell::JOIN_TIMEOUT)),
+    )
     .await
     .context("building Discord client")?;
 
