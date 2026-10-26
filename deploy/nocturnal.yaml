@@ -24,12 +24,38 @@ bell:
 health:
   bind: 127.0.0.1:8090
 
-# archive:                            # off-site Parquet mirror; unset = off
-#   bucket: nocturnal-ledger
-#   prefix: prod
-# compaction:                         # roll sealed WAL into Parquet on a timer
-#   interval_secs: 86400              # nightly; unset = never, and the WAL only grows
+# Off-site Parquet mirror of the compacted ledger; unset bucket = off.
+archive:
+  bucket: nocturnal-ledger
+  prefix: prod
 
 # Telemetry and archive credentials come from the standard environment in
 # /etc/nocturnal/env — OTEL_* for telemetry, AWS_* for object storage — never
 # from bot-specific keys.
+
+# Roll sealed WAL segments into Parquet nightly. Without this the WAL only
+# grows; nocturnal.wal.size on the Overview dashboard is what it costs.
+compaction:
+  interval_secs: 86400
+
+# Telemetry provisioning (M8): the token commands, served under the bot members
+# already have. Paths are the ones dpsbot.py owned; this process is now the only
+# writer of both.
+provision:
+  # guild_id unset: single identity, /dpstoken registers with everything else.
+  tokens_path: /etc/eq-otel/tokens.txt
+  perses_provisioning_dir: /etc/perses/provisioning
+  roles_map_path: /etc/eq-otel/roles.yaml
+  dashboard_url: https://dps.nocturnal-guild.de/perses
+
+# The guild roster page (M9): rendered from the ledger, served by Caddy at /roster/.
+roster:
+  output_path: /var/www/roster/data.json
+  # Character profiles (everquest.character.profile events) come from Ourios.
+  ourios_query_url: http://127.0.0.1:4320/v1/query
+  ourios_tenant: nocturnal
+  # Naming a raid from what it fought (raid-bosses.yaml is the boss table; edit freely).
+  prometheus_query_url: http://127.0.0.1:9090/api/v1/query
+  raid_bosses_path: /etc/nocturnal/raid-bosses.yaml
+  # The Perses island, unpacked by the puller; the bot serves it under /assets.
+  assets_dir: /var/www/site-assets/assets

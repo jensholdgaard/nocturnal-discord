@@ -32,6 +32,17 @@ delay panel.
 ## Deploy
 
     deploy/install-vm.sh          # idempotent: binary, config, unit, dashboard
+    deploy/drift-check.sh --diff  # read-only: does the VM still run what deploy/ says?
+
+`deploy/` is the source of truth for the bot's files on the VM: `nocturnal.yaml`,
+`raid-bosses.yaml`, the units, timers and drop-ins (`nocturnal.service.d/`, which
+holds the credentials), the scripts, the `*-bot-*` dashboards and the Prometheus
+rules. A change made live on the VM goes into `deploy/` the same day. Since
+2026-10-26 `install-vm.sh` runs the drift check first and stops if the VM differs
+(`APPLY=1` installs over the difference when that is the point). It keeps existing
+encrypted credentials (`ROTATE_TOKENS=1` re-encrypts them from `.env`) and carries
+over env lines it does not write, such as the archive's `AWS_*`. The box itself
+(Caddy, the collector, Ourios, fail2ban) is everquest-observability's `deploy/`.
 
 It never reseeds an existing ledger. A deploy is a binary swap plus a restart;
 boot is process start plus replay (~2 s for the guild's full history). Crash

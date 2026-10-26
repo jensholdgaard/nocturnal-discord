@@ -17,3 +17,5 @@ echo "— data in the stack —"
 echo "ledger head in Prometheus: $(curl -s 'http://127.0.0.1:9090/api/v1/query?query=nocturnal_ledger_seq' | grep -oE '"[0-9]+"\]' | tail -1)"
 echo "jaeger services: $(curl -s http://127.0.0.1:16686/api/services | head -c 200)"
 REMOTE
+echo "— drift (deploy/ vs the VM) —"
+"$(dirname "$0")/drift-check.sh"
